@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { 
   Check, 
   Menu, 
@@ -37,8 +37,20 @@ import {
   Settings,
   Globe,
   LayoutDashboard,
-  Activity
+  Activity,
+  Unlink
 } from 'lucide-react';
+import {
+  initGoogleApi,
+  initGoogleIdentity,
+  requestAccessToken,
+  revokeAccessToken,
+  isSignedIn as isGoogleSignedIn,
+  fetchGoogleCalendarEvents,
+  createGoogleCalendarEvent,
+  getGoogleUserInfo,
+  setAccessToken
+} from './googleCalendar';
 
 // --- Context ---
 
@@ -207,8 +219,61 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isCalendarSynced, setIsCalendarSynced] = useState(false);
 
+  // Google Calendar State
+  const [googleAccount, setGoogleAccount] = useState<{
+    email: string;
+    name: string;
+    picture: string;
+  } | null>(null);
+  const [isGoogleConnecting, setIsGoogleConnecting] = useState(false);
+  const [googleApiReady, setGoogleApiReady] = useState(false);
+
   // Time labels from 7 AM to 3 PM for the demo view
   const timeLabels = [7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+  // Initialize Google APIs on mount
+  useEffect(() => {
+    const initGoogle = async () => {
+      try {
+        await initGoogleApi();
+        initGoogleIdentity(async (token) => {
+          // Token received - fetch user info
+          const userInfo = await getGoogleUserInfo();
+          if (userInfo) {
+            setGoogleAccount(userInfo);
+            setIsCalendarSynced(true);
+          }
+          setIsGoogleConnecting(false);
+        });
+        setGoogleApiReady(true);
+      } catch (error) {
+        console.error('Failed to initialize Google APIs:', error);
+      }
+    };
+    
+    // Small delay to ensure scripts are loaded
+    const timer = setTimeout(initGoogle, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Handle Google Calendar connection
+  const handleConnectGoogle = useCallback(() => {
+    if (!googleApiReady) {
+      alert('Google APIs are still loading. Please try again in a moment.');
+      return;
+    }
+    setIsGoogleConnecting(true);
+    requestAccessToken();
+  }, [googleApiReady]);
+
+  // Handle Google Calendar disconnection
+  const handleDisconnectGoogle = useCallback(() => {
+    revokeAccessToken();
+    setGoogleAccount(null);
+    setIsCalendarSynced(false);
+    // Remove Google events from schedule
+    setSchedule(prev => prev.filter(block => !block.isGoogle || typeof block.id === 'number'));
+  }, []);
 
   // --- Handlers ---
 
@@ -299,29 +364,54 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
       setSchedule(schedule.filter(b => b.id !== blockId));
   };
 
-  const handleSync = () => {
-    if (!user) {
-      alert("Please sign in to sync your calendar!");
+  const handleSync = async () => {
+    if (!googleAccount) {
+      alert("Please connect your Google Calendar in Settings first!");
+      setIsSettingsOpen(true);
       return;
     }
     
     setIsSyncing(true);
-    // Simulate API call to Google Calendar
-    setTimeout(() => {
-        setIsSyncing(false);
-        setIsCalendarSynced(true);
+    
+    try {
+      // Get today's date range
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      // Fetch events from Google Calendar
+      const googleEvents = await fetchGoogleCalendarEvents(today, tomorrow);
+      
+      // Convert to ScheduleBlock format and merge with existing schedule
+      setSchedule(prev => {
+        // Remove old Google events
+        const localBlocks = prev.filter(block => !block.isGoogle);
         
-        // 1. Pull changes FROM Google (Simulated)
-        setSchedule(prev => {
-            const existingIds = new Set(prev.map(b => b.id));
-            const newEvents = EXTERNAL_GOOGLE_EVENTS.filter(e => !existingIds.has(e.id));
-            // In a real app, we would also check for updates/deletions from GCal
-            return [...prev, ...newEvents];
-        });
-
-        console.log("Pushing local schedule to Google Calendar...", schedule);
-
-    }, 1500);
+        // Add new Google events
+        const newGoogleBlocks: ScheduleBlock[] = googleEvents.map(event => ({
+          id: event.id,
+          title: event.title,
+          tag: 'meeting',
+          start: event.start,
+          duration: event.duration,
+          color: "bg-blue-100 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800",
+          textColor: "text-blue-700 dark:text-blue-300",
+          isGoogle: true
+        }));
+        
+        return [...localBlocks, ...newGoogleBlocks];
+      });
+      
+      setIsCalendarSynced(true);
+      console.log("Synced with Google Calendar");
+      
+    } catch (error) {
+      console.error('Sync failed:', error);
+      alert('Failed to sync with Google Calendar. Please try reconnecting in Settings.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleTaskDragStart = (e: React.DragEvent, task: Task, sourceList: 'active' | 'later') => {
@@ -365,7 +455,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
       e.dataTransfer.dropEffect = 'copy';
   };
 
-  const handleHourDrop = (e: React.DragEvent, hour: number) => {
+  const handleHourDrop = async (e: React.DragEvent, hour: number) => {
       e.preventDefault();
       setDragOverHour(null);
       if (!draggedItem) return;
@@ -379,8 +469,26 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
           duration: 1,
           color: "bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500", 
           textColor: "text-indigo-950 dark:text-indigo-50",
-          isGoogle: true // Assuming dropping on timeline pushes to GCal immediately in this mental model
+          isGoogle: false
       };
+
+      // If connected to Google Calendar, create the event there too
+      if (googleAccount) {
+          try {
+              const googleEventId = await createGoogleCalendarEvent(
+                  task.title,
+                  hour,
+                  1 // 1 hour duration
+              );
+              newBlock.id = googleEventId;
+              newBlock.isGoogle = true;
+              newBlock.color = "bg-blue-100 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800";
+              newBlock.textColor = "text-blue-700 dark:text-blue-300";
+          } catch (error) {
+              console.error('Failed to create Google Calendar event:', error);
+              // Continue with local block even if Google fails
+          }
+      }
 
       setSchedule(prev => [...prev, newBlock]);
       
@@ -485,18 +593,73 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
                     <button onClick={() => setIsSettingsOpen(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500"><X size={20}/></button>
                 </div>
                 <div className="p-6 space-y-6">
-                    {/* Time Format */}
+                    {/* Google Calendar Connection */}
                     <div>
-                        <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Time Format</label>
-                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-                            <button 
-                                onClick={() => setSettings({...settings, timeFormat: '12h'})}
-                                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '12h' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                            >12-hour (9:00 AM)</button>
-                            <button 
-                                onClick={() => setSettings({...settings, timeFormat: '24h'})}
-                                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '24h' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                            >24-hour (09:00)</button>
+                        <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Google Calendar</label>
+                        {googleAccount ? (
+                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                                <div className="flex items-center gap-3">
+                                    <img 
+                                        src={googleAccount.picture} 
+                                        alt={googleAccount.name}
+                                        className="w-10 h-10 rounded-full"
+                                    />
+                                    <div className="flex-1">
+                                        <p className="font-medium text-green-800 dark:text-green-200">{googleAccount.name}</p>
+                                        <p className="text-xs text-green-600 dark:text-green-400">{googleAccount.email}</p>
+                                    </div>
+                                    <button
+                                        onClick={handleDisconnectGoogle}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                    >
+                                        <Unlink size={14} />
+                                        Disconnect
+                                    </button>
+                                </div>
+                                <div className="mt-3 flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                                    <CalendarCheck size={14} />
+                                    <span>Calendar connected and syncing</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={handleConnectGoogle}
+                                disabled={isGoogleConnecting || !googleApiReady}
+                                className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isGoogleConnecting ? (
+                                    <Loader2 size={20} className="animate-spin text-slate-400" />
+                                ) : (
+                                    <img 
+                                        src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" 
+                                        alt="Google Calendar"
+                                        className="w-5 h-5"
+                                    />
+                                )}
+                                <span className="font-medium text-slate-700 dark:text-slate-200">
+                                    {isGoogleConnecting ? 'Connecting...' : !googleApiReady ? 'Loading...' : 'Connect Google Calendar'}
+                                </span>
+                            </button>
+                        )}
+                        <p className="text-xs text-slate-500 mt-2">
+                            Connect your Google account to sync events between Ascend and Google Calendar.
+                        </p>
+                    </div>
+
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
+                        {/* Time Format */}
+                        <div>
+                            <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Time Format</label>
+                            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                                <button 
+                                    onClick={() => setSettings({...settings, timeFormat: '12h'})}
+                                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '12h' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                >12-hour (9:00 AM)</button>
+                                <button 
+                                    onClick={() => setSettings({...settings, timeFormat: '24h'})}
+                                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '24h' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                >24-hour (09:00)</button>
+                            </div>
                         </div>
                     </div>
 
