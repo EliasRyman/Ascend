@@ -302,29 +302,27 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           loadUserSettings()
         ]);
 
-        if (activeData.length > 0 || laterData.length > 0) {
-          setActiveTasks(activeData.length > 0 ? activeData.map(t => ({
-            id: t.id,
-            title: t.title,
-            tag: t.tag,
-            tagColor: t.tagColor,
-            time: t.time,
-            completed: t.completed
-          })) : INITIAL_TASKS);
-          
-          setLaterTasks(laterData.length > 0 ? laterData.map(t => ({
-            id: t.id,
-            title: t.title,
-            tag: t.tag,
-            tagColor: t.tagColor,
-            time: t.time,
-            completed: t.completed
-          })) : LATER_TASKS);
-        }
+        // Always use database data for logged-in users (even if empty)
+        // This ensures deleted items stay deleted
+        setActiveTasks(activeData.map(t => ({
+          id: t.id,
+          title: t.title,
+          tag: t.tag,
+          tagColor: t.tagColor,
+          time: t.time,
+          completed: t.completed
+        })));
+        
+        setLaterTasks(laterData.map(t => ({
+          id: t.id,
+          title: t.title,
+          tag: t.tag,
+          tagColor: t.tagColor,
+          time: t.time,
+          completed: t.completed
+        })));
 
-        if (blocksData.length > 0) {
-          setSchedule(blocksData);
-        }
+        setSchedule(blocksData);
 
         // Load user settings
         if (userSettings) {
