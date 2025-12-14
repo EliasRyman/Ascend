@@ -450,10 +450,53 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
   const isToday = (date: Date) => isSameDay(date, new Date());
 
-  const handleDateSelect = (day: number) => {
+  const handleDateSelect = async (day: number) => {
     const newDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
     setSelectedDate(newDate);
     setIsCalendarOpen(false);
+    
+    // Load schedule blocks for the selected date
+    await loadScheduleForDate(newDate);
+  };
+  
+  const loadScheduleForDate = async (date: Date) => {
+    try {
+      // Load blocks from database for this date
+      const blocksData = await loadScheduleBlocks(date);
+      
+      // If Google is connected, also fetch Google Calendar events
+      if (googleAccount && isSignedIn()) {
+        const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+        const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+        
+        const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
+        
+        // Merge database blocks with Google events
+        const googleBlocks: ScheduleBlock[] = googleEvents.map(event => ({
+          id: event.id,
+          title: event.title,
+          tag: null,
+          start: event.start,
+          duration: event.duration,
+          color: 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
+          textColor: 'text-blue-950 dark:text-blue-50',
+          isGoogle: true,
+          googleEventId: event.id,
+          completed: false
+        }));
+        
+        // Combine: DB blocks + Google events (avoiding duplicates by googleEventId)
+        const dbBlockIds = new Set(blocksData.map(b => b.googleEventId).filter(Boolean));
+        const uniqueGoogleBlocks = googleBlocks.filter(g => !dbBlockIds.has(g.googleEventId));
+        
+        setSchedule([...blocksData, ...uniqueGoogleBlocks]);
+      } else {
+        setSchedule(blocksData.length > 0 ? blocksData : []);
+      }
+    } catch (error) {
+      console.error('Failed to load schedule for date:', error);
+      setNotification({ type: 'error', message: 'Failed to load schedule for selected date' });
+    }
   };
 
   const handlePrevMonth = () => {
@@ -541,7 +584,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               resizedBlock.title,
               resizedBlock.start,
               resizedBlock.duration,
-              new Date()
+              selectedDate
             );
             console.log('Updated Google Calendar event duration');
           } catch (error) {
@@ -566,7 +609,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               movedBlock.title,
               movedBlock.start,
               movedBlock.duration,
-              new Date()
+              selectedDate
             );
             console.log('Updated Google Calendar event time');
             setNotification({ type: 'success', message: 'Event time updated in Google Calendar' });
@@ -764,18 +807,17 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           googleEventId: b.googleEventId,
         }));
 
-      // Fetch events from BOTH Ascend calendar AND primary Google Calendar
-      const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
-      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+      // Fetch events from BOTH Ascend calendar AND primary Google Calendar for selected date
+      const startOfDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 0, 0, 0);
+      const endOfDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59);
       
       // Get all Google Calendar events (both primary and Ascend)
       console.log('Fetching Google Calendar events...');
       const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
       console.log('Google events received:', googleEvents);
       
-      // Perform two-way sync
-      const syncResult = await syncCalendarEvents(localBlocksForSync, new Date());
+      // Perform two-way sync for selected date
+      const syncResult = await syncCalendarEvents(localBlocksForSync, selectedDate);
       console.log('Sync result:', syncResult);
 
       setSchedule(prev => {
@@ -932,8 +974,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           taskId: task.id
       };
 
-      // Save to database
-      const savedBlock = await createScheduleBlock(blockData);
+      // Save to database for the selected date
+      const savedBlock = await createScheduleBlock(blockData, selectedDate);
       
       // Preserve taskId and completed since they're not in database
       const newBlock: ScheduleBlock = savedBlock ? {
@@ -963,7 +1005,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   task.title,
                   hour,
                   newBlock.duration, // Use actual block duration
-                  new Date(),
+                  selectedDate, // Use selected date instead of today
                   task.tag || 'work' // Pass tag for color coding
               );
               console.log('Created Google Calendar event:', eventId);
@@ -1503,11 +1545,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                    
                    {/* Today Button */}
                    <button
-                     onClick={() => {
+                     onClick={async () => {
                        const today = new Date();
                        setSelectedDate(today);
                        setCalendarViewDate(today);
                        setIsCalendarOpen(false);
+                       await loadScheduleForDate(today);
                      }}
                      className="mt-3 w-full py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
                    >
