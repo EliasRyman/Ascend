@@ -448,7 +448,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [resizingBlockId, resizeStartY, resizeStartDuration]);
+  }, [resizingBlockId, resizeStartY, resizeStartDuration, schedule, googleAccount]);
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newTaskInput.trim()) {
