@@ -573,13 +573,30 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   };
 
   const handleDeleteTask = async (taskId: number | string, listType: string) => {
-    // Delete from database
-    await deleteTaskFromDb(String(taskId));
-      if (listType === 'active') {
-          setActiveTasks(activeTasks.filter(t => t.id !== taskId));
-      } else {
-          setLaterTasks(laterTasks.filter(t => t.id !== taskId));
+    // Find and delete any linked schedule block
+    const linkedBlock = schedule.find(b => String(b.taskId) === String(taskId));
+    if (linkedBlock) {
+      // Delete from Google Calendar if connected
+      if (linkedBlock.googleEventId && googleAccount && isSignedIn()) {
+        try {
+          await deleteGoogleCalendarEvent(linkedBlock.googleEventId);
+          console.log('Deleted linked event from Google Calendar');
+        } catch (error) {
+          console.error('Failed to delete from Google Calendar:', error);
+        }
       }
+      // Delete block from database and state
+      await deleteScheduleBlock(String(linkedBlock.id));
+      setSchedule(prev => prev.filter(b => String(b.id) !== String(linkedBlock.id)));
+    }
+    
+    // Delete task from database
+    await deleteTaskFromDb(String(taskId));
+    if (listType === 'active') {
+      setActiveTasks(activeTasks.filter(t => String(t.id) !== String(taskId)));
+    } else {
+      setLaterTasks(laterTasks.filter(t => String(t.id) !== String(taskId)));
+    }
   };
 
   const handleToggleComplete = (taskId: number | string, listType: 'active' | 'later') => {
@@ -635,7 +652,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
   const handleDeleteBlock = async (blockId: number | string) => {
       // Find the block to get Google event ID
-      const block = schedule.find(b => b.id === blockId);
+      const block = schedule.find(b => String(b.id) === String(blockId));
       
       // Delete from Google Calendar if it has a googleEventId
       if (block?.googleEventId && googleAccount && isSignedIn()) {
@@ -648,19 +665,19 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         }
       }
 
-      // Clear the time from the linked task
+      // Clear the time from the linked task (but DON'T delete the task)
       if (block?.taskId) {
         setActiveTasks(prev => prev.map(t => 
-          t.id === block.taskId ? { ...t, time: null } : t
+          String(t.id) === String(block.taskId) ? { ...t, time: null } : t
         ));
         setLaterTasks(prev => prev.map(t => 
-          t.id === block.taskId ? { ...t, time: null } : t
+          String(t.id) === String(block.taskId) ? { ...t, time: null } : t
         ));
       }
 
-      // Delete from database
+      // Delete block from database (not the task!)
       await deleteScheduleBlock(String(blockId));
-      setSchedule(schedule.filter(b => b.id !== blockId));
+      setSchedule(prev => prev.filter(b => String(b.id) !== String(blockId)));
   };
 
   const handleSync = async () => {
