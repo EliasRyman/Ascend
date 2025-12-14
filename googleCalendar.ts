@@ -577,7 +577,9 @@ export async function createGoogleCalendarEvent(
   }
 
   // Get or create Ascend calendar
+  console.log('Getting Ascend calendar ID...');
   const calendarId = await getAscendCalendarId();
+  console.log('Using calendar ID:', calendarId);
 
   // Create start and end times
   const startDate = new Date(date);
@@ -588,6 +590,14 @@ export async function createGoogleCalendarEvent(
 
   // Get color ID based on tag
   const colorId = tag ? (TAG_COLOR_MAP[tag.toLowerCase()] || '9') : '9';
+
+  console.log('Creating event:', {
+    title,
+    calendarId,
+    start: startDate.toISOString(),
+    end: endDate.toISOString(),
+    colorId
+  });
 
   try {
     const response = await gapi.client.calendar.events.insert({
@@ -607,7 +617,7 @@ export async function createGoogleCalendarEvent(
       },
     });
 
-    console.log('Created event in Ascend calendar:', response.result.id, 'with color:', colorId);
+    console.log('✅ Successfully created event in Ascend calendar:', response.result.id);
     return response.result.id;
   } catch (error) {
     console.error('Error creating calendar event:', error);

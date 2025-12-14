@@ -743,7 +743,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       setDraggedItem(null);
 
       // Push to Google Calendar if connected
+      console.log('Checking Google connection:', { googleAccount: !!googleAccount, isSignedIn: isSignedIn() });
       if (googleAccount && isSignedIn()) {
+          console.log('Attempting to create Google Calendar event...');
           try {
               const eventId = await createGoogleCalendarEvent(
                   task.title,
