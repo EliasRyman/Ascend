@@ -1778,14 +1778,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                        <path d="M8 21L12 7L16 21" />
-                        <path d="M12 7L15 3" />
-                        <path d="M15 3L17 5" />
-                        <path d="M15 3L13 5" />
-                      </svg>
-                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center"><Flame size={20} className="text-white" /></div>
                     Habit Tracker
                   </h1>
                   <p className="text-slate-500 dark:text-slate-400 mt-1">Build consistency, one day at a time</p>
