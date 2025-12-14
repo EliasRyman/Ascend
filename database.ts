@@ -13,7 +13,7 @@ export interface Task {
 export interface ScheduleBlock {
   id: string;
   title: string;
-  tag: string | null;
+  tag: string;
   start: number;
   duration: number;
   color: string;
@@ -21,9 +21,6 @@ export interface ScheduleBlock {
   isGoogle?: boolean;
   googleEventId?: string;
   completed?: boolean;
-  taskId?: string | number;
-  calendarColor?: string; // Hex color from Google Calendar
-  calendarName?: string; // Name of the source calendar
 }
 
 export interface UserSettings {
@@ -49,7 +46,7 @@ function dbBlockToBlock(dbBlock: DbScheduleBlock): ScheduleBlock {
   return {
     id: dbBlock.id,
     title: dbBlock.title,
-    tag: dbBlock.tag || null,
+    tag: dbBlock.tag || 'work',
     start: dbBlock.start_hour,
     duration: dbBlock.duration,
     color: dbBlock.color || 'bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500',
@@ -146,15 +143,6 @@ export async function updateTask(taskId: string, updates: Partial<Task>): Promis
 }
 
 export async function deleteTask(taskId: string): Promise<boolean> {
-  // Check if taskId looks like a UUID (contains dashes and is ~36 chars)
-  // Demo tasks have simple numeric IDs which shouldn't be sent to database
-  const isUuid = taskId.includes('-') && taskId.length >= 32;
-  
-  if (!isUuid) {
-    console.log('Task ID is not a UUID, skipping database delete:', taskId);
-    return true; // Return true since there's nothing to delete in DB
-  }
-  
   const { error } = await supabase
     .from('tasks')
     .delete()
@@ -242,6 +230,7 @@ export async function updateScheduleBlock(blockId: string, updates: Partial<Sche
   if (updates.duration !== undefined) updateData.duration = updates.duration;
   if (updates.color !== undefined) updateData.color = updates.color;
   if (updates.textColor !== undefined) updateData.text_color = updates.textColor;
+  if (updates.completed !== undefined) updateData.completed = updates.completed;
 
   const { error } = await supabase
     .from('schedule_blocks')
@@ -257,15 +246,6 @@ export async function updateScheduleBlock(blockId: string, updates: Partial<Sche
 }
 
 export async function deleteScheduleBlock(blockId: string): Promise<boolean> {
-  // Check if blockId looks like a UUID (contains dashes and is ~36 chars)
-  // Local/demo blocks have simple numeric IDs which shouldn't be sent to database
-  const isUuid = blockId.includes('-') && blockId.length >= 32;
-  
-  if (!isUuid) {
-    console.log('Block ID is not a UUID, skipping database delete:', blockId);
-    return true; // Return true since there's nothing to delete in DB
-  }
-  
   const { error } = await supabase
     .from('schedule_blocks')
     .delete()

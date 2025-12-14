@@ -27,8 +27,6 @@ declare namespace gapi {
   
   namespace client {
     function init(config: { discoveryDocs?: string[] }): Promise<void>;
-    function setToken(token: { access_token: string } | null): void;
-    function getToken(): { access_token: string } | null;
     
     namespace calendar {
       interface EventsResource {

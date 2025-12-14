@@ -44,7 +44,6 @@ import {
   Tag,
   Palette,
   Flame,
-  Trophy,
   TrendingUp,
   Zap,
   Edit3,
@@ -108,8 +107,8 @@ interface ScheduleBlock {
   isGoogle?: boolean;
   googleEventId?: string;
   completed?: boolean;
-  taskId?: number | string; // Link to original task
-  habitId?: string; // Link to habit
+  taskId?: number | string;
+  habitId?: string;
   calendarColor?: string;
   calendarName?: string;
 }
@@ -126,35 +125,34 @@ interface Task {
 interface Habit {
   id: string;
   name: string;
-  tag: string | null; // Tag name, matches userTags
-  tagColor: string | null; // Tag color from Google Calendar colors
+  tag: string | null;
+  tagColor: string | null;
   frequency: 'daily' | 'weekly';
-  scheduledDays: number[]; // 0-6 for Sunday-Saturday, empty = daily
-  scheduledStartTime: string | null; // "HH:MM" format
-  scheduledEndTime: string | null; // "HH:MM" format
+  scheduledDays: number[];
+  scheduledStartTime: string | null;
+  scheduledEndTime: string | null;
   currentStreak: number;
   longestStreak: number;
-  completedDates: string[]; // ISO date strings "YYYY-MM-DD"
+  completedDates: string[];
   createdAt: string;
 }
 
-// Google Calendar color palette (same as tags)
-const GOOGLE_CALENDAR_COLORS = [
-  { id: '1', name: 'Lavender', hex: '#7986cb', bg: 'bg-[#7986cb]' },
-  { id: '2', name: 'Sage', hex: '#33b679', bg: 'bg-[#33b679]' },
-  { id: '3', name: 'Grape', hex: '#8e24aa', bg: 'bg-[#8e24aa]' },
-  { id: '4', name: 'Flamingo', hex: '#e67c73', bg: 'bg-[#e67c73]' },
-  { id: '5', name: 'Banana', hex: '#f6bf26', bg: 'bg-[#f6bf26]' },
-  { id: '6', name: 'Tangerine', hex: '#f4511e', bg: 'bg-[#f4511e]' },
-  { id: '7', name: 'Peacock', hex: '#039be5', bg: 'bg-[#039be5]' },
-  { id: '8', name: 'Graphite', hex: '#616161', bg: 'bg-[#616161]' },
-  { id: '9', name: 'Blueberry', hex: '#3f51b5', bg: 'bg-[#3f51b5]' },
-  { id: '10', name: 'Basil', hex: '#0b8043', bg: 'bg-[#0b8043]' },
-  { id: '11', name: 'Tomato', hex: '#d50000', bg: 'bg-[#d50000]' },
+// Google Calendar color palette
+const GOOGLE_COLORS = [
+  { id: '1', name: 'Lavender', hex: '#7986cb', tailwind: 'bg-[#7986cb] text-white' },
+  { id: '2', name: 'Sage', hex: '#33b679', tailwind: 'bg-[#33b679] text-white' },
+  { id: '3', name: 'Grape', hex: '#8e24aa', tailwind: 'bg-[#8e24aa] text-white' },
+  { id: '4', name: 'Flamingo', hex: '#e67c73', tailwind: 'bg-[#e67c73] text-white' },
+  { id: '5', name: 'Banana', hex: '#f6bf26', tailwind: 'bg-[#f6bf26] text-slate-800' },
+  { id: '6', name: 'Tangerine', hex: '#f4511e', tailwind: 'bg-[#f4511e] text-white' },
+  { id: '7', name: 'Peacock', hex: '#039be5', tailwind: 'bg-[#039be5] text-white' },
+  { id: '8', name: 'Graphite', hex: '#616161', tailwind: 'bg-[#616161] text-white' },
+  { id: '9', name: 'Blueberry', hex: '#3f51b5', tailwind: 'bg-[#3f51b5] text-white' },
+  { id: '10', name: 'Basil', hex: '#0b8043', tailwind: 'bg-[#0b8043] text-white' },
+  { id: '11', name: 'Tomato', hex: '#d50000', tailwind: 'bg-[#d50000] text-white' },
 ];
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const WEEKDAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // --- Data Models for Demo ---
 
@@ -215,21 +213,6 @@ const EXTERNAL_GOOGLE_EVENTS: ScheduleBlock[] = [
   }
 ];
 
-// --- Google Calendar Color Palette ---
-const GOOGLE_COLORS = [
-  { id: '1', name: 'Lavender', hex: '#7986cb', tailwind: 'bg-[#7986cb] text-white' },
-  { id: '2', name: 'Sage', hex: '#33b679', tailwind: 'bg-[#33b679] text-white' },
-  { id: '3', name: 'Grape', hex: '#8e24aa', tailwind: 'bg-[#8e24aa] text-white' },
-  { id: '4', name: 'Flamingo', hex: '#e67c73', tailwind: 'bg-[#e67c73] text-white' },
-  { id: '5', name: 'Banana', hex: '#f6bf26', tailwind: 'bg-[#f6bf26] text-slate-800' },
-  { id: '6', name: 'Tangerine', hex: '#f4511e', tailwind: 'bg-[#f4511e] text-white' },
-  { id: '7', name: 'Peacock', hex: '#039be5', tailwind: 'bg-[#039be5] text-white' },
-  { id: '8', name: 'Graphite', hex: '#616161', tailwind: 'bg-[#616161] text-white' },
-  { id: '9', name: 'Blueberry', hex: '#3f51b5', tailwind: 'bg-[#3f51b5] text-white' },
-  { id: '10', name: 'Basil', hex: '#0b8043', tailwind: 'bg-[#0b8043] text-white' },
-  { id: '11', name: 'Tomato', hex: '#d50000', tailwind: 'bg-[#d50000] text-white' },
-];
-
 // --- Timebox App Components ---
 
 interface TaskItemProps {
@@ -261,7 +244,6 @@ const TaskItem = ({
   const [isTagSubmenuOpen, setIsTagSubmenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -292,8 +274,8 @@ const TaskItem = ({
       </span>
       {task.tag && (
         <span 
-          className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide`}
-          style={{ backgroundColor: task.tagColor || '#6F00FF', color: 'white' }}
+          className="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide text-white"
+          style={{ backgroundColor: task.tagColor || '#6F00FF' }}
         >
           {task.tag}
         </span>
@@ -307,10 +289,7 @@ const TaskItem = ({
       {/* Options Menu */}
       <div className="relative z-40" ref={menuRef}>
         <button 
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsMenuOpen(!isMenuOpen);
-          }}
+          onClick={(e) => { e.stopPropagation(); setIsMenuOpen(!isMenuOpen); }}
           className="text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-300 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
         >
           <MoreVertical size={16} />
@@ -318,112 +297,45 @@ const TaskItem = ({
         
         {isMenuOpen && (
           <div className="absolute right-0 top-8 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl z-[100] py-1 text-sm">
-            {/* Mark as Complete */}
-            <button
-              onClick={() => {
-                onToggleComplete(task.id);
-                setIsMenuOpen(false);
-              }}
-              className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
-            >
+            <button onClick={() => { onToggleComplete(task.id); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200">
               <Check size={14} className={task.completed ? 'text-emerald-500' : ''} />
               {task.completed ? 'Mark as Incomplete' : 'Mark as Complete'}
             </button>
-            
-            {/* Move to Later/Active */}
-            <button
-              onClick={() => {
-                onMoveToList(task.id, listType === 'active' ? 'later' : 'active');
-                setIsMenuOpen(false);
-              }}
-              className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
-            >
+            <button onClick={() => { onMoveToList(task.id, listType === 'active' ? 'later' : 'active'); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200">
               <MoveRight size={14} />
               {listType === 'active' ? 'Move to Later' : 'Move to Active'}
             </button>
-            
             <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-            
-            {/* Create Tag */}
-            <button
-              onClick={() => {
-                onOpenTagModal(task.id);
-                setIsMenuOpen(false);
-              }}
-              className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
-            >
-              <Plus size={14} />
-              Create Tag
+            <button onClick={() => { onOpenTagModal(task.id); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200">
+              <Plus size={14} /> Create Tag
             </button>
-            
-            {/* Add Tag (with inline options) */}
             <div className="relative">
-              <button
-                onClick={() => setIsTagSubmenuOpen(!isTagSubmenuOpen)}
-                className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200 justify-between"
-              >
-                <span className="flex items-center gap-2">
-                  <Tag size={14} />
-                  Add Tag
-                </span>
+              <button onClick={() => setIsTagSubmenuOpen(!isTagSubmenuOpen)} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200 justify-between">
+                <span className="flex items-center gap-2"><Tag size={14} /> Add Tag</span>
                 {isTagSubmenuOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </button>
-              
               {isTagSubmenuOpen && userTags.length > 0 && (
                 <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
                   {userTags.map((tag, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        onAddTag(task.id, tag.name, tag.color);
-                        setIsMenuOpen(false);
-                        setIsTagSubmenuOpen(false);
-                      }}
-                      className="w-full px-4 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
-                    >
-                      <span 
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: tag.color }}
-                      />
+                    <button key={idx} onClick={() => { onAddTag(task.id, tag.name, tag.color); setIsMenuOpen(false); setIsTagSubmenuOpen(false); }} className="w-full px-4 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
                       <span className="text-slate-600 dark:text-slate-300 text-sm">{tag.name}</span>
                     </button>
                   ))}
                 </div>
               )}
-              
               {isTagSubmenuOpen && userTags.length === 0 && (
-                <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 py-2 px-4 text-xs text-slate-400">
-                  No tags yet. Create one first!
-                </div>
+                <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 py-2 px-4 text-xs text-slate-400">No tags yet</div>
               )}
             </div>
-            
-            {/* Remove Tag */}
             {task.tag && (
-              <button
-                onClick={() => {
-                  onRemoveTag(task.id);
-                  setIsMenuOpen(false);
-                }}
-                className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
-              >
-                <X size={14} />
-                Remove Tag
+              <button onClick={() => { onRemoveTag(task.id); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                <X size={14} /> Remove Tag
               </button>
             )}
-            
             <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-            
-            {/* Delete Task */}
-            <button
-              onClick={() => {
-                onDelete(task.id);
-                setIsMenuOpen(false);
-              }}
-              className="w-full px-3 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400"
-            >
-              <Trash2 size={14} />
-              Delete Task
+            <button onClick={() => { onDelete(task.id); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400">
+              <Trash2 size={14} /> Delete Task
             </button>
           </div>
         )}
@@ -437,197 +349,9 @@ interface TagModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (tagName: string, tagColor: string) => void;
-  existingTags: { name: string; color: string }[];
 }
 
-// --- Weight Line Chart Component ---
-interface WeightLineChartProps {
-  entries: { date: string; weight: number }[];
-  height?: number;
-}
-
-const WeightLineChart = ({ entries, height = 200 }: WeightLineChartProps) => {
-  if (entries.length < 2) {
-    return (
-      <div className="flex items-center justify-center h-40 text-slate-400 text-sm">
-        Need at least 2 entries to show chart
-      </div>
-    );
-  }
-
-  const padding = { top: 10, right: 10, bottom: 30, left: 40 };
-  const chartWidth = 600; // Wider viewBox for better proportions
-  const chartHeight = height;
-  const innerWidth = chartWidth - padding.left - padding.right;
-  const innerHeight = chartHeight - padding.top - padding.bottom;
-
-  const weights = entries.map(e => e.weight);
-  const minWeight = Math.floor(Math.min(...weights) - 1);
-  const maxWeight = Math.ceil(Math.max(...weights) + 1);
-  const weightRange = maxWeight - minWeight;
-
-  // Calculate points
-  const points = entries.map((entry, idx) => {
-    const x = padding.left + (idx / (entries.length - 1)) * innerWidth;
-    const y = padding.top + innerHeight - ((entry.weight - minWeight) / weightRange) * innerHeight;
-    return { x, y, ...entry };
-  });
-
-  // Create smooth curve path
-  const linePath = points.reduce((path, point, idx) => {
-    if (idx === 0) return `M ${point.x} ${point.y}`;
-    
-    const prev = points[idx - 1];
-    const cpx1 = prev.x + (point.x - prev.x) / 3;
-    const cpx2 = point.x - (point.x - prev.x) / 3;
-    return `${path} C ${cpx1} ${prev.y}, ${cpx2} ${point.y}, ${point.x} ${point.y}`;
-  }, '');
-
-  // Create area path (for gradient fill)
-  const areaPath = `${linePath} L ${points[points.length - 1].x} ${padding.top + innerHeight} L ${padding.left} ${padding.top + innerHeight} Z`;
-
-  // Y-axis labels
-  const yLabels = [];
-  const ySteps = 4;
-  for (let i = 0; i <= ySteps; i++) {
-    const value = minWeight + (weightRange * i) / ySteps;
-    const y = padding.top + innerHeight - (i / ySteps) * innerHeight;
-    yLabels.push({ value: value.toFixed(1), y });
-  }
-
-  // X-axis labels (show first, middle, last)
-  const xLabels = [
-    { label: new Date(entries[0].date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' }), x: padding.left },
-    { label: new Date(entries[Math.floor(entries.length / 2)].date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' }), x: padding.left + innerWidth / 2 },
-    { label: new Date(entries[entries.length - 1].date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' }), x: padding.left + innerWidth },
-  ];
-
-  return (
-    <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" className="w-full" style={{ height }}>
-      <defs>
-        <linearGradient id="weightGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#6F00FF" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#6F00FF" stopOpacity="0.05" />
-        </linearGradient>
-      </defs>
-
-      {/* Grid lines */}
-      {yLabels.map((label, idx) => (
-        <line
-          key={idx}
-          x1={padding.left}
-          y1={label.y}
-          x2={padding.left + innerWidth}
-          y2={label.y}
-          stroke="currentColor"
-          strokeOpacity="0.1"
-          strokeDasharray="4 4"
-        />
-      ))}
-
-      {/* Area fill */}
-      <path d={areaPath} fill="url(#weightGradient)" />
-
-      {/* Main line */}
-      <path
-        d={linePath}
-        fill="none"
-        stroke="#6F00FF"
-        strokeWidth="3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
-      {/* Moving average line (thinner, smoother) */}
-      {entries.length >= 7 && (() => {
-        const maPoints = entries.map((entry, idx) => {
-          const start = Math.max(0, idx - 3);
-          const end = Math.min(entries.length, idx + 4);
-          const slice = entries.slice(start, end);
-          const avg = slice.reduce((sum, e) => sum + e.weight, 0) / slice.length;
-          const x = padding.left + (idx / (entries.length - 1)) * innerWidth;
-          const y = padding.top + innerHeight - ((avg - minWeight) / weightRange) * innerHeight;
-          return { x, y };
-        });
-        
-        const maPath = maPoints.reduce((path, point, idx) => {
-          if (idx === 0) return `M ${point.x} ${point.y}`;
-          const prev = maPoints[idx - 1];
-          const cpx1 = prev.x + (point.x - prev.x) / 3;
-          const cpx2 = point.x - (point.x - prev.x) / 3;
-          return `${path} C ${cpx1} ${prev.y}, ${cpx2} ${point.y}, ${point.x} ${point.y}`;
-        }, '');
-        
-        return (
-          <path
-            d={maPath}
-            fill="none"
-            stroke="#a78bfa"
-            strokeWidth="2"
-            strokeLinecap="round"
-            opacity="0.7"
-          />
-        );
-      })()}
-
-      {/* Data points */}
-      {points.map((point, idx) => (
-        <g key={idx}>
-          <circle
-            cx={point.x}
-            cy={point.y}
-            r="4"
-            fill="#6F00FF"
-            stroke="white"
-            strokeWidth="2"
-            className="cursor-pointer hover:r-6 transition-all"
-          />
-          <title>{`${point.date}: ${point.weight} kg`}</title>
-        </g>
-      ))}
-
-      {/* Y-axis labels */}
-      {yLabels.map((label, idx) => (
-        <text
-          key={idx}
-          x={padding.left - 8}
-          y={label.y}
-          textAnchor="end"
-          dominantBaseline="middle"
-          className="fill-slate-400 text-[10px]"
-        >
-          {label.value}
-        </text>
-      ))}
-
-      {/* X-axis labels */}
-      {xLabels.map((label, idx) => (
-        <text
-          key={idx}
-          x={label.x}
-          y={chartHeight - 10}
-          textAnchor="middle"
-          className="fill-slate-400 text-[10px]"
-        >
-          {label.label}
-        </text>
-      ))}
-
-      {/* Y-axis title */}
-      <text
-        x={12}
-        y={chartHeight / 2}
-        textAnchor="middle"
-        transform={`rotate(-90, 12, ${chartHeight / 2})`}
-        className="fill-slate-400 text-[10px]"
-      >
-        kg
-      </text>
-    </svg>
-  );
-};
-
-const TagModal = ({ isOpen, onClose, onSave, existingTags }: TagModalProps) => {
+const TagModal = ({ isOpen, onClose, onSave }: TagModalProps) => {
   const [tagName, setTagName] = useState('');
   const [selectedColor, setSelectedColor] = useState(GOOGLE_COLORS[0].hex);
 
@@ -648,98 +372,117 @@ const TagModal = ({ isOpen, onClose, onSave, existingTags }: TagModalProps) => {
         <div className="p-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Tag size={20} className="text-[#6F00FF]" />
-              Create Tag
+              <Tag size={20} className="text-[#6F00FF]" /> Create Tag
             </h3>
-            <button
-              onClick={onClose}
-              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-            >
+            <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
               <X size={20} />
             </button>
           </div>
         </div>
-        
         <div className="p-4 space-y-4">
-          {/* Tag Name Input */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Tag Name
-            </label>
-            <input
-              type="text"
-              value={tagName}
-              onChange={(e) => setTagName(e.target.value)}
-              placeholder="e.g., Work, Personal, Urgent"
-              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50 focus:border-[#6F00FF]"
-              autoFocus
-            />
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tag Name</label>
+            <input type="text" value={tagName} onChange={(e) => setTagName(e.target.value)} placeholder="e.g., Work, Personal" className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50" autoFocus />
           </div>
-          
-          {/* Color Picker */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Color
-            </label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Color</label>
             <div className="grid grid-cols-6 gap-2">
               {GOOGLE_COLORS.map((color) => (
-                <button
-                  key={color.id}
-                  onClick={() => setSelectedColor(color.hex)}
-                  className={`w-8 h-8 rounded-full transition-all ${selectedColor === color.hex ? 'ring-2 ring-offset-2 ring-[#6F00FF] dark:ring-offset-slate-900 scale-110' : 'hover:scale-105'}`}
-                  style={{ backgroundColor: color.hex }}
-                  title={color.name}
-                />
+                <button key={color.id} onClick={() => setSelectedColor(color.hex)} className={`w-8 h-8 rounded-full transition-all ${selectedColor === color.hex ? 'ring-2 ring-offset-2 ring-[#6F00FF] dark:ring-offset-slate-900 scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: color.hex }} title={color.name} />
               ))}
             </div>
           </div>
-          
-          {/* Preview */}
           {tagName && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Preview
-              </label>
-              <span
-                className="inline-block text-xs px-2 py-1 rounded font-semibold uppercase tracking-wide text-white"
-                style={{ backgroundColor: selectedColor }}
-              >
-                {tagName}
-              </span>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Preview</label>
+              <span className="inline-block text-xs px-2 py-1 rounded font-semibold uppercase tracking-wide text-white" style={{ backgroundColor: selectedColor }}>{tagName}</span>
             </div>
           )}
         </div>
-        
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!tagName.trim()}
-            className="px-4 py-2 text-sm font-medium bg-[#6F00FF] text-white rounded-lg hover:bg-[#5800cc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Create Tag
-          </button>
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">Cancel</button>
+          <button onClick={handleSave} disabled={!tagName.trim()} className="px-4 py-2 text-sm font-medium bg-[#6F00FF] text-white rounded-lg hover:bg-[#5800cc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Create Tag</button>
         </div>
       </div>
     </div>
   );
 };
 
+// --- Weight Line Chart Component ---
+const WeightLineChart = ({ entries, height = 200 }: { entries: { date: string; weight: number }[]; height?: number }) => {
+  if (entries.length < 2) {
+    return <div className="flex items-center justify-center h-40 text-slate-400 text-sm">Need at least 2 entries to show chart</div>;
+  }
+
+  const padding = { top: 10, right: 10, bottom: 30, left: 40 };
+  const chartWidth = 600;
+  const chartHeight = height;
+  const innerWidth = chartWidth - padding.left - padding.right;
+  const innerHeight = chartHeight - padding.top - padding.bottom;
+
+  const weights = entries.map(e => e.weight);
+  const minWeight = Math.floor(Math.min(...weights) - 1);
+  const maxWeight = Math.ceil(Math.max(...weights) + 1);
+  const weightRange = maxWeight - minWeight;
+
+  const points = entries.map((entry, idx) => {
+    const x = padding.left + (idx / (entries.length - 1)) * innerWidth;
+    const y = padding.top + innerHeight - ((entry.weight - minWeight) / weightRange) * innerHeight;
+    return { x, y, ...entry };
+  });
+
+  const linePath = points.reduce((path, point, idx) => {
+    if (idx === 0) return `M ${point.x} ${point.y}`;
+    const prev = points[idx - 1];
+    const cpx1 = prev.x + (point.x - prev.x) / 3;
+    const cpx2 = point.x - (point.x - prev.x) / 3;
+    return `${path} C ${cpx1} ${prev.y}, ${cpx2} ${point.y}, ${point.x} ${point.y}`;
+  }, '');
+
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${padding.top + innerHeight} L ${padding.left} ${padding.top + innerHeight} Z`;
+
+  const yLabels = [];
+  const ySteps = 4;
+  for (let i = 0; i <= ySteps; i++) {
+    const value = minWeight + (weightRange * i) / ySteps;
+    const y = padding.top + innerHeight - (i / ySteps) * innerHeight;
+    yLabels.push({ value: value.toFixed(1), y });
+  }
+
+  return (
+    <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" className="w-full" style={{ height }}>
+      <defs>
+        <linearGradient id="weightGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#6F00FF" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#6F00FF" stopOpacity="0.05" />
+        </linearGradient>
+      </defs>
+      {yLabels.map((label, idx) => (
+        <line key={idx} x1={padding.left} y1={label.y} x2={padding.left + innerWidth} y2={label.y} stroke="currentColor" strokeOpacity="0.1" strokeDasharray="4 4" />
+      ))}
+      <path d={areaPath} fill="url(#weightGradient)" />
+      <path d={linePath} fill="none" stroke="#6F00FF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      {points.map((point, idx) => (
+        <g key={idx}>
+          <circle cx={point.x} cy={point.y} r="4" fill="#6F00FF" stroke="white" strokeWidth="2" className="cursor-pointer" />
+          <title>{`${point.date}: ${point.weight} kg`}</title>
+        </g>
+      ))}
+      {yLabels.map((label, idx) => (
+        <text key={idx} x={padding.left - 8} y={label.y} textAnchor="end" dominantBaseline="middle" className="fill-slate-400 text-[10px]">{label.value}</text>
+      ))}
+    </svg>
+  );
+};
+
 // --- Habit Form Component ---
-interface HabitFormProps {
+const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: {
   initialHabit?: Habit | null;
   userTags: { name: string; color: string }[];
   onSave: (data: Omit<Habit, 'id' | 'currentStreak' | 'longestStreak' | 'completedDates' | 'createdAt'>) => void;
   onCancel: () => void;
   onCreateTag: () => void;
-}
-
-const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: HabitFormProps) => {
+}) => {
   const [name, setName] = useState(initialHabit?.name || '');
   const [tag, setTag] = useState<string | null>(initialHabit?.tag || null);
   const [tagColor, setTagColor] = useState<string | null>(initialHabit?.tagColor || null);
@@ -749,223 +492,82 @@ const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: Ha
   const [endTime, setEndTime] = useState(initialHabit?.scheduledEndTime || '');
 
   const toggleDay = (day: number) => {
-    setScheduledDays(prev => 
-      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort()
-    );
-  };
-
-  const selectTag = (tagName: string, color: string) => {
-    setTag(tagName);
-    setTagColor(color);
+    setScheduledDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort());
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-
-    onSave({
-      name: name.trim(),
-      tag,
-      tagColor,
-      frequency,
-      scheduledDays: frequency === 'daily' ? [] : scheduledDays,
-      scheduledStartTime: startTime || null,
-      scheduledEndTime: endTime || null,
-    });
+    onSave({ name: name.trim(), tag, tagColor, frequency, scheduledDays: frequency === 'daily' ? [] : scheduledDays, scheduledStartTime: startTime || null, scheduledEndTime: endTime || null });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Habit Name */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Habit Name
-        </label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="e.g., Morning workout"
-          className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] focus:border-transparent"
-          autoFocus
-        />
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Habit Name</label>
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Morning workout" className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]" autoFocus />
       </div>
-
-      {/* Tag Selection */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Tag <span className="text-slate-400 font-normal">(optional)</span>
-        </label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Tag <span className="text-slate-400 font-normal">(optional)</span></label>
         <div className="flex flex-wrap gap-2">
           {userTags.map(t => (
-            <button
-              key={t.name}
-              type="button"
-              onClick={() => selectTag(t.name, t.color)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                tag === t.name
-                  ? 'ring-2 ring-[#6F00FF] ring-offset-2 dark:ring-offset-slate-900'
-                  : 'hover:opacity-80'
-              }`}
-              style={{ backgroundColor: t.color, color: 'white' }}
-            >
-              {t.name}
-            </button>
+            <button key={t.name} type="button" onClick={() => { setTag(t.name); setTagColor(t.color); }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all text-white ${tag === t.name ? 'ring-2 ring-[#6F00FF] ring-offset-2 dark:ring-offset-slate-900' : 'hover:opacity-80'}`} style={{ backgroundColor: t.color }}>{t.name}</button>
           ))}
-          <button
-            type="button"
-            onClick={onCreateTag}
-            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
-          >
-            <Plus size={14} />
-            New Tag
-          </button>
+          <button type="button" onClick={onCreateTag} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-1"><Plus size={14} /> New Tag</button>
         </div>
-        {tag && (
-          <button
-            type="button"
-            onClick={() => { setTag(null); setTagColor(null); }}
-            className="mt-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-          >
-            ✕ Remove tag
-          </button>
-        )}
+        {tag && <button type="button" onClick={() => { setTag(null); setTagColor(null); }} className="mt-2 text-xs text-slate-500 hover:text-slate-700">✕ Remove tag</button>}
       </div>
-
-      {/* Frequency */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Frequency
-        </label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Frequency</label>
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setFrequency('daily')}
-            className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-              frequency === 'daily'
-                ? 'bg-[#6F00FF] text-white'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-            }`}
-          >
-            <Repeat size={16} className="inline mr-2" />
-            Every Day
-          </button>
-          <button
-            type="button"
-            onClick={() => setFrequency('weekly')}
-            className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-              frequency === 'weekly'
-                ? 'bg-[#6F00FF] text-white'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-            }`}
-          >
-            <Calendar size={16} className="inline mr-2" />
-            Specific Days
-          </button>
+          <button type="button" onClick={() => setFrequency('daily')} className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all ${frequency === 'daily' ? 'bg-[#6F00FF] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'}`}><Repeat size={16} className="inline mr-2" /> Every Day</button>
+          <button type="button" onClick={() => setFrequency('weekly')} className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all ${frequency === 'weekly' ? 'bg-[#6F00FF] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'}`}><Calendar size={16} className="inline mr-2" /> Specific Days</button>
         </div>
       </div>
-
-      {/* Day Selection (if weekly) */}
       {frequency === 'weekly' && (
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Select Days
-          </label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Select Days</label>
           <div className="flex gap-1">
             {WEEKDAYS.map((day, idx) => (
-              <button
-                key={day}
-                type="button"
-                onClick={() => toggleDay(idx)}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                  scheduledDays.includes(idx)
-                    ? 'bg-[#6F00FF] text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                {day}
-              </button>
+              <button key={day} type="button" onClick={() => toggleDay(idx)} className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${scheduledDays.includes(idx) ? 'bg-[#6F00FF] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200'}`}>{day}</button>
             ))}
           </div>
         </div>
       )}
-
-      {/* Scheduled Time (Start - End) */}
       <div>
         <div className="flex items-center gap-2 mb-2">
-          <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-            Scheduled Time <span className="text-slate-400 font-normal">(optional)</span>
-          </label>
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Scheduled Time <span className="text-slate-400 font-normal">(optional)</span></label>
           <div className="relative group">
             <Info size={14} className="text-slate-400 cursor-help" />
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 dark:bg-slate-700 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
               <div className="font-medium mb-1">With time:</div>
-              <div className="text-slate-300">Appears directly on your timeline</div>
+              <div className="text-slate-300">Appears directly on timeline</div>
               <div className="font-medium mt-2 mb-1">Without time:</div>
-              <div className="text-slate-300">Appears in To-Do list to schedule later</div>
-              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800 dark:border-t-slate-700"></div>
+              <div className="text-slate-300">Appears in To-Do list</div>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex-1">
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Start</label>
-            <input
-              type="time"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] focus:border-transparent"
-            />
+            <label className="block text-xs text-slate-500 mb-1">Start</label>
+            <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]" />
           </div>
           <span className="text-slate-400 mt-5">–</span>
           <div className="flex-1">
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">End</label>
-            <input
-              type="time"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] focus:border-transparent"
-            />
+            <label className="block text-xs text-slate-500 mb-1">End</label>
+            <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]" />
           </div>
-          {(startTime || endTime) && (
-            <button
-              type="button"
-              onClick={() => { setStartTime(''); setEndTime(''); }}
-              className="mt-5 p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-            >
-              <X size={18} />
-            </button>
-          )}
+          {(startTime || endTime) && <button type="button" onClick={() => { setStartTime(''); setEndTime(''); }} className="mt-5 p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200"><X size={18} /></button>}
         </div>
         {startTime && endTime ? (
-          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-1">
-            <Clock size={12} />
-            Will appear directly on your Timebox timeline
-          </p>
+          <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1"><Clock size={12} /> Will appear on timeline</p>
         ) : (
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1">
-            <ListTodo size={12} />
-            Will appear in To-Do list for manual scheduling
-          </p>
+          <p className="text-xs text-slate-500 mt-2 flex items-center gap-1"><ListTodo size={12} /> Will appear in To-Do list</p>
         )}
       </div>
-
-      {/* Actions */}
       <div className="flex gap-3 pt-4">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={!name.trim()}
-          className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-[#6F00FF] text-white hover:bg-[#5800cc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {initialHabit ? 'Update Habit' : 'Create Habit'}
-        </button>
+        <button type="button" onClick={onCancel} className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 hover:bg-slate-200">Cancel</button>
+        <button type="submit" disabled={!name.trim()} className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-[#6F00FF] text-white hover:bg-[#5800cc] disabled:opacity-50">{initialHabit ? 'Update Habit' : 'Create Habit'}</button>
       </div>
     </form>
   );
@@ -979,19 +581,18 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   // State for Settings
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState({
-    timeFormat: '12h', // '12h' | '24h'
+    timeFormat: '12h',
     timezone: 'Local'
   });
-  
+
   // State for Calendar Picker
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [calendarViewDate, setCalendarViewDate] = useState(new Date());
   const calendarRef = useRef<HTMLDivElement>(null);
-  
+
   // State for Tags
   const [userTags, setUserTags] = useState<{ name: string; color: string }[]>(() => {
-    // Load from localStorage on init
     const saved = localStorage.getItem('ascend_user_tags');
     return saved ? JSON.parse(saved) : [];
   });
@@ -1003,16 +604,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     const saved = localStorage.getItem('ascend_notes');
     return saved || '';
   });
-  
-  // State for Promo Section collapse
+  const [notesSaved, setNotesSaved] = useState(false);
+
+  // State for Promo Section
   const [isPromoOpen, setIsPromoOpen] = useState(() => {
     const saved = localStorage.getItem('ascend_promo_open');
     return saved !== null ? JSON.parse(saved) : true;
   });
-  
-  // State for notes saved indicator
-  const [notesSaved, setNotesSaved] = useState(false);
-  
+
   // State for Weight Tracking
   const [weightEntries, setWeightEntries] = useState<{ date: string; weight: number }[]>(() => {
     const saved = localStorage.getItem('ascend_weight_entries');
@@ -1028,153 +627,22 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   });
   const [isAddHabitOpen, setIsAddHabitOpen] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
-  const [habitViewDate, setHabitViewDate] = useState(new Date());
 
   // Save habits to localStorage
   useEffect(() => {
     localStorage.setItem('ascend_habits', JSON.stringify(habits));
   }, [habits]);
 
-  // Helper functions for habits
-  const getTodayString = () => new Date().toISOString().split('T')[0];
+  // Timeline refs and state
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
   
-  const isHabitScheduledForDay = (habit: Habit, date: Date) => {
-    const dayOfWeek = date.getDay();
-    if (habit.frequency === 'daily') return true;
-    return habit.scheduledDays.includes(dayOfWeek);
-  };
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
-  const isHabitCompletedOnDate = (habit: Habit, dateString: string) => {
-    return habit.completedDates.includes(dateString);
-  };
-
-  const calculateStreak = (habit: Habit): number => {
-    const today = new Date();
-    let streak = 0;
-    let currentDate = new Date(today);
-    
-    // Check if completed today first
-    const todayString = currentDate.toISOString().split('T')[0];
-    if (!isHabitScheduledForDay(habit, currentDate)) {
-      // Skip today if not scheduled
-      currentDate.setDate(currentDate.getDate() - 1);
-    }
-    
-    while (true) {
-      const dateString = currentDate.toISOString().split('T')[0];
-      
-      // Check if this day is scheduled
-      if (isHabitScheduledForDay(habit, currentDate)) {
-        if (habit.completedDates.includes(dateString)) {
-          streak++;
-        } else {
-          // Allow today to be incomplete without breaking streak
-          if (dateString === todayString) {
-            currentDate.setDate(currentDate.getDate() - 1);
-            continue;
-          }
-          break;
-        }
-      }
-      
-      currentDate.setDate(currentDate.getDate() - 1);
-      
-      // Limit search to last 365 days
-      if (streak > 365) break;
-    }
-    
-    return streak;
-  };
-
-  const toggleHabitCompletion = (habitId: string, date?: Date) => {
-    const targetDate = date || new Date();
-    const dateString = targetDate.toISOString().split('T')[0];
-    
-    setHabits(prev => prev.map(habit => {
-      if (habit.id !== habitId) return habit;
-      
-      const isCompleted = habit.completedDates.includes(dateString);
-      let newCompletedDates: string[];
-      
-      if (isCompleted) {
-        newCompletedDates = habit.completedDates.filter(d => d !== dateString);
-      } else {
-        newCompletedDates = [...habit.completedDates, dateString];
-      }
-      
-      const updatedHabit = {
-        ...habit,
-        completedDates: newCompletedDates,
-      };
-      
-      // Recalculate streaks
-      const newStreak = calculateStreak(updatedHabit);
-      
-      return {
-        ...updatedHabit,
-        currentStreak: newStreak,
-        longestStreak: Math.max(updatedHabit.longestStreak, newStreak),
-      };
-    }));
-  };
-
-  const addHabit = (newHabit: Omit<Habit, 'id' | 'currentStreak' | 'longestStreak' | 'completedDates' | 'createdAt'>) => {
-    const habit: Habit = {
-      ...newHabit,
-      id: crypto.randomUUID(),
-      currentStreak: 0,
-      longestStreak: 0,
-      completedDates: [],
-      createdAt: new Date().toISOString(),
-    };
-    setHabits(prev => [...prev, habit]);
-    setIsAddHabitOpen(false);
-  };
-
-  const updateHabit = (habitId: string, updates: Partial<Habit>) => {
-    setHabits(prev => prev.map(h => h.id === habitId ? { ...h, ...updates } : h));
-    setEditingHabit(null);
-  };
-
-  const deleteHabit = (habitId: string) => {
-    setHabits(prev => prev.filter(h => h.id !== habitId));
-  };
-
-  // Get habits scheduled for today
-  const getTodaysHabits = () => {
-    const today = new Date();
-    return habits.filter(h => isHabitScheduledForDay(h, today));
-  };
-
-  // Get today's habits without scheduled time (for To-Do list)
-  const getUnscheduledTodaysHabits = () => {
-    return getTodaysHabits().filter(h => !h.scheduledStartTime);
-  };
-
-  // Get weekly completion data for a habit
-  const getWeeklyData = (habit: Habit) => {
-    const result = [];
-    const today = new Date();
-    
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateString = date.toISOString().split('T')[0];
-      const isScheduled = isHabitScheduledForDay(habit, date);
-      const isCompleted = habit.completedDates.includes(dateString);
-      
-      result.push({
-        date,
-        dateString,
-        dayName: WEEKDAYS[date.getDay()],
-        isScheduled,
-        isCompleted,
-        isToday: i === 0,
-      });
-    }
-    
-    return result;
-  };
+  const currentTimeDecimal = currentTime.getHours() + currentTime.getMinutes() / 60;
 
   // Google Calendar State
   const [googleAccount, setGoogleAccount] = useState<{
@@ -1194,12 +662,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         // Check for saved Google user (persisted connection)
         const savedUser = loadSavedGoogleUser();
         if (savedUser && isSignedIn()) {
-          console.log('Restored Google Calendar connection - will verify on first sync');
+          console.log('Restored Google Calendar connection');
           setGoogleAccount(savedUser);
-        } else if (savedUser) {
-          // Token expired or invalid, clear saved user
-          console.log('Saved Google user found but token is invalid, clearing...');
-          revokeAccessToken(); // This clears localStorage
         }
         
         initGoogleIdentity(async (token) => {
@@ -1218,9 +682,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     };
     initGoogle();
   }, []);
-
-  // Auto-sync flag to prevent multiple syncs
-  const [hasAutoSynced, setHasAutoSynced] = useState(false);
 
   const handleConnectGoogle = () => {
     setIsGoogleConnecting(true);
@@ -1252,27 +713,29 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           loadUserSettings()
         ]);
 
-        // Always use database data for logged-in users (even if empty)
-        // This ensures deleted items stay deleted
-        setActiveTasks(activeData.map(t => ({
-          id: t.id,
-          title: t.title,
-          tag: t.tag,
-          tagColor: t.tagColor,
-          time: t.time,
-          completed: t.completed
-        })));
-        
-        setLaterTasks(laterData.map(t => ({
-          id: t.id,
-          title: t.title,
-          tag: t.tag,
-          tagColor: t.tagColor,
-          time: t.time,
-          completed: t.completed
-        })));
+        if (activeData.length > 0 || laterData.length > 0) {
+          setActiveTasks(activeData.length > 0 ? activeData.map(t => ({
+            id: t.id,
+            title: t.title,
+            tag: t.tag,
+            tagColor: t.tagColor,
+            time: t.time,
+            completed: t.completed
+          })) : INITIAL_TASKS);
+          
+          setLaterTasks(laterData.length > 0 ? laterData.map(t => ({
+            id: t.id,
+            title: t.title,
+            tag: t.tag,
+            tagColor: t.tagColor,
+            time: t.time,
+            completed: t.completed
+          })) : LATER_TASKS);
+        }
 
-        setSchedule(blocksData);
+        if (blocksData.length > 0) {
+          setSchedule(blocksData);
+        }
 
         // Load user settings
         if (userSettings) {
@@ -1296,15 +759,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [draggedItem, setDraggedItem] = useState(null);
   const [dragOverList, setDragOverList] = useState(null);
   const [dragOverHour, setDragOverHour] = useState(null);
-  
-  // Timeline scroll ref
-  const timelineRef = React.useRef<HTMLDivElement>(null);
 
   // Resize State
   const [resizingBlockId, setResizingBlockId] = useState<number | string | null>(null);
   const [resizeStartY, setResizeStartY] = useState<number | null>(null);
   const [resizeStartDuration, setResizeStartDuration] = useState<number | null>(null);
-  
+
   // Drag/Move Block State
   const [draggingBlockId, setDraggingBlockId] = useState<number | string | null>(null);
   const [dragStartY, setDragStartY] = useState<number | null>(null);
@@ -1342,31 +802,16 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     saveSettings();
   }, [settings, user, isDataLoaded]);
 
-  // Time labels for full 24-hour day (00:00 - 23:00)
+  // Time labels for full 24-hour day
   const timeLabels = Array.from({ length: 24 }, (_, i) => i);
-  
-  // Current time state - updates every minute
-  const [currentTime, setCurrentTime] = useState(new Date());
-  
+
+  // Scroll to current time on load
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000); // Update every minute
-    
-    return () => clearInterval(timer);
-  }, []);
-  
-  // Calculate current time as decimal (e.g., 13:30 = 13.5)
-  const currentTimeDecimal = currentTime.getHours() + currentTime.getMinutes() / 60;
-  
-  // Scroll to current time on mount
-  useEffect(() => {
-    if (timelineRef.current) {
-      // Scroll to current time minus 2 hours to show some context above
+    if (timelineRef.current && isDataLoaded) {
       const scrollPosition = Math.max(0, (currentTimeDecimal - 2) * 96);
       timelineRef.current.scrollTop = scrollPosition;
     }
-  }, [isDataLoaded]); // Only run once when data is loaded
+  }, [isDataLoaded]);
 
   // Close calendar when clicking outside
   useEffect(() => {
@@ -1375,129 +820,256 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         setIsCalendarOpen(false);
       }
     };
-    if (isCalendarOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    if (isCalendarOpen) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isCalendarOpen]);
 
-  // --- Calendar Helper Functions ---
-  const getDaysInMonth = (year: number, month: number) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
-
-  const getFirstDayOfMonth = (year: number, month: number) => {
-    return new Date(year, month, 1).getDay();
-  };
-
-  const isSameDay = (date1: Date, date2: Date) => {
-    return date1.getFullYear() === date2.getFullYear() &&
-           date1.getMonth() === date2.getMonth() &&
-           date1.getDate() === date2.getDate();
-  };
-
+  // Calendar helper functions
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+  const isSameDay = (date1: Date, date2: Date) => date1.getFullYear() === date2.getFullYear() && date1.getMonth() === date2.getMonth() && date1.getDate() === date2.getDate();
   const isToday = (date: Date) => isSameDay(date, new Date());
 
+  // Habit helper functions
+  const getTodayString = () => new Date().toISOString().split('T')[0];
+  const isHabitScheduledForDay = (habit: Habit, date: Date) => habit.frequency === 'daily' || habit.scheduledDays.includes(date.getDay());
+  const isHabitCompletedOnDate = (habit: Habit, dateString: string) => habit.completedDates.includes(dateString);
+
+  const calculateStreak = (habit: Habit): number => {
+    let streak = 0;
+    let currentDate = new Date();
+    const todayString = currentDate.toISOString().split('T')[0];
+    
+    while (true) {
+      const dateString = currentDate.toISOString().split('T')[0];
+      if (isHabitScheduledForDay(habit, currentDate)) {
+        if (habit.completedDates.includes(dateString)) streak++;
+        else if (dateString !== todayString) break;
+      }
+      currentDate.setDate(currentDate.getDate() - 1);
+      if (streak > 365) break;
+    }
+    return streak;
+  };
+
+  const toggleHabitCompletion = (habitId: string, date?: Date) => {
+    const targetDate = date || new Date();
+    const dateString = targetDate.toISOString().split('T')[0];
+    
+    setHabits(prev => prev.map(habit => {
+      if (habit.id !== habitId) return habit;
+      const isCompleted = habit.completedDates.includes(dateString);
+      const newCompletedDates = isCompleted ? habit.completedDates.filter(d => d !== dateString) : [...habit.completedDates, dateString];
+      const updatedHabit = { ...habit, completedDates: newCompletedDates };
+      const newStreak = calculateStreak(updatedHabit);
+      return { ...updatedHabit, currentStreak: newStreak, longestStreak: Math.max(updatedHabit.longestStreak, newStreak) };
+    }));
+  };
+
+  const addHabit = (newHabit: Omit<Habit, 'id' | 'currentStreak' | 'longestStreak' | 'completedDates' | 'createdAt'>) => {
+    const habit: Habit = { ...newHabit, id: crypto.randomUUID(), currentStreak: 0, longestStreak: 0, completedDates: [], createdAt: new Date().toISOString() };
+    setHabits(prev => [...prev, habit]);
+    setIsAddHabitOpen(false);
+  };
+
+  const updateHabit = (habitId: string, updates: Partial<Habit>) => {
+    setHabits(prev => prev.map(h => h.id === habitId ? { ...h, ...updates } : h));
+    setEditingHabit(null);
+  };
+
+  const deleteHabit = (habitId: string) => setHabits(prev => prev.filter(h => h.id !== habitId));
+
+  const getTodaysHabits = () => habits.filter(h => isHabitScheduledForDay(h, new Date()));
+  const getUnscheduledTodaysHabits = () => getTodaysHabits().filter(h => !h.scheduledStartTime);
+
+  const getWeeklyData = (habit: Habit) => {
+    const result = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateString = date.toISOString().split('T')[0];
+      result.push({
+        date, dateString, dayName: WEEKDAYS[date.getDay()],
+        isScheduled: isHabitScheduledForDay(habit, date),
+        isCompleted: habit.completedDates.includes(dateString),
+        isToday: i === 0
+      });
+    }
+    return result;
+  };
+
+  // Tag handlers
+  const handleCreateTag = (tagName: string, tagColor: string) => {
+    const newTag = { name: tagName, color: tagColor };
+    const updatedTags = [...userTags, newTag];
+    setUserTags(updatedTags);
+    localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
+    if (tagModalTaskId) handleAddTagToTask(tagModalTaskId, tagName, tagColor);
+    setTagModalTaskId(null);
+  };
+
+  const handleAddTagToTask = async (taskId: number | string, tagName: string, tagColor: string) => {
+    setActiveTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, tag: tagName, tagColor: tagColor } : t));
+    setLaterTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, tag: tagName, tagColor: tagColor } : t));
+    await updateTask(String(taskId), { tag: tagName, tagColor: tagColor });
+  };
+
+  const handleRemoveTagFromTask = async (taskId: number | string) => {
+    setActiveTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, tag: null, tagColor: null } : t));
+    setLaterTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, tag: null, tagColor: null } : t));
+    await updateTask(String(taskId), { tag: null, tagColor: null });
+  };
+
+  const handleOpenTagModal = (taskId: number | string) => { setTagModalTaskId(taskId); setIsTagModalOpen(true); };
+
+  const handleMoveTaskToList = async (taskId: number | string, targetList: 'active' | 'later') => {
+    const taskInActive = activeTasks.find(t => String(t.id) === String(taskId));
+    const taskInLater = laterTasks.find(t => String(t.id) === String(taskId));
+    const task = taskInActive || taskInLater;
+    if (!task) return;
+    
+    if (taskInActive && targetList === 'later') {
+      setActiveTasks(prev => prev.filter(t => String(t.id) !== String(taskId)));
+      setLaterTasks(prev => [...prev, { ...task, time: null }]);
+    } else if (taskInLater && targetList === 'active') {
+      setLaterTasks(prev => prev.filter(t => String(t.id) !== String(taskId)));
+      setActiveTasks(prev => [...prev, task]);
+    }
+    await moveTask(String(taskId), targetList);
+  };
+
+  const handleToggleComplete = async (taskId: number | string, listType: 'active' | 'later') => {
+    const currentTask = listType === 'active' ? activeTasks.find(t => String(t.id) === String(taskId)) : laterTasks.find(t => String(t.id) === String(taskId));
+    const newCompleted = currentTask ? !currentTask.completed : true;
+    
+    if (listType === 'active') {
+      setActiveTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, completed: newCompleted } : t));
+    } else {
+      setLaterTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, completed: newCompleted } : t));
+    }
+    setSchedule(prev => prev.map(block => String(block.taskId) === String(taskId) ? { ...block, completed: newCompleted } : block));
+    await updateTask(String(taskId), { completed: newCompleted });
+  };
+
+  const handleToggleBlockComplete = async (blockId: number | string) => {
+    const block = schedule.find(b => String(b.id) === String(blockId));
+    if (!block) return;
+    const newCompleted = !block.completed;
+    setSchedule(prev => prev.map(b => String(b.id) === String(blockId) ? { ...b, completed: newCompleted } : b));
+    if (block.taskId) {
+      setActiveTasks(prev => prev.map(t => String(t.id) === String(block.taskId) ? { ...t, completed: newCompleted } : t));
+      setLaterTasks(prev => prev.map(t => String(t.id) === String(block.taskId) ? { ...t, completed: newCompleted } : t));
+    }
+    if (block.habitId) toggleHabitCompletion(block.habitId, selectedDate);
+    await updateScheduleBlock(String(blockId), { completed: newCompleted });
+  };
+
+  // Notes and weight handlers
+  const handleNotesChange = (content: string) => {
+    setNotesContent(content);
+    localStorage.setItem('ascend_notes', content);
+    setNotesSaved(true);
+    setTimeout(() => setNotesSaved(false), 2000);
+  };
+
+  const handlePromoToggle = () => {
+    const newState = !isPromoOpen;
+    setIsPromoOpen(newState);
+    localStorage.setItem('ascend_promo_open', JSON.stringify(newState));
+  };
+
+  const handleAddWeight = () => {
+    const weight = parseFloat(newWeight);
+    if (isNaN(weight) || weight <= 0) return;
+    
+    const dateToLog = weightDate;
+    const existingIndex = weightEntries.findIndex(e => e.date === dateToLog);
+    
+    let updatedEntries = existingIndex >= 0 
+      ? weightEntries.map((e, i) => i === existingIndex ? { date: dateToLog, weight } : e)
+      : [...weightEntries, { date: dateToLog, weight }].sort((a, b) => a.date.localeCompare(b.date));
+    
+    if (updatedEntries.length > 90) updatedEntries = updatedEntries.slice(-90);
+    
+    setWeightEntries(updatedEntries);
+    localStorage.setItem('ascend_weight_entries', JSON.stringify(updatedEntries));
+    setNewWeight('');
+    setWeightDate(new Date().toISOString().split('T')[0]);
+    setNotification({ type: 'success', message: `Weight logged: ${weight} kg` });
+  };
+
+  // Calendar date selection
   const handleDateSelect = async (day: number) => {
     const newDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
     setSelectedDate(newDate);
     setIsCalendarOpen(false);
-    
-    // Load schedule blocks for the selected date
     await loadScheduleForDate(newDate);
   };
-  
+
   const loadScheduleForDate = async (date: Date) => {
     try {
-      // Load blocks from database for this date
       const blocksData = await loadScheduleBlocks(date);
-      
-      // Get habits scheduled for this date with specific times
       const dateString = date.toISOString().split('T')[0];
+      
+      // Add habit blocks
       const habitBlocks: ScheduleBlock[] = habits
         .filter(h => h.scheduledStartTime && isHabitScheduledForDay(h, date))
         .map(habit => {
           const [startHours, startMinutes] = habit.scheduledStartTime!.split(':').map(Number);
           const startTime = startHours + startMinutes / 60;
-          
-          // Calculate duration from start and end time
-          let duration = 0.5; // Default 30 min
+          let duration = 0.5;
           if (habit.scheduledEndTime) {
             const [endHours, endMinutes] = habit.scheduledEndTime.split(':').map(Number);
-            const endTime = endHours + endMinutes / 60;
-            duration = Math.max(0.25, endTime - startTime); // Minimum 15 min
+            duration = Math.max(0.25, (endHours + endMinutes / 60) - startTime);
           }
-          
-          const isCompleted = habit.completedDates.includes(dateString);
-          
-          // Use tag color or default purple
-          const bgColor = habit.tagColor ? `bg-[${habit.tagColor}]` : 'bg-[#6F00FF]';
-          
           return {
             id: `habit-${habit.id}-${dateString}`,
             title: habit.name,
             tag: habit.tag,
             start: startTime,
             duration,
-            color: bgColor,
+            color: habit.tagColor ? `bg-[${habit.tagColor}]` : 'bg-[#6F00FF]',
             textColor: 'text-white',
             isGoogle: false,
-            completed: isCompleted,
+            completed: habit.completedDates.includes(dateString),
             habitId: habit.id,
-            calendarColor: habit.tagColor, // Use tag color as calendar color for consistent styling
+            calendarColor: habit.tagColor,
           };
         });
-      
-      // If Google is connected, also fetch Google Calendar events
+
       if (googleAccount && isSignedIn()) {
         const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
         const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
-        
         const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
-        
-        // Merge database blocks with Google events
-        const googleBlocks: ScheduleBlock[] = googleEvents.map(event => {
-          // Use calendar color from Google or fallback to blue
-          const calColor = (event as any).calendarColor;
-          const calName = (event as any).calendarName;
-          
-          return {
-            id: event.id,
-            title: event.title,
-            tag: calName || null, // Use calendar name as tag
-            start: event.start,
-            duration: event.duration,
-            color: calColor ? '' : 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
-            textColor: 'text-white',
-            isGoogle: true,
-            googleEventId: event.id,
-            completed: false,
-            calendarColor: calColor, // Store the hex color
-            calendarName: calName,
-          };
-        });
-        
-        // Combine: DB blocks + Google events + Habit blocks (avoiding duplicates by googleEventId)
+        const googleBlocks: ScheduleBlock[] = googleEvents.map(event => ({
+          id: event.id,
+          title: event.title,
+          tag: (event as any).calendarName || null,
+          start: event.start,
+          duration: event.duration,
+          color: (event as any).calendarColor ? '' : 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
+          textColor: 'text-white',
+          isGoogle: true,
+          googleEventId: event.id,
+          completed: false,
+          calendarColor: (event as any).calendarColor,
+          calendarName: (event as any).calendarName,
+        }));
         const dbBlockIds = new Set(blocksData.map(b => b.googleEventId).filter(Boolean));
         const uniqueGoogleBlocks = googleBlocks.filter(g => !dbBlockIds.has(g.googleEventId));
-        
         setSchedule([...blocksData, ...uniqueGoogleBlocks, ...habitBlocks]);
       } else {
-        setSchedule([...(blocksData.length > 0 ? blocksData : []), ...habitBlocks]);
+        setSchedule([...blocksData, ...habitBlocks]);
       }
     } catch (error) {
       console.error('Failed to load schedule for date:', error);
-      setNotification({ type: 'error', message: 'Failed to load schedule for selected date' });
+      setNotification({ type: 'error', message: 'Failed to load schedule' });
     }
   };
 
-  const handlePrevMonth = () => {
-    setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1));
-  };
-
-  const handleNextMonth = () => {
-    setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1));
-  };
+  const handlePrevMonth = () => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1));
+  const handleNextMonth = () => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1));
 
   // --- Handlers ---
 
@@ -1528,39 +1100,25 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       // Handle resize
       if (resizingBlockId !== null && resizeStartY !== null && resizeStartDuration !== null) {
         const deltaY = e.clientY - resizeStartY;
-        const deltaHours = deltaY / 96; // 96px per hour
+        const deltaHours = deltaY / 96;
         let newDuration = resizeStartDuration + deltaHours;
-        
-        // Snap to 15 mins (0.25 hours)
         newDuration = Math.round(newDuration * 4) / 4;
-        
-        // Minimum duration 15 mins
         if (newDuration < 0.25) newDuration = 0.25;
-
-        setSchedule(prev => prev.map(block => 
-          block.id === resizingBlockId ? { ...block, duration: newDuration } : block
-        ));
+        setSchedule(prev => prev.map(block => block.id === resizingBlockId ? { ...block, duration: newDuration } : block));
       }
       
       // Handle drag/move
       if (draggingBlockId !== null && dragStartY !== null && dragStartTime !== null) {
         const deltaY = e.clientY - dragStartY;
-        const deltaHours = deltaY / 96; // 96px per hour
+        const deltaHours = deltaY / 96;
         let newStart = dragStartTime + deltaHours;
-        
-        // Snap to 15 mins (0.25 hours)
         newStart = Math.round(newStart * 4) / 4;
-        
-        // Keep within day bounds (0-24)
         const block = schedule.find(b => b.id === draggingBlockId);
         if (block) {
           if (newStart < 0) newStart = 0;
           if (newStart + block.duration > 24) newStart = 24 - block.duration;
         }
-
-        setSchedule(prev => prev.map(block => 
-          block.id === draggingBlockId ? { ...block, start: newStart } : block
-        ));
+        setSchedule(prev => prev.map(block => block.id === draggingBlockId ? { ...block, start: newStart } : block));
       }
     };
 
@@ -1568,22 +1126,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       // Handle resize end
       if (resizingBlockId !== null) {
         const resizedBlock = schedule.find(b => b.id === resizingBlockId);
-        
         if (resizedBlock?.googleEventId && googleAccount && isSignedIn()) {
           try {
-            await updateGoogleCalendarEvent(
-              resizedBlock.googleEventId,
-              resizedBlock.title,
-              resizedBlock.start,
-              resizedBlock.duration,
-              selectedDate
-            );
+            await updateGoogleCalendarEvent(resizedBlock.googleEventId, resizedBlock.title, resizedBlock.start, resizedBlock.duration, selectedDate);
             console.log('Updated Google Calendar event duration');
           } catch (error) {
             console.error('Failed to update Google Calendar event:', error);
           }
         }
-
         setResizingBlockId(null);
         setResizeStartY(null);
         setResizeStartDuration(null);
@@ -1592,25 +1142,16 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       // Handle drag/move end
       if (draggingBlockId !== null) {
         const movedBlock = schedule.find(b => b.id === draggingBlockId);
-        
-        // Sync new time to Google Calendar if connected
         if (movedBlock?.googleEventId && googleAccount && isSignedIn()) {
           try {
-            await updateGoogleCalendarEvent(
-              movedBlock.googleEventId,
-              movedBlock.title,
-              movedBlock.start,
-              movedBlock.duration,
-              selectedDate
-            );
+            await updateGoogleCalendarEvent(movedBlock.googleEventId, movedBlock.title, movedBlock.start, movedBlock.duration, selectedDate);
             console.log('Updated Google Calendar event time');
-            setNotification({ type: 'success', message: 'Event time updated in Google Calendar' });
+            setNotification({ type: 'success', message: 'Event time updated' });
           } catch (error) {
             console.error('Failed to update Google Calendar event:', error);
-            setNotification({ type: 'error', message: 'Failed to update Google Calendar' });
+            setNotification({ type: 'error', message: 'Failed to update event' });
           }
         }
-
         setDraggingBlockId(null);
         setDragStartY(null);
         setDragStartTime(null);
@@ -1621,12 +1162,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     }
-
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [resizingBlockId, resizeStartY, resizeStartDuration, draggingBlockId, dragStartY, dragStartTime, schedule, googleAccount]);
+  }, [resizingBlockId, resizeStartY, resizeStartDuration, draggingBlockId, dragStartY, dragStartTime, schedule, googleAccount, selectedDate]);
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newTaskInput.trim()) {
@@ -1660,27 +1200,18 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   };
 
   const handleDeleteTask = async (taskId: number | string, listType: string) => {
-    console.log('Deleting task:', taskId);
-    console.log('All blocks:', schedule.map(b => ({ id: b.id, taskId: b.taskId, title: b.title })));
-    
-    // Find and delete any linked schedule block
+    // Find and delete linked schedule block
     const linkedBlock = schedule.find(b => b.taskId && String(b.taskId) === String(taskId));
-    console.log('Found linked block:', linkedBlock);
-    
     if (linkedBlock) {
-      // Delete from Google Calendar if connected
       if (linkedBlock.googleEventId && googleAccount && isSignedIn()) {
         try {
           await deleteGoogleCalendarEvent(linkedBlock.googleEventId);
-          console.log('Deleted linked event from Google Calendar');
         } catch (error) {
           console.error('Failed to delete from Google Calendar:', error);
         }
       }
-      // Delete block from database and state
       await deleteScheduleBlock(String(linkedBlock.id));
       setSchedule(prev => prev.filter(b => String(b.id) !== String(linkedBlock.id)));
-      console.log('Deleted linked block from timeline');
     }
     
     // Delete task from database
@@ -1690,209 +1221,29 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     } else {
       setLaterTasks(prev => prev.filter(t => String(t.id) !== String(taskId)));
     }
-    console.log('Task deleted');
-  };
-
-  const handleToggleComplete = (taskId: number | string, listType: 'active' | 'later') => {
-    // Find the current task to get its new completed state
-    const currentTask = listType === 'active' 
-      ? activeTasks.find(t => String(t.id) === String(taskId))
-      : laterTasks.find(t => String(t.id) === String(taskId));
-    
-    const newCompleted = currentTask ? !currentTask.completed : true;
-    
-    // Toggle completion in the task list
-    if (listType === 'active') {
-      setActiveTasks(prev => prev.map(t => 
-        String(t.id) === String(taskId) ? { ...t, completed: newCompleted } : t
-      ));
-    } else {
-      setLaterTasks(prev => prev.map(t => 
-        String(t.id) === String(taskId) ? { ...t, completed: newCompleted } : t
-      ));
-    }
-    
-    // Also toggle completion in any linked schedule block (compare as strings)
-    setSchedule(prev => prev.map(block => 
-      String(block.taskId) === String(taskId) ? { ...block, completed: newCompleted } : block
-    ));
-    
-    console.log('Toggle complete:', { taskId, newCompleted, listType });
-  };
-
-  // Toggle completion directly on a schedule block
-  const handleToggleBlockComplete = (blockId: number | string) => {
-    const block = schedule.find(b => String(b.id) === String(blockId));
-    if (!block) return;
-    
-    const newCompleted = !block.completed;
-    
-    // Update the block
-    setSchedule(prev => prev.map(b => 
-      String(b.id) === String(blockId) ? { ...b, completed: newCompleted } : b
-    ));
-    
-    // If this block is linked to a task, also update the task
-    if (block.taskId) {
-      setActiveTasks(prev => prev.map(t => 
-        String(t.id) === String(block.taskId) ? { ...t, completed: newCompleted } : t
-      ));
-      setLaterTasks(prev => prev.map(t => 
-        String(t.id) === String(block.taskId) ? { ...t, completed: newCompleted } : t
-      ));
-      console.log('Block toggle synced to task:', { blockId, taskId: block.taskId, newCompleted });
-    }
-    
-    // If this block is linked to a habit, also update the habit
-    if (block.habitId) {
-      toggleHabitCompletion(block.habitId, selectedDate);
-      console.log('Block toggle synced to habit:', { blockId, habitId: block.habitId, newCompleted });
-    }
-  };
-
-  // --- Tag Management Handlers ---
-  
-  const handleCreateTag = (tagName: string, tagColor: string) => {
-    const newTag = { name: tagName, color: tagColor };
-    const updatedTags = [...userTags, newTag];
-    setUserTags(updatedTags);
-    localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
-    
-    // If we have a task ID, apply the tag to it
-    if (tagModalTaskId) {
-      handleAddTagToTask(tagModalTaskId, tagName, tagColor);
-    }
-    setTagModalTaskId(null);
-  };
-
-  // Notes handler with saved indicator
-  const handleNotesChange = (content: string) => {
-    setNotesContent(content);
-    localStorage.setItem('ascend_notes', content);
-    setNotesSaved(true);
-    setTimeout(() => setNotesSaved(false), 2000);
-  };
-  
-  // Promo collapse handler
-  const handlePromoToggle = () => {
-    const newState = !isPromoOpen;
-    setIsPromoOpen(newState);
-    localStorage.setItem('ascend_promo_open', JSON.stringify(newState));
-  };
-
-  // Weight tracking handler
-  const handleAddWeight = () => {
-    const weight = parseFloat(newWeight);
-    if (isNaN(weight) || weight <= 0) return;
-    
-    const dateToLog = weightDate;
-    const existingIndex = weightEntries.findIndex(e => e.date === dateToLog);
-    
-    let updatedEntries;
-    if (existingIndex >= 0) {
-      // Update existing entry for that date
-      updatedEntries = [...weightEntries];
-      updatedEntries[existingIndex] = { date: dateToLog, weight };
-    } else {
-      // Add new entry
-      updatedEntries = [...weightEntries, { date: dateToLog, weight }].sort((a, b) => a.date.localeCompare(b.date));
-    }
-    
-    // Keep only last 90 days (increased from 30)
-    if (updatedEntries.length > 90) {
-      updatedEntries = updatedEntries.slice(-90);
-    }
-    
-    setWeightEntries(updatedEntries);
-    localStorage.setItem('ascend_weight_entries', JSON.stringify(updatedEntries));
-    setNewWeight('');
-    setWeightDate(new Date().toISOString().split('T')[0]); // Reset to today
-    
-    const isToday = dateToLog === new Date().toISOString().split('T')[0];
-    setNotification({ type: 'success', message: `Weight logged: ${weight} kg${isToday ? '' : ` for ${dateToLog}`}` });
-  };
-
-  const handleAddTagToTask = async (taskId: number | string, tagName: string, tagColor: string) => {
-    // Update in active tasks
-    setActiveTasks(prev => prev.map(t => 
-      String(t.id) === String(taskId) ? { ...t, tag: tagName, tagColor: tagColor } : t
-    ));
-    // Update in later tasks
-    setLaterTasks(prev => prev.map(t => 
-      String(t.id) === String(taskId) ? { ...t, tag: tagName, tagColor: tagColor } : t
-    ));
-    // Update in database
-    await updateTask(String(taskId), { tag: tagName, tagColor: tagColor });
-  };
-
-  const handleRemoveTagFromTask = async (taskId: number | string) => {
-    // Update in active tasks
-    setActiveTasks(prev => prev.map(t => 
-      String(t.id) === String(taskId) ? { ...t, tag: null, tagColor: null } : t
-    ));
-    // Update in later tasks
-    setLaterTasks(prev => prev.map(t => 
-      String(t.id) === String(taskId) ? { ...t, tag: null, tagColor: null } : t
-    ));
-    // Update in database
-    await updateTask(String(taskId), { tag: null, tagColor: null });
-  };
-
-  const handleOpenTagModal = (taskId: number | string) => {
-    setTagModalTaskId(taskId);
-    setIsTagModalOpen(true);
-  };
-
-  const handleMoveTaskToList = async (taskId: number | string, targetList: 'active' | 'later') => {
-    // Find the task in both lists
-    const taskInActive = activeTasks.find(t => String(t.id) === String(taskId));
-    const taskInLater = laterTasks.find(t => String(t.id) === String(taskId));
-    const task = taskInActive || taskInLater;
-    
-    if (!task) return;
-    
-    if (taskInActive && targetList === 'later') {
-      // Move from active to later
-      setActiveTasks(prev => prev.filter(t => String(t.id) !== String(taskId)));
-      setLaterTasks(prev => [...prev, { ...task, time: null }]);
-    } else if (taskInLater && targetList === 'active') {
-      // Move from later to active
-      setLaterTasks(prev => prev.filter(t => String(t.id) !== String(taskId)));
-      setActiveTasks(prev => [...prev, task]);
-    }
-    
-    // Update in database
-    await moveTask(String(taskId), targetList);
   };
 
   const handleDeleteBlock = async (blockId: number | string) => {
-      // Find the block to get Google event ID
-      const block = schedule.find(b => String(b.id) === String(blockId));
-      
-      // Delete from Google Calendar if it has a googleEventId
-      if (block?.googleEventId && googleAccount && isSignedIn()) {
-        try {
-          await deleteGoogleCalendarEvent(block.googleEventId);
-          console.log('Deleted event from Google Calendar:', block.googleEventId);
-        } catch (error) {
-          console.error('Failed to delete from Google Calendar:', error);
-          // Continue with local delete even if Google delete fails
-        }
+    const block = schedule.find(b => String(b.id) === String(blockId));
+    
+    // Delete from Google Calendar
+    if (block?.googleEventId && googleAccount && isSignedIn()) {
+      try {
+        await deleteGoogleCalendarEvent(block.googleEventId);
+      } catch (error) {
+        console.error('Failed to delete from Google Calendar:', error);
       }
+    }
 
-      // Clear the time from the linked task (but DON'T delete the task)
-      if (block?.taskId) {
-        setActiveTasks(prev => prev.map(t => 
-          String(t.id) === String(block.taskId) ? { ...t, time: null } : t
-        ));
-        setLaterTasks(prev => prev.map(t => 
-          String(t.id) === String(block.taskId) ? { ...t, time: null } : t
-        ));
-      }
+    // Clear linked task's time (but don't delete the task)
+    if (block?.taskId) {
+      setActiveTasks(prev => prev.map(t => String(t.id) === String(block.taskId) ? { ...t, time: null } : t));
+      setLaterTasks(prev => prev.map(t => String(t.id) === String(block.taskId) ? { ...t, time: null } : t));
+    }
 
-      // Delete block from database (not the task!)
-      await deleteScheduleBlock(String(blockId));
-      setSchedule(prev => prev.filter(b => String(b.id) !== String(blockId)));
+    // Delete from database
+    await deleteScheduleBlock(String(blockId));
+    setSchedule(prev => prev.filter(b => String(b.id) !== String(blockId)));
   };
 
   const handleSync = async () => {
@@ -1920,51 +1271,27 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           googleEventId: b.googleEventId,
         }));
 
-      // Fetch events from BOTH Ascend calendar AND primary Google Calendar for selected date
-      const startOfDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 0, 0, 0);
-      const endOfDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59);
-      
-      // Get all Google Calendar events (both primary and Ascend)
-      console.log('Fetching Google Calendar events...');
-      const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
-      console.log('Google events received:', googleEvents);
-      
-      // Perform two-way sync for selected date
-      const syncResult = await syncCalendarEvents(localBlocksForSync, selectedDate);
-      console.log('Sync result:', syncResult);
+      // Perform two-way sync
+      const syncResult = await syncCalendarEvents(localBlocksForSync, new Date());
 
       setSchedule(prev => {
         let updated = [...prev];
-        
-        // Get existing Google event IDs to avoid duplicates
-        const existingGoogleIds = new Set(
-          prev.filter(b => b.googleEventId).map(b => b.googleEventId)
-        );
 
-        // Add ALL Google Calendar events (from both primary and Ascend calendars)
-        console.log('Existing Google IDs:', Array.from(existingGoogleIds));
-        console.log('Events to add:', googleEvents.filter(event => !existingGoogleIds.has(event.id)));
-        
-        const allNewBlocks = googleEvents
-          .filter(event => !existingGoogleIds.has(event.id))
-          .map(event => ({
-            id: event.id,
-            title: event.title,
-            tag: 'google',
-            start: event.start,
-            duration: event.duration,
-            color: event.isFromAscendCalendar 
-              ? 'bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500'
-              : 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
-            textColor: event.isFromAscendCalendar
-              ? 'text-indigo-950 dark:text-indigo-50'
-              : 'text-blue-950 dark:text-blue-50',
-            isGoogle: true,
-            googleEventId: event.id,
-          }));
-        updated = [...updated, ...allNewBlocks];
+        // Add new events from Google
+        const newBlocks = syncResult.toAdd.map(event => ({
+          id: event.id,
+          title: event.title,
+          tag: 'google',
+          start: event.start,
+          duration: event.duration,
+          color: 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
+          textColor: 'text-blue-950 dark:text-blue-50',
+          isGoogle: true,
+          googleEventId: event.id,
+        }));
+        updated = [...updated, ...newBlocks];
 
-        // Update changed events from syncResult
+        // Update changed events
         for (const { localId, event } of syncResult.toUpdate) {
           updated = updated.map(b => 
             b.id === localId 
@@ -1994,27 +1321,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
       setIsCalendarSynced(true);
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('Sync failed:', error);
-      if (error?.message === 'TOKEN_INVALID' || error?.message?.includes('token')) {
-        setNotification({ type: 'error', message: 'Google session expired. Please reconnect in Settings.' });
-        setGoogleAccount(null);
-      } else {
-        setNotification({ type: 'error', message: 'Failed to sync with Google Calendar' });
-      }
+      setNotification({ type: 'error', message: 'Failed to sync with Google Calendar' });
     } finally {
       setIsSyncing(false);
     }
   };
-
-  // Auto-sync when Google account is connected (only once per session)
-  useEffect(() => {
-    if (googleAccount && isSignedIn() && user && isDataLoaded && !hasAutoSynced && !isSyncing) {
-      console.log('Auto-syncing Google Calendar...');
-      setHasAutoSynced(true);
-      handleSync();
-    }
-  }, [googleAccount, user, isDataLoaded, hasAutoSynced, isSyncing]);
 
   const handleTaskDragStart = (e, task, sourceList) => {
     setDraggedItem({ task, sourceList });
@@ -2028,7 +1341,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleListDrop = async (e: React.DragEvent, targetListId: 'active' | 'later') => {
+  const handleListDrop = (e, targetListId) => {
     e.preventDefault();
     setDragOverList(null);
     if (!draggedItem) return;
@@ -2049,10 +1362,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     } else {
         setLaterTasks(prev => [...prev, newTask]);
     }
-    
-    // Save to database
-    await moveTask(String(task.id), targetListId);
-    
     setDraggedItem(null);
   };
 
@@ -2071,24 +1380,22 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         const habitName = e.dataTransfer.getData('habitName');
         const habitTag = e.dataTransfer.getData('habitTag') || null;
         const habitTagColor = e.dataTransfer.getData('habitTagColor') || null;
-        
-        // Check if this habit is already on the timeline for today
         const dateString = selectedDate.toISOString().split('T')[0];
+        
+        // Check if already on timeline
         const existingBlock = schedule.find(b => b.habitId === habitId);
         if (existingBlock) {
-          setNotification({ type: 'info', message: 'This habit is already on the timeline. Move it instead!' });
+          setNotification({ type: 'info', message: 'This habit is already on the timeline!' });
           return;
         }
         
-        // Create a block for the habit
-        const bgColor = habitTagColor ? `bg-[${habitTagColor}]` : 'bg-[#6F00FF]';
         const habitBlock: ScheduleBlock = {
           id: `habit-${habitId}-${dateString}-${hour}`,
           title: habitName,
           tag: habitTag,
           start: hour,
           duration: 1,
-          color: bgColor,
+          color: habitTagColor ? `bg-[${habitTagColor}]` : 'bg-[#6F00FF]',
           textColor: 'text-white',
           isGoogle: false,
           completed: false,
@@ -2097,14 +1404,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         };
         
         setSchedule(prev => [...prev, habitBlock]);
-        
-        // Update the habit's scheduled time in state
-        setHabits(prev => prev.map(h => 
-          h.id === habitId 
-            ? { ...h, scheduledStartTime: `${hour.toString().padStart(2, '0')}:00`, scheduledEndTime: `${(hour + 1).toString().padStart(2, '0')}:00` }
-            : h
-        ));
-        
+        setHabits(prev => prev.map(h => h.id === habitId ? { ...h, scheduledStartTime: `${hour.toString().padStart(2, '0')}:00`, scheduledEndTime: `${(hour + 1).toString().padStart(2, '0')}:00` } : h));
         setNotification({ type: 'success', message: `Scheduled "${habitName}" at ${formatTime(hour)}` });
         return;
       }
@@ -2112,10 +1412,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       if (!draggedItem) return;
       const { task } = draggedItem;
 
-      // Check if this task is already on the timeline
+      // Check if task is already on timeline
       const existingBlock = schedule.find(b => b.taskId === task.id);
       if (existingBlock) {
-        setNotification({ type: 'info', message: 'This task is already on the timeline. Move it instead!' });
+        setNotification({ type: 'info', message: 'This task is already on the timeline!' });
         setDraggedItem(null);
         return;
       }
@@ -2132,13 +1432,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           taskId: task.id
       };
 
-      // Save to database for the selected date
       const savedBlock = await createScheduleBlock(blockData, selectedDate);
       
-      // Preserve taskId and completed since they're not in database
       const newBlock: ScheduleBlock = savedBlock ? {
           ...savedBlock,
-          taskId: task.id,  // Keep the link to the original task
+          taskId: task.id,
           completed: task.completed || false
       } : {
           id: Date.now(),
@@ -2147,39 +1445,22 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
       setSchedule(prev => [...prev, newBlock]);
       
-      // Update the task to reflect it has been scheduled
       if (draggedItem.sourceList === 'active') {
           const timeString = formatTime(hour);
           setActiveTasks(prev => prev.map(t => t.id === task.id ? { ...t, time: timeString } : t));
       }
       setDraggedItem(null);
 
-      // Push to Google Calendar if connected
-      console.log('Checking Google connection:', { googleAccount: !!googleAccount, isSignedIn: isSignedIn() });
       if (googleAccount && isSignedIn()) {
-          console.log('Attempting to create Google Calendar event...');
           try {
-              const eventId = await createGoogleCalendarEvent(
-                  task.title,
-                  hour,
-                  newBlock.duration, // Use actual block duration
-                  selectedDate, // Use selected date instead of today
-                  task.tag || undefined // Pass tag for color coding
-              );
-              console.log('Created Google Calendar event:', eventId);
-              // Update the block with the Google event ID
-              setSchedule(prev => prev.map(b => 
-                  b.id === newBlock.id 
-                      ? { ...b, googleEventId: eventId }
-                      : b
-              ));
+              const eventId = await createGoogleCalendarEvent(task.title, hour, newBlock.duration, selectedDate, task.tag || undefined);
+              setSchedule(prev => prev.map(b => b.id === newBlock.id ? { ...b, googleEventId: eventId } : b));
               setNotification({ type: 'success', message: `Added "${task.title}" to Google Calendar` });
           } catch (error: any) {
               console.error('Failed to create Google Calendar event:', error);
               const errorMessage = error?.message || 'Unknown error';
               if (errorMessage.includes('token expired') || errorMessage.includes('Not signed in')) {
                 setNotification({ type: 'error', message: 'Google session expired. Please reconnect in Settings.' });
-                // Clear the stale Google account
                 setGoogleAccount(null);
               } else {
                 setNotification({ type: 'error', message: `Failed to add to Google Calendar: ${errorMessage}` });
@@ -2234,36 +1515,21 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center bg-slate-100 dark:bg-slate-800 rounded-full p-1">
           <button 
             onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-              activeTab === 'dashboard' 
-                ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' 
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'dashboard' ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
           >
-            <LayoutDashboard size={16} />
-            Dashboard
+            <LayoutDashboard size={16} /> Dashboard
           </button>
           <button 
             onClick={() => setActiveTab('timebox')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-              activeTab === 'timebox' 
-                ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' 
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'timebox' ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
           >
-            <Clock size={16} />
-            Timebox
+            <Clock size={16} /> Timebox
           </button>
           <button 
             onClick={() => setActiveTab('habittracker')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-              activeTab === 'habittracker' 
-                ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' 
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'habittracker' ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
           >
-            <Target size={16} />
-            Habits
+            <Target size={16} /> Habits
           </button>
         </div>
 
@@ -2420,33 +1686,21 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       )}
 
       {/* Tag Modal */}
-      <TagModal
-        isOpen={isTagModalOpen}
-        onClose={() => {
-          setIsTagModalOpen(false);
-          setTagModalTaskId(null);
-        }}
-        onSave={handleCreateTag}
-        existingTags={userTags}
-      />
+      <TagModal isOpen={isTagModalOpen} onClose={() => { setIsTagModalOpen(false); setTagModalTaskId(null); }} onSave={handleCreateTag} />
 
       {/* Main Content Area */}
       {activeTab === 'dashboard' && (
         <div className="flex-1 overflow-y-auto animate-fade-in-up">
           <div className="max-w-6xl mx-auto p-6 space-y-6">
-            
-            {/* Header / Greeting */}
+            {/* Header */}
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-3xl font-bold text-slate-800 dark:text-white">
-                  {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}{user ? `, ${user.name.split(' ')[0]}` : ''}! 👋
+                  {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}{user ? `, ${user.name?.split(' ')[0] || ''}` : ''}! 👋
                 </h1>
-                <p className="text-slate-500 dark:text-slate-400 mt-1">
-                  {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                </p>
+                <p className="text-slate-500 dark:text-slate-400 mt-1">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
               </div>
               <div className="flex items-center gap-4">
-                {/* Quick Stats */}
                 <div className="bg-white dark:bg-slate-800 rounded-xl px-4 py-3 shadow-sm border border-slate-200 dark:border-slate-700">
                   <div className="text-2xl font-bold text-[#6F00FF]">{activeTasks.filter(t => t.completed).length}/{activeTasks.length}</div>
                   <div className="text-xs text-slate-500">Tasks done</div>
@@ -2460,87 +1714,42 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
             {/* Main Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Today's Tasks - Takes 1 column */}
+              {/* Today's Tasks */}
               <div className="lg:col-span-1">
                 <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 h-full">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2">
-                      <ListTodo size={20} className="text-[#6F00FF]" />
-                      Today's Tasks
-                    </h2>
-                    <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-full">
-                      {activeTasks.filter(t => t.completed).length} of {activeTasks.length}
-                    </span>
+                    <h2 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><ListTodo size={20} className="text-[#6F00FF]" /> Today's Tasks</h2>
+                    <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-full">{activeTasks.filter(t => t.completed).length} of {activeTasks.length}</span>
                   </div>
-                  
                   <div className="space-y-2 max-h-80 overflow-y-auto">
                     {activeTasks.length === 0 ? (
                       <p className="text-center text-slate-400 py-8 text-sm">No tasks for today</p>
                     ) : (
                       activeTasks.map(task => (
-                        <div 
-                          key={task.id}
-                          className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                            task.completed 
-                              ? 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 opacity-60' 
-                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-[#6F00FF]/50'
-                          }`}
-                        >
-                          <button
-                            onClick={() => handleToggleComplete(task.id, 'active')}
-                            className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                              task.completed 
-                                ? 'bg-emerald-500 border-emerald-500' 
-                                : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'
-                            }`}
-                          >
+                        <div key={task.id} className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${task.completed ? 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 opacity-60' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+                          <button onClick={() => handleToggleComplete(task.id, 'active')} className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${task.completed ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}>
                             {task.completed && <Check size={12} className="text-white" />}
                           </button>
-                          <span className={`flex-1 text-sm ${task.completed ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}>
-                            {task.title}
-                          </span>
-                          {task.tag && (
-                            <span 
-                              className="text-[10px] px-1.5 py-0.5 rounded font-semibold text-white"
-                              style={{ backgroundColor: task.tagColor || '#6F00FF' }}
-                            >
-                              {task.tag}
-                            </span>
-                          )}
+                          <span className={`flex-1 text-sm ${task.completed ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}>{task.title}</span>
+                          {task.tag && <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold text-white" style={{ backgroundColor: task.tagColor || '#6F00FF' }}>{task.tag}</span>}
                         </div>
                       ))
                     )}
                   </div>
-                  
-                  <button 
-                    onClick={() => setActiveTab('timebox')}
-                    className="w-full mt-4 py-2 text-sm text-[#6F00FF] hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-lg transition-colors font-medium"
-                  >
-                    Open Timebox →
-                  </button>
+                  <button onClick={() => setActiveTab('timebox')} className="w-full mt-4 py-2 text-sm text-[#6F00FF] hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-lg transition-colors font-medium">Open Timebox →</button>
                 </div>
               </div>
 
-              {/* Weight Tracker - Takes 2 columns */}
+              {/* Weight Tracker */}
               <div className="lg:col-span-2">
                 <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2">
-                      <Activity size={20} className="text-[#6F00FF]" />
-                      Weight Tracker
-                    </h2>
+                    <h2 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><Activity size={20} className="text-[#6F00FF]" /> Weight Tracker</h2>
                     {weightEntries.length > 0 && (
                       <div className="flex items-center gap-4 text-sm">
-                        <span className="text-slate-500">
-                          Current: <strong className="text-slate-800 dark:text-white">{weightEntries[weightEntries.length - 1]?.weight} kg</strong>
-                        </span>
+                        <span className="text-slate-500">Current: <strong className="text-slate-800 dark:text-white">{weightEntries[weightEntries.length - 1]?.weight} kg</strong></span>
                         {weightEntries.length > 1 && (
-                          <span className={`font-medium ${
-                            weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight 
-                              ? 'text-emerald-500' 
-                              : 'text-red-500'
-                          }`}>
+                          <span className={`font-medium ${weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight ? 'text-emerald-500' : 'text-red-500'}`}>
                             {weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight ? '↓' : '↑'}
                             {Math.abs(weightEntries[weightEntries.length - 1].weight - weightEntries[0].weight).toFixed(1)} kg
                           </span>
@@ -2548,90 +1757,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       </div>
                     )}
                   </div>
-                  
-                  {/* Line Chart */}
                   <WeightLineChart entries={weightEntries} height={220} />
-                  
-                  {/* Weight Input */}
                   <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
-                    <input
-                      type="date"
-                      value={weightDate}
-                      onChange={(e) => setWeightDate(e.target.value)}
-                      max={new Date().toISOString().split('T')[0]}
-                      className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
-                    />
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={newWeight}
-                      onChange={(e) => setNewWeight(e.target.value)}
-                      placeholder="Weight (kg)"
-                      className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddWeight()}
-                    />
-                    <button
-                      onClick={handleAddWeight}
-                      className="px-4 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors"
-                    >
-                      Log
-                    </button>
+                    <input type="date" value={weightDate} onChange={(e) => setWeightDate(e.target.value)} max={new Date().toISOString().split('T')[0]} className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50" />
+                    <input type="number" step="0.1" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} placeholder="Weight (kg)" className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50" onKeyDown={(e) => e.key === 'Enter' && handleAddWeight()} />
+                    <button onClick={handleAddWeight} className="px-4 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors">Log</button>
                   </div>
                 </div>
               </div>
-
-              {/* Upcoming Events */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
-                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-3">
-                  <Calendar size={18} className="text-[#6F00FF]" />
-                  Today's Schedule
-                </h3>
-                <div className="space-y-2">
-                  {schedule.length === 0 ? (
-                    <p className="text-sm text-slate-400 py-4 text-center">No events scheduled</p>
-                  ) : (
-                    schedule.slice(0, 4).map(block => (
-                      <div key={block.id} className="flex items-center gap-3 text-sm">
-                        <div className="text-slate-400 font-mono w-16">{formatTime(block.start)}</div>
-                        <div 
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: block.calendarColor || '#6F00FF' }}
-                        />
-                        <div className="flex-1 text-slate-700 dark:text-slate-200 truncate">{block.title}</div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Weekly Progress */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
-                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-3">
-                  <BarChart3 size={18} className="text-[#6F00FF]" />
-                  This Week
-                </h3>
-                <div className="grid grid-cols-7 gap-1">
-                  {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => {
-                    const isToday = idx === (new Date().getDay() + 6) % 7;
-                    const hasTasks = Math.random() > 0.5; // Placeholder - would check real data
-                    return (
-                      <div key={idx} className="text-center">
-                        <div className={`text-xs mb-1 ${isToday ? 'text-[#6F00FF] font-bold' : 'text-slate-400'}`}>{day}</div>
-                        <div className={`w-8 h-8 rounded-lg mx-auto flex items-center justify-center ${
-                          isToday 
-                            ? 'bg-[#6F00FF] text-white' 
-                            : hasTasks 
-                              ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' 
-                              : 'bg-slate-100 dark:bg-slate-700 text-slate-400'
-                        }`}>
-                          {isToday ? '●' : hasTasks ? '✓' : '○'}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
             </div>
           </div>
         </div>
@@ -2641,185 +1774,82 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         <div className="flex-1 overflow-hidden animate-fade-in-up">
           <div className="h-full overflow-y-auto">
             <div className="max-w-4xl mx-auto p-6 space-y-6">
-              
               {/* Header */}
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center">
-                      <Flame size={20} className="text-white" />
-                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center"><Flame size={20} className="text-white" /></div>
                     Habit Tracker
                   </h1>
                   <p className="text-slate-500 dark:text-slate-400 mt-1">Build consistency, one day at a time</p>
                 </div>
-                <button
-                  onClick={() => setIsAddHabitOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-[#6F00FF] text-white rounded-xl font-semibold hover:bg-[#5800cc] transition-all shadow-lg shadow-purple-500/25"
-                >
-                  <Plus size={18} />
-                  New Habit
+                <button onClick={() => setIsAddHabitOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-[#6F00FF] text-white rounded-xl font-semibold hover:bg-[#5800cc] transition-all shadow-lg shadow-purple-500/25">
+                  <Plus size={18} /> New Habit
                 </button>
               </div>
 
-              {/* Stats Overview */}
+              {/* Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm mb-1">
-                    <Target size={14} />
-                    Active Habits
-                  </div>
+                  <div className="flex items-center gap-2 text-slate-500 text-sm mb-1"><Target size={14} /> Active Habits</div>
                   <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{habits.length}</div>
                 </div>
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm mb-1">
-                    <Check size={14} />
-                    Done Today
-                  </div>
-                  <div className="text-2xl font-bold text-emerald-500">
-                    {getTodaysHabits().filter(h => isHabitCompletedOnDate(h, getTodayString())).length}
-                    <span className="text-slate-400 text-lg font-normal">/{getTodaysHabits().length}</span>
-                  </div>
+                  <div className="flex items-center gap-2 text-slate-500 text-sm mb-1"><Check size={14} /> Done Today</div>
+                  <div className="text-2xl font-bold text-emerald-500">{getTodaysHabits().filter(h => isHabitCompletedOnDate(h, getTodayString())).length}<span className="text-slate-400 text-lg font-normal">/{getTodaysHabits().length}</span></div>
                 </div>
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm mb-1">
-                    <Flame size={14} />
-                    Best Streak
-                  </div>
-                  <div className="text-2xl font-bold text-orange-500">
-                    {habits.length > 0 ? Math.max(...habits.map(h => h.longestStreak)) : 0}
-                    <span className="text-slate-400 text-sm font-normal ml-1">days</span>
-                  </div>
+                  <div className="flex items-center gap-2 text-slate-500 text-sm mb-1"><Flame size={14} /> Best Streak</div>
+                  <div className="text-2xl font-bold text-orange-500">{habits.length > 0 ? Math.max(...habits.map(h => h.longestStreak)) : 0}<span className="text-slate-400 text-sm font-normal ml-1">days</span></div>
                 </div>
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm mb-1">
-                    <TrendingUp size={14} />
-                    Weekly Rate
-                  </div>
-                  <div className="text-2xl font-bold text-blue-500">
-                    {habits.length > 0 ? Math.round(
-                      habits.reduce((acc, h) => {
-                        const weekData = getWeeklyData(h);
-                        const scheduled = weekData.filter(d => d.isScheduled).length;
-                        const completed = weekData.filter(d => d.isScheduled && d.isCompleted).length;
-                        return acc + (scheduled > 0 ? (completed / scheduled) * 100 : 0);
-                      }, 0) / habits.length
-                    ) : 0}%
-                  </div>
+                  <div className="flex items-center gap-2 text-slate-500 text-sm mb-1"><TrendingUp size={14} /> Weekly Rate</div>
+                  <div className="text-2xl font-bold text-blue-500">{habits.length > 0 ? Math.round(habits.reduce((acc, h) => { const weekData = getWeeklyData(h); const scheduled = weekData.filter(d => d.isScheduled).length; const completed = weekData.filter(d => d.isScheduled && d.isCompleted).length; return acc + (scheduled > 0 ? (completed / scheduled) * 100 : 0); }, 0) / habits.length) : 0}%</div>
                 </div>
               </div>
 
-              {/* Today's Habits Section */}
+              {/* Today's Habits */}
               <div>
                 <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
-                  <Zap size={18} className="text-amber-500" />
-                  Today's Habits
-                  <span className="text-sm font-normal text-slate-400 ml-2">
-                    {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-                  </span>
+                  <Zap size={18} className="text-amber-500" /> Today's Habits
+                  <span className="text-sm font-normal text-slate-400 ml-2">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
                 </h2>
                 
                 {getTodaysHabits().length === 0 ? (
                   <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-700">
                     <Activity size={48} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
-                    <p className="text-slate-500 dark:text-slate-400 font-medium">No habits scheduled for today</p>
-                    <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Create a new habit to get started!</p>
+                    <p className="text-slate-500">No habits scheduled for today</p>
+                    <p className="text-slate-400 text-sm mt-1">Create a new habit to get started!</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {getTodaysHabits().map(habit => {
                       const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
                       const weekData = getWeeklyData(habit);
-                      
                       return (
-                        <div 
-                          key={habit.id}
-                          className={`bg-white dark:bg-slate-800 rounded-2xl p-4 border transition-all ${
-                            isCompleted 
-                              ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/20' 
-                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                          }`}
-                        >
+                        <div key={habit.id} className={`bg-white dark:bg-slate-800 rounded-2xl p-4 border transition-all ${isCompleted ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/20' : 'border-slate-200 dark:border-slate-700'}`}>
                           <div className="flex items-center gap-4">
-                            {/* Completion Button */}
-                            <button
-                              onClick={() => toggleHabitCompletion(habit.id)}
-                              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shrink-0 ${
-                                isCompleted
-                                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                                  : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600'
-                              }`}
-                              style={!isCompleted && habit.tagColor ? { backgroundColor: habit.tagColor } : undefined}
-                            >
+                            <button onClick={() => toggleHabitCompletion(habit.id)} className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shrink-0 ${isCompleted ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-slate-200 dark:bg-slate-700'}`} style={!isCompleted && habit.tagColor ? { backgroundColor: habit.tagColor } : undefined}>
                               {isCompleted ? <Check size={24} strokeWidth={3} className="text-white" /> : <Target size={20} className="text-white" />}
                             </button>
-                            
-                            {/* Habit Info */}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <h3 className={`font-semibold text-slate-800 dark:text-slate-100 ${isCompleted ? 'line-through opacity-60' : ''}`}>
-                                  {habit.name}
-                                </h3>
-                                {habit.scheduledStartTime && (
-                                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                                    <Clock size={10} />
-                                    {habit.scheduledStartTime}{habit.scheduledEndTime ? ` - ${habit.scheduledEndTime}` : ''}
-                                  </span>
-                                )}
+                                <h3 className={`font-semibold text-slate-800 dark:text-slate-100 ${isCompleted ? 'line-through opacity-60' : ''}`}>{habit.name}</h3>
+                                {habit.scheduledStartTime && <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 flex items-center gap-1"><Clock size={10} />{habit.scheduledStartTime}{habit.scheduledEndTime ? ` - ${habit.scheduledEndTime}` : ''}</span>}
                               </div>
                               <div className="flex items-center gap-3 mt-1">
-                                {habit.tag && (
-                                  <span 
-                                    className="text-xs px-2 py-0.5 rounded-full text-white font-medium"
-                                    style={{ backgroundColor: habit.tagColor || '#6F00FF' }}
-                                  >
-                                    {habit.tag}
-                                  </span>
-                                )}
-                                {habit.currentStreak > 0 && (
-                                  <span className="text-xs font-medium text-orange-500 flex items-center gap-1">
-                                    <Flame size={12} />
-                                    {habit.currentStreak} day streak
-                                  </span>
-                                )}
+                                {habit.tag && <span className="text-xs px-2 py-0.5 rounded-full text-white font-medium" style={{ backgroundColor: habit.tagColor || '#6F00FF' }}>{habit.tag}</span>}
+                                {habit.currentStreak > 0 && <span className="text-xs font-medium text-orange-500 flex items-center gap-1"><Flame size={12} />{habit.currentStreak} day streak</span>}
                               </div>
                             </div>
-                            
-                            {/* Weekly Progress Mini */}
                             <div className="hidden sm:flex items-center gap-1">
                               {weekData.map((day, idx) => (
-                                <div
-                                  key={idx}
-                                  className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-medium transition-all ${
-                                    day.isToday ? 'ring-2 ring-[#6F00FF] ring-offset-1 dark:ring-offset-slate-800' : ''
-                                  } ${
-                                    !day.isScheduled 
-                                      ? 'bg-slate-100 dark:bg-slate-700 text-slate-300 dark:text-slate-600'
-                                      : day.isCompleted
-                                        ? 'bg-emerald-500 text-white'
-                                        : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400'
-                                  }`}
-                                  title={`${day.dayName}: ${day.isScheduled ? (day.isCompleted ? 'Done!' : 'Not done') : 'Not scheduled'}`}
-                                >
-                                  {day.dayName.charAt(0)}
-                                </div>
+                                <div key={idx} className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-medium ${day.isToday ? 'ring-2 ring-[#6F00FF] ring-offset-1 dark:ring-offset-slate-800' : ''} ${!day.isScheduled ? 'bg-slate-100 dark:bg-slate-700 text-slate-300' : day.isCompleted ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-500'}`}>{day.dayName.charAt(0)}</div>
                               ))}
                             </div>
-                            
-                            {/* Actions */}
                             <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => setEditingHabit(habit)}
-                                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                              >
-                                <Edit3 size={16} />
-                              </button>
-                              <button
-                                onClick={() => deleteHabit(habit.id)}
-                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              <button onClick={() => setEditingHabit(habit)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"><Edit3 size={16} /></button>
+                              <button onClick={() => deleteHabit(habit.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><Trash2 size={16} /></button>
                             </div>
                           </div>
                         </div>
@@ -2829,109 +1859,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 )}
               </div>
 
-              {/* All Habits Section */}
-              {habits.length > 0 && habits.filter(h => !isHabitScheduledForDay(h, new Date())).length > 0 && (
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
-                    <Repeat size={18} className="text-slate-400" />
-                    Other Habits
-                  </h2>
-                  <div className="space-y-3">
-                    {habits.filter(h => !isHabitScheduledForDay(h, new Date())).map(habit => {
-                      const weekData = getWeeklyData(habit);
-                      
-                      return (
-                        <div 
-                          key={habit.id}
-                          className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 opacity-70"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div 
-                              className="w-12 h-12 rounded-xl flex items-center justify-center bg-slate-300 dark:bg-slate-600"
-                              style={habit.tagColor ? { backgroundColor: habit.tagColor } : undefined}
-                            >
-                              <Target size={20} className="text-white" />
-                            </div>
-                            
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold text-slate-800 dark:text-slate-100">{habit.name}</h3>
-                              <div className="flex items-center gap-3 mt-1">
-                                <span className="text-xs text-slate-400 dark:text-slate-500">
-                                  {habit.frequency === 'daily' ? 'Daily' : habit.scheduledDays.map(d => WEEKDAYS[d]).join(', ')}
-                                </span>
-                                {habit.tag && (
-                                  <span 
-                                    className="text-xs px-2 py-0.5 rounded-full text-white font-medium"
-                                    style={{ backgroundColor: habit.tagColor || '#6F00FF' }}
-                                  >
-                                    {habit.tag}
-                                  </span>
-                                )}
-                                {habit.currentStreak > 0 && (
-                                  <span className="text-xs font-medium text-orange-500 flex items-center gap-1">
-                                    <Flame size={12} />
-                                    {habit.currentStreak} days
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <div className="hidden sm:flex items-center gap-1">
-                              {weekData.map((day, idx) => (
-                                <div
-                                  key={idx}
-                                  className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-medium ${
-                                    !day.isScheduled 
-                                      ? 'bg-slate-100 dark:bg-slate-700 text-slate-300 dark:text-slate-600'
-                                      : day.isCompleted
-                                        ? 'bg-emerald-500 text-white'
-                                        : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400'
-                                  }`}
-                                >
-                                  {day.dayName.charAt(0)}
-                                </div>
-                              ))}
-                            </div>
-                            
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => setEditingHabit(habit)}
-                                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                              >
-                                <Edit3 size={16} />
-                              </button>
-                              <button
-                                onClick={() => deleteHabit(habit.id)}
-                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               {/* Empty State */}
               {habits.length === 0 && (
                 <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-12 text-center">
-                  <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center shadow-xl shadow-purple-500/20">
-                    <Target size={40} className="text-white" />
-                  </div>
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center shadow-xl shadow-purple-500/20"><Target size={40} className="text-white" /></div>
                   <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Start Building Better Habits</h3>
-                  <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-6">
-                    Create your first habit and start tracking your progress. Small consistent actions lead to big results!
-                  </p>
-                  <button
-                    onClick={() => setIsAddHabitOpen(true)}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-[#6F00FF] text-white rounded-xl font-semibold hover:bg-[#5800cc] transition-all shadow-lg shadow-purple-500/25"
-                  >
-                    <Plus size={18} />
-                    Create First Habit
-                  </button>
+                  <p className="text-slate-500 max-w-md mx-auto mb-6">Create your first habit and start tracking your progress!</p>
+                  <button onClick={() => setIsAddHabitOpen(true)} className="inline-flex items-center gap-2 px-6 py-3 bg-[#6F00FF] text-white rounded-xl font-semibold hover:bg-[#5800cc] shadow-lg shadow-purple-500/25"><Plus size={18} /> Create First Habit</button>
                 </div>
               )}
             </div>
@@ -2943,32 +1877,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">
-                      {editingHabit ? 'Edit Habit' : 'Create New Habit'}
-                    </h2>
-                    <button
-                      onClick={() => { setIsAddHabitOpen(false); setEditingHabit(null); }}
-                      className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                    >
-                      <X size={20} />
-                    </button>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{editingHabit ? 'Edit Habit' : 'Create New Habit'}</h2>
+                    <button onClick={() => { setIsAddHabitOpen(false); setEditingHabit(null); }} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><X size={20} /></button>
                   </div>
-                  
                   <HabitForm
                     initialHabit={editingHabit}
                     userTags={userTags}
-                    onSave={(data) => {
-                      if (editingHabit) {
-                        updateHabit(editingHabit.id, data);
-                      } else {
-                        addHabit(data);
-                      }
-                    }}
+                    onSave={(data) => { if (editingHabit) updateHabit(editingHabit.id, data); else addHabit(data); }}
                     onCancel={() => { setIsAddHabitOpen(false); setEditingHabit(null); }}
-                    onCreateTag={() => {
-                      setTagModalTaskId(null); // No task, just creating for habits
-                      setIsTagModalOpen(true);
-                    }}
+                    onCreateTag={() => { setTagModalTaskId(null); setIsTagModalOpen(true); }}
                   />
                 </div>
               </div>
@@ -3018,48 +1935,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               {getUnscheduledTodaysHabits().map(habit => {
                 const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
                 return (
-                  <div
-                    key={`habit-${habit.id}`}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('habitId', habit.id);
-                      e.dataTransfer.setData('habitName', habit.name);
-                      e.dataTransfer.setData('habitTag', habit.tag || '');
-                      e.dataTransfer.setData('habitTagColor', habit.tagColor || '');
-                    }}
-                    className={`flex items-center gap-3 p-2.5 bg-white dark:bg-slate-800 rounded-lg border transition-all cursor-grab active:cursor-grabbing hover:shadow-sm ${
-                      isCompleted 
-                        ? 'border-emerald-200 dark:border-emerald-800 opacity-60' 
-                        : 'border-slate-200 dark:border-slate-700 hover:border-[#6F00FF]/30'
-                    }`}
-                  >
-                    <button
-                      onClick={() => toggleHabitCompletion(habit.id)}
-                      className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${
-                        isCompleted 
-                          ? 'bg-emerald-500 border-emerald-500' 
-                          : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'
-                      }`}
-                    >
+                  <div key={`habit-${habit.id}`} draggable onDragStart={(e) => { e.dataTransfer.setData('habitId', habit.id); e.dataTransfer.setData('habitName', habit.name); e.dataTransfer.setData('habitTag', habit.tag || ''); e.dataTransfer.setData('habitTagColor', habit.tagColor || ''); }} className={`flex items-center gap-3 p-2.5 bg-white dark:bg-slate-800 rounded-lg border transition-all cursor-grab active:cursor-grabbing hover:shadow-sm ${isCompleted ? 'border-emerald-200 dark:border-emerald-800 opacity-60' : 'border-slate-200 dark:border-slate-700 hover:border-[#6F00FF]/30'}`}>
+                    <button onClick={() => toggleHabitCompletion(habit.id)} className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${isCompleted ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}>
                       {isCompleted && <Check size={12} className="text-white" strokeWidth={3} />}
                     </button>
                     <div className="flex-1 min-w-0">
-                      <span className={`text-sm font-medium text-slate-700 dark:text-slate-200 ${isCompleted ? 'line-through' : ''}`}>
-                        {habit.name}
-                      </span>
-                      {habit.tag && (
-                        <span 
-                          className="ml-2 text-[10px] px-1.5 py-0.5 rounded text-white font-medium"
-                          style={{ backgroundColor: habit.tagColor || '#6F00FF' }}
-                        >
-                          {habit.tag}
-                        </span>
-                      )}
+                      <span className={`text-sm font-medium text-slate-700 dark:text-slate-200 ${isCompleted ? 'line-through' : ''}`}>{habit.name}</span>
+                      {habit.tag && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded text-white font-medium" style={{ backgroundColor: habit.tagColor || '#6F00FF' }}>{habit.tag}</span>}
                     </div>
-                    <div className="flex items-center gap-1 text-xs text-slate-400">
-                      <Flame size={12} className="text-orange-400" />
-                      <span className="font-medium">{habit.currentStreak}</span>
-                    </div>
+                    <div className="flex items-center gap-1 text-xs text-slate-400"><Flame size={12} className="text-orange-400" /><span className="font-medium">{habit.currentStreak}</span></div>
                   </div>
                 );
               })}
@@ -3127,113 +2011,51 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         <div className="md:col-span-6 bg-white dark:bg-slate-900 flex flex-col relative overflow-hidden">
           {/* Date Selector Header */}
           <div className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center shrink-0 relative">
-             <div 
-               ref={calendarRef}
-               className="relative"
-             >
-               <div 
-                 onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-                 className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-               >
-                  <div className={`w-2 h-2 rounded-full ${isToday(selectedDate) ? 'bg-emerald-500' : 'bg-slate-400'}`}></div>
-                  {selectedDate.toLocaleDateString('sv-SE', { month: 'long', day: 'numeric' })}
-                  <User size={14} className="ml-1 text-slate-400" />
-               </div>
-               
-               {/* Calendar Popup */}
-               {isCalendarOpen && (
-                 <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 z-50 min-w-[280px]">
-                   {/* Month Navigation */}
-                   <div className="flex items-center justify-between mb-4">
-                     <button 
-                       onClick={handlePrevMonth}
-                       className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                     >
-                       <ChevronLeft size={18} className="text-slate-500" />
-                     </button>
-                     <span className="font-semibold text-slate-800 dark:text-slate-200">
-                       {calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                     </span>
-                     <button 
-                       onClick={handleNextMonth}
-                       className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                     >
-                       <ChevronRight size={18} className="text-slate-500" />
-                     </button>
-                   </div>
-                   
-                   {/* Weekday Headers */}
-                   <div className="grid grid-cols-7 gap-1 mb-2">
-                     {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                       <div key={day} className="text-center text-xs font-medium text-slate-400 py-1">
-                         {day}
-                       </div>
-                     ))}
-                   </div>
-                   
-                   {/* Days Grid */}
-                   <div className="grid grid-cols-7 gap-1">
-                     {/* Empty cells for days before first of month */}
-                     {Array.from({ length: getFirstDayOfMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => (
-                       <div key={`empty-${i}`} className="w-9 h-9" />
-                     ))}
-                     
-                     {/* Day cells */}
-                     {Array.from({ length: getDaysInMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => {
-                       const day = i + 1;
-                       const date = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
-                       const isSelected = isSameDay(date, selectedDate);
-                       const isTodayDate = isToday(date);
-                       
-                       return (
-                         <button
-                           key={day}
-                           onClick={() => handleDateSelect(day)}
-                           className={`w-9 h-9 rounded-lg text-sm font-medium transition-all
-                             ${isSelected 
-                               ? 'bg-emerald-500 text-white ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900' 
-                               : isTodayDate 
-                                 ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100' 
-                                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                             }`}
-                         >
-                           {day}
-                         </button>
-                       );
-                     })}
-                   </div>
-                   
-                   {/* Today Button */}
-                   <button
-                     onClick={async () => {
-                       const today = new Date();
-                       setSelectedDate(today);
-                       setCalendarViewDate(today);
-                       setIsCalendarOpen(false);
-                       await loadScheduleForDate(today);
-                     }}
-                     className="mt-3 w-full py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
-                   >
-                     Today
-                   </button>
-                 </div>
-               )}
-             </div>
+            <div ref={calendarRef} className="relative">
+              <div onClick={() => setIsCalendarOpen(!isCalendarOpen)} className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors">
+                <div className={`w-2 h-2 rounded-full ${isToday(selectedDate) ? 'bg-emerald-500' : 'bg-slate-400'}`}></div>
+                {selectedDate.toLocaleDateString('sv-SE', { month: 'long', day: 'numeric' })}
+                <User size={14} className="ml-1 text-slate-400" />
+              </div>
+              
+              {/* Calendar Popup */}
+              {isCalendarOpen && (
+                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 z-50 min-w-[280px]">
+                  <div className="flex items-center justify-between mb-4">
+                    <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronLeft size={18} className="text-slate-500" /></button>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">{calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                    <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronRight size={18} className="text-slate-500" /></button>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (<div key={day} className="text-center text-xs font-medium text-slate-400 py-1">{day}</div>))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1">
+                    {Array.from({ length: getFirstDayOfMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => (<div key={`empty-${i}`} className="w-9 h-9" />))}
+                    {Array.from({ length: getDaysInMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => {
+                      const day = i + 1;
+                      const date = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
+                      const isSelected = isSameDay(date, selectedDate);
+                      const isTodayDate = isToday(date);
+                      return (
+                        <button key={day} onClick={() => handleDateSelect(day)} className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${isSelected ? 'bg-emerald-500 text-white ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900' : isTodayDate ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>{day}</button>
+                      );
+                    })}
+                  </div>
+                  <button onClick={async () => { const today = new Date(); setSelectedDate(today); setCalendarViewDate(today); setIsCalendarOpen(false); await loadScheduleForDate(today); }} className="mt-3 w-full py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg">Today</button>
+                </div>
+              )}
+            </div>
           </div>
+          
           <div ref={timelineRef} className="flex-1 overflow-y-auto relative custom-scrollbar scroll-smooth">
             
-            {/* Calendar Grid - 24 hours * 96px = 2304px */}
+            {/* Calendar Grid - 24 hours */}
             <div className="relative py-6" style={{ minHeight: `${24 * 96 + 48}px` }}>
               
               {/* Current Time Indicator (Dynamic) */}
-              <div 
-                className="absolute left-0 right-0 z-20 flex items-center pointer-events-none transition-all duration-1000"
-                style={{ top: `${currentTimeDecimal * 96 + 24}px` }}
-              >
+              <div className="absolute left-0 right-0 z-20 flex items-center pointer-events-none transition-all duration-1000" style={{ top: `${currentTimeDecimal * 96 + 24}px` }}>
                 <div className="w-14 text-right pr-2">
-                  <span className="text-[10px] font-bold text-emerald-500 bg-white dark:bg-slate-900 px-1">
-                    {formatTime(currentTimeDecimal)}
-                  </span>
+                  <span className="text-[10px] font-bold text-emerald-500 bg-white dark:bg-slate-900 px-1">{formatTime(currentTimeDecimal)}</span>
                 </div>
                 <div className="h-0.5 bg-emerald-500 flex-1 relative shadow-sm">
                   <div className="absolute -left-1.5 -top-1.5 w-3 h-3 rounded-full bg-emerald-500 shadow-md"></div>
@@ -3271,33 +2093,24 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
               {/* Render Time Blocks */}
               {schedule.map((block) => {
-                // Calculate position based on midnight (0:00), each hour is 96px (h-24)
+                // Calculate position based on midnight (0:00)
                 const topOffset = block.start * 96; 
                 const height = block.duration * 96;
                 const endTime = block.start + block.duration;
                 
-                // Use Google Calendar color if available, otherwise use block.color
+                // Use calendar color if available
                 const hasCalendarColor = block.calendarColor && block.isGoogle;
                 const blockStyle = hasCalendarColor 
-                  ? { 
-                      top: `${topOffset}px`, 
-                      height: `${height}px`,
-                      backgroundColor: block.calendarColor,
-                      borderColor: block.calendarColor,
-                    }
+                  ? { top: `${topOffset}px`, height: `${height}px`, backgroundColor: block.calendarColor, borderColor: block.calendarColor }
                   : { top: `${topOffset}px`, height: `${height}px` };
 
                 return (
                   <div 
                     key={block.id}
                     style={blockStyle}
-                    className={`absolute left-16 right-4 rounded-lg p-3 border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 text-slate-500 dark:text-slate-400' : hasCalendarColor ? 'text-white' : `${block.color} ${block.textColor}`} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
+                    className={`absolute left-16 right-4 rounded-lg p-3 border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 text-slate-500' : hasCalendarColor ? 'text-white' : `${block.color} ${block.textColor}`} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
                     onMouseDown={(e) => {
-                      // Don't start drag if clicking on buttons or resize handle
-                      if ((e.target as HTMLElement).closest('button') || 
-                          (e.target as HTMLElement).closest('.cursor-ns-resize')) {
-                        return;
-                      }
+                      if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.cursor-ns-resize')) return;
                       e.preventDefault();
                       setDraggingBlockId(block.id);
                       setDragStartY(e.clientY);
@@ -3315,15 +2128,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                         </div>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      {/* Completion checkbox for all blocks */}
+                      {/* Completion checkbox */}
                       <div 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          handleToggleBlockComplete(block.id);
-                        }}
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleToggleBlockComplete(block.id); }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-slate-400 dark:border-slate-500 hover:border-emerald-500 bg-white/80 dark:bg-slate-800/80'}`}
+                        className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-slate-400 hover:border-emerald-500 bg-white/80 dark:bg-slate-800/80'}`}
                       >
                         {block.completed && <Check size={14} className="text-white" strokeWidth={3} />}
                       </div>
@@ -3339,7 +2148,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-end justify-center pb-1 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity z-20"
                       onMouseDown={(e) => {
                         e.stopPropagation();
-                        e.preventDefault(); // Prevent text selection
+                        e.preventDefault();
                         setResizingBlockId(block.id);
                         setResizeStartY(e.clientY);
                         setResizeStartDuration(block.duration);
@@ -3368,11 +2177,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       </div>
                       <h2 className="font-bold text-lg">Notes</h2>
                     </div>
-                    {notesSaved && (
-                      <span className="text-xs text-emerald-500 flex items-center gap-1">
-                        <Check size={12} /> Saved
-                      </span>
-                    )}
+                    {notesSaved && <span className="text-xs text-emerald-500 flex items-center gap-1"><Check size={12} /> Saved</span>}
                  </div>
                  
                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden">
@@ -3388,21 +2193,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               {/* Weight Tracking Section */}
               <div>
                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2">
-                      <Activity size={20} className="text-[#6F00FF]" />
-                      Weight Tracker
-                    </h2>
+                    <h2 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><Activity size={20} className="text-[#6F00FF]" /> Weight Tracker</h2>
                     {weightEntries.length > 0 && (
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="text-slate-500">
-                          <strong className="text-slate-800 dark:text-white">{weightEntries[weightEntries.length - 1]?.weight} kg</strong>
-                        </span>
+                        <span className="text-slate-500"><strong className="text-slate-800 dark:text-white">{weightEntries[weightEntries.length - 1]?.weight} kg</strong></span>
                         {weightEntries.length > 1 && (
-                          <span className={`font-medium ${
-                            weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight 
-                              ? 'text-emerald-500' 
-                              : 'text-red-500'
-                          }`}>
+                          <span className={`font-medium ${weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight ? 'text-emerald-500' : 'text-red-500'}`}>
                             {weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight ? '↓' : '↑'}
                             {Math.abs(weightEntries[weightEntries.length - 1].weight - weightEntries[0].weight).toFixed(1)}
                           </span>
@@ -3412,50 +2208,21 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                  </div>
                  
                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm p-4">
-                    {/* Line Chart */}
                     <WeightLineChart entries={weightEntries} height={160} />
-                    
-                    {/* Today's Weight Input */}
                     <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={newWeight}
-                        onChange={(e) => setNewWeight(e.target.value)}
-                        placeholder="Today's weight (kg)"
-                        className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            setWeightDate(new Date().toISOString().split('T')[0]);
-                            handleAddWeight();
-                          }
-                        }}
-                      />
-                      <button
-                        onClick={() => {
-                          setWeightDate(new Date().toISOString().split('T')[0]);
-                          handleAddWeight();
-                        }}
-                        className="px-4 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors"
-                      >
-                        Log
-                      </button>
+                      <input type="number" step="0.1" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} placeholder="Today's weight (kg)" className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50" onKeyDown={(e) => { if (e.key === 'Enter') { setWeightDate(new Date().toISOString().split('T')[0]); handleAddWeight(); } }} />
+                      <button onClick={() => { setWeightDate(new Date().toISOString().split('T')[0]); handleAddWeight(); }} className="px-4 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors">Log</button>
                     </div>
                  </div>
               </div>
 
               {/* Promo Section (Collapsible) */}
               <div className="bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/10 dark:to-indigo-900/10 rounded-xl border border-violet-100 dark:border-violet-900/20 overflow-hidden">
-                  <button 
-                    onClick={handlePromoToggle}
-                    className="w-full p-4 flex items-center justify-between text-left"
-                  >
+                  <button onClick={handlePromoToggle} className="w-full p-4 flex items-center justify-between text-left">
                     <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <span className="text-xl">👩‍🚀</span> What else does Ascend offer?
                     </h4>
-                    <div className={`transform transition-transform ${isPromoOpen ? 'rotate-180' : ''}`}>
-                      <ChevronDown size={20} className="text-slate-400" />
-                    </div>
+                    <div className={`transform transition-transform ${isPromoOpen ? 'rotate-180' : ''}`}><ChevronDown size={20} className="text-slate-400" /></div>
                   </button>
                   
                   {isPromoOpen && (

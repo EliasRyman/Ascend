@@ -39,8 +39,6 @@ interface CalendarEvent {
   isGoogle: boolean;
   isFromAscendCalendar?: boolean;
   colorId?: string;
-  calendarName?: string; // Name of the source calendar
-  calendarColor?: string; // Hex color from Google Calendar
 }
 
 let tokenClient: google.accounts.oauth2.TokenClient | null = null;
@@ -58,7 +56,7 @@ const STORAGE_KEY_USER = 'ascend_google_user';
 // Token expiry buffer (refresh 5 minutes before expiry)
 const TOKEN_EXPIRY_BUFFER = 5 * 60 * 1000; // 5 minutes in ms
 
-// Load saved token from localStorage and set it on gapi client
+// Load saved token from localStorage
 function loadSavedToken(): void {
   try {
     const savedToken = localStorage.getItem(STORAGE_KEY_TOKEN);
@@ -70,13 +68,7 @@ function loadSavedToken(): void {
       const expiryTime = parseInt(savedExpiry, 10);
       if (Date.now() < expiryTime - TOKEN_EXPIRY_BUFFER) {
         accessToken = savedToken;
-        // Also set the token on gapi client so API calls work
-        if (typeof gapi !== 'undefined' && gapi.client) {
-          gapi.client.setToken({ access_token: savedToken });
-          console.log('Loaded saved Google token and set on gapi client');
-        } else {
-          console.log('Loaded saved Google token (gapi not ready yet)');
-        }
+        console.log('Loaded saved Google token (valid)');
       } else {
         console.log('Saved token expired, will need refresh');
         // Clear expired token
@@ -253,13 +245,6 @@ export async function initGoogleApi(): Promise<void> {
           discoveryDocs: [DISCOVERY_DOC],
         });
         gapiInited = true;
-        
-        // Now that gapi is ready, set the saved token if we have one
-        if (accessToken) {
-          gapi.client.setToken({ access_token: accessToken });
-          console.log('Set saved token on gapi client after init');
-        }
-        
         maybeEnableButtons();
         resolve();
       } catch (err) {
@@ -285,8 +270,6 @@ export function initGoogleIdentity(onTokenReceived: (token: string) => void): vo
         return;
       }
       accessToken = response.access_token;
-      // Set token on gapi client
-      gapi.client.setToken({ access_token: response.access_token });
       // Save token with expiry (expires_in is in seconds)
       saveToken(response.access_token, response.expires_in || 3600);
       
@@ -362,43 +345,16 @@ async function findOrCreateAscendCalendar(): Promise<string> {
     ascendCalendarId = newCalendarId;
     saveCalendarId(newCalendarId);
     return newCalendarId;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error finding/creating Ascend calendar:', error);
-    // Check if it's an auth error (401/403)
-    if (error?.status === 401 || error?.status === 403 || 
-        error?.result?.error?.code === 401 || error?.result?.error?.code === 403) {
-      console.error('Token rejected by Google, clearing saved data...');
-      clearSavedData();
-      accessToken = null;
-      throw new Error('TOKEN_INVALID');
-    }
     throw error;
   }
 }
 
 // Get Ascend calendar ID (creates if needed)
 export async function getAscendCalendarId(): Promise<string> {
-  // If we have a cached ID, verify it's still valid
   if (ascendCalendarId) {
-    try {
-      // Quick check if calendar still exists
-      const listResponse = await gapi.client.calendar.calendarList.list();
-      const calendars = listResponse.result.items || [];
-      const exists = calendars.some((cal: any) => cal.id === ascendCalendarId);
-      
-      if (exists) {
-        return ascendCalendarId;
-      } else {
-        console.log('Cached Ascend calendar ID is invalid, recreating...');
-        ascendCalendarId = null;
-        localStorage.removeItem(STORAGE_KEY_CALENDAR_ID);
-      }
-    } catch (error) {
-      console.error('Error validating calendar ID:', error);
-      // Clear invalid ID and recreate
-      ascendCalendarId = null;
-      localStorage.removeItem(STORAGE_KEY_CALENDAR_ID);
-    }
+    return ascendCalendarId;
   }
   return await findOrCreateAscendCalendar();
 }
@@ -478,13 +434,10 @@ export async function fetchGoogleCalendarEvents(
 
   try {
     // Fetch from Ascend calendar
-    if (includeAscendCalendar) {
+    if (includeAscendCalendar && ascendCalendarId) {
       try {
-        // Ensure Ascend calendar exists (creates if needed)
-        const calendarId = await getAscendCalendarId();
-        
         const ascendResponse = await gapi.client.calendar.events.list({
-          calendarId: calendarId,
+          calendarId: ascendCalendarId,
           timeMin: timeMin.toISOString(),
           timeMax: timeMax.toISOString(),
           singleEvents: true,
@@ -492,73 +445,35 @@ export async function fetchGoogleCalendarEvents(
         });
 
         const ascendEvents: GoogleCalendarEvent[] = ascendResponse.result.items || [];
-        console.log(`Fetched ${ascendEvents.length} events from Ascend calendar`);
         allEvents.push(...ascendEvents
           .filter(event => event.start?.dateTime)
           .map(event => mapGoogleEventToCalendarEvent(event, true))
         );
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error fetching Ascend calendar events:', error);
-        // Check for auth errors
-        if (error?.status === 401 || error?.status === 403 || 
-            error?.result?.error?.code === 401 || error?.result?.error?.code === 403 ||
-            error?.message === 'TOKEN_INVALID') {
-          console.error('Token invalid, clearing saved data...');
-          clearSavedData();
-          accessToken = null;
-          throw new Error('TOKEN_INVALID');
-        }
       }
     }
 
-    // Fetch from ALL user calendars (primary + subscribed calendars like IHM, Helgdagar, etc.)
+    // Fetch from primary calendar
     if (includePrimaryCalendar) {
       try {
-        // First, get list of all calendars
-        const calendarListResponse = await gapi.client.calendar.calendarList.list({
-          minAccessRole: 'reader', // Get all calendars user can at least read
+        const primaryResponse = await gapi.client.calendar.events.list({
+          calendarId: 'primary',
+          timeMin: timeMin.toISOString(),
+          timeMax: timeMax.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
         });
-        
-        const calendars = calendarListResponse.result.items || [];
-        console.log(`Found ${calendars.length} calendars:`, calendars.map(c => c.summary));
-        
-        // Fetch events from each calendar (skip Ascend calendar since we already fetched it)
-        for (const calendar of calendars) {
-          // Skip the Ascend calendar (we already fetched it above)
-          if (calendar.summary === 'Ascend' || calendar.id === ascendCalendarId) {
-            continue;
-          }
-          
-          try {
-            const response = await gapi.client.calendar.events.list({
-              calendarId: calendar.id!,
-              timeMin: timeMin.toISOString(),
-              timeMax: timeMax.toISOString(),
-              singleEvents: true,
-              orderBy: 'startTime',
-            });
 
-            const events: GoogleCalendarEvent[] = response.result.items || [];
-            console.log(`Fetched ${events.length} events from "${calendar.summary}"`);
-            
-            allEvents.push(...events
-              .filter(event => event.start?.dateTime) // Only timed events, not all-day
-              .map(event => ({
-                ...mapGoogleEventToCalendarEvent(event, false),
-                calendarName: calendar.summary, // Add calendar name for display
-                calendarColor: calendar.backgroundColor, // Add calendar color
-              }))
-            );
-          } catch (error) {
-            console.error(`Error fetching events from "${calendar.summary}":`, error);
-          }
-        }
+        const primaryEvents: GoogleCalendarEvent[] = primaryResponse.result.items || [];
+        allEvents.push(...primaryEvents
+          .filter(event => event.start?.dateTime)
+          .map(event => mapGoogleEventToCalendarEvent(event, false))
+        );
       } catch (error) {
-        console.error('Error fetching calendar list:', error);
+        console.error('Error fetching primary calendar events:', error);
       }
     }
-    
-    console.log(`Total events fetched: ${allEvents.length}`);
 
     return allEvents;
   } catch (error) {
@@ -604,9 +519,7 @@ export async function createGoogleCalendarEvent(
   }
 
   // Get or create Ascend calendar
-  console.log('Getting Ascend calendar ID...');
   const calendarId = await getAscendCalendarId();
-  console.log('Using calendar ID:', calendarId);
 
   // Create start and end times
   const startDate = new Date(date);
@@ -617,14 +530,6 @@ export async function createGoogleCalendarEvent(
 
   // Get color ID based on tag
   const colorId = tag ? (TAG_COLOR_MAP[tag.toLowerCase()] || '9') : '9';
-
-  console.log('Creating event:', {
-    title,
-    calendarId,
-    start: startDate.toISOString(),
-    end: endDate.toISOString(),
-    colorId
-  });
 
   try {
     const response = await gapi.client.calendar.events.insert({
@@ -644,7 +549,7 @@ export async function createGoogleCalendarEvent(
       },
     });
 
-    console.log('✅ Successfully created event in Ascend calendar:', response.result.id);
+    console.log('Created event in Ascend calendar:', response.result.id, 'with color:', colorId);
     return response.result.id;
   } catch (error) {
     console.error('Error creating calendar event:', error);
