@@ -600,6 +600,29 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     ));
   };
 
+  // Toggle completion directly on a schedule block
+  const handleToggleBlockComplete = (blockId: number | string) => {
+    const block = schedule.find(b => b.id === blockId);
+    if (!block) return;
+    
+    const newCompleted = !block.completed;
+    
+    // Update the block
+    setSchedule(prev => prev.map(b => 
+      b.id === blockId ? { ...b, completed: newCompleted } : b
+    ));
+    
+    // If this block is linked to a task, also update the task
+    if (block.taskId) {
+      setActiveTasks(prev => prev.map(t => 
+        t.id === block.taskId ? { ...t, completed: newCompleted } : t
+      ));
+      setLaterTasks(prev => prev.map(t => 
+        t.id === block.taskId ? { ...t, completed: newCompleted } : t
+      ));
+    }
+  };
+
   const handleDeleteBlock = async (blockId: number | string) => {
       // Find the block to get Google event ID
       const block = schedule.find(b => b.id === blockId);
@@ -1269,21 +1292,18 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                         </div>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      {/* Completion checkbox for blocks linked to tasks */}
-                      {block.taskId && (
-                        <div 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            const listType = activeTasks.find(t => t.id === block.taskId) ? 'active' : 'later';
-                            handleToggleComplete(block.taskId!, listType);
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-slate-400 dark:border-slate-500 hover:border-emerald-500 bg-white/80 dark:bg-slate-800/80'}`}
-                        >
-                          {block.completed && <Check size={14} className="text-white" strokeWidth={3} />}
-                        </div>
-                      )}
+                      {/* Completion checkbox for all blocks */}
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          handleToggleBlockComplete(block.id);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-slate-400 dark:border-slate-500 hover:border-emerald-500 bg-white/80 dark:bg-slate-800/80'}`}
+                      >
+                        {block.completed && <Check size={14} className="text-white" strokeWidth={3} />}
+                      </div>
                       <h3 className={`font-bold text-sm pointer-events-none ${block.completed ? 'line-through' : ''}`}>{block.title}</h3>
                     </div>
                     <div className="mt-auto flex items-center gap-2 pointer-events-none">
