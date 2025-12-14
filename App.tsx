@@ -573,8 +573,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   };
 
   const handleDeleteTask = async (taskId: number | string, listType: string) => {
+    console.log('Deleting task:', taskId);
+    console.log('All blocks:', schedule.map(b => ({ id: b.id, taskId: b.taskId, title: b.title })));
+    
     // Find and delete any linked schedule block
-    const linkedBlock = schedule.find(b => String(b.taskId) === String(taskId));
+    const linkedBlock = schedule.find(b => b.taskId && String(b.taskId) === String(taskId));
+    console.log('Found linked block:', linkedBlock);
+    
     if (linkedBlock) {
       // Delete from Google Calendar if connected
       if (linkedBlock.googleEventId && googleAccount && isSignedIn()) {
@@ -588,15 +593,17 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       // Delete block from database and state
       await deleteScheduleBlock(String(linkedBlock.id));
       setSchedule(prev => prev.filter(b => String(b.id) !== String(linkedBlock.id)));
+      console.log('Deleted linked block from timeline');
     }
     
     // Delete task from database
     await deleteTaskFromDb(String(taskId));
     if (listType === 'active') {
-      setActiveTasks(activeTasks.filter(t => String(t.id) !== String(taskId)));
+      setActiveTasks(prev => prev.filter(t => String(t.id) !== String(taskId)));
     } else {
-      setLaterTasks(laterTasks.filter(t => String(t.id) !== String(taskId)));
+      setLaterTasks(prev => prev.filter(t => String(t.id) !== String(taskId)));
     }
+    console.log('Task deleted');
   };
 
   const handleToggleComplete = (taskId: number | string, listType: 'active' | 'later') => {
