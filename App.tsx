@@ -69,7 +69,9 @@ import {
   deleteTask as deleteTaskFromDb,
   loadScheduleBlocks,
   createScheduleBlock,
-  deleteScheduleBlock
+  deleteScheduleBlock,
+  loadUserSettings,
+  saveUserSettings
 } from './database';
 
 // --- Context ---
@@ -273,10 +275,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       if (!user) return;
       
       try {
-        const [activeData, laterData, blocksData] = await Promise.all([
+        const [activeData, laterData, blocksData, userSettings] = await Promise.all([
           loadTasks('active'),
           loadTasks('later'),
-          loadScheduleBlocks()
+          loadScheduleBlocks(),
+          loadUserSettings()
         ]);
 
         if (activeData.length > 0 || laterData.length > 0) {
@@ -301,6 +304,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
         if (blocksData.length > 0) {
           setSchedule(blocksData);
+        }
+
+        // Load user settings
+        if (userSettings) {
+          setSettings({
+            timeFormat: userSettings.timeFormat || '12h',
+            timezone: userSettings.timezone || 'Local'
+          });
         }
 
         setIsDataLoaded(true);
@@ -340,6 +351,20 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       return () => clearTimeout(timer);
     }
   }, [notification]);
+
+  // Save settings when they change
+  useEffect(() => {
+    if (!user || !isDataLoaded) return;
+    
+    const saveSettings = async () => {
+      await saveUserSettings({
+        timeFormat: settings.timeFormat as '12h' | '24h',
+        timezone: settings.timezone
+      });
+    };
+    
+    saveSettings();
+  }, [settings, user, isDataLoaded]);
 
   // Time labels from 7 AM to 3 PM for the demo view
   const timeLabels = [7, 8, 9, 10, 11, 12, 13, 14, 15];
