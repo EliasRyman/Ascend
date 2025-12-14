@@ -29,8 +29,8 @@ declare namespace gapi {
     function init(config: { discoveryDocs?: string[] }): Promise<void>;
     
     namespace calendar {
-      namespace events {
-        function list(params: {
+      interface EventsResource {
+        list(params: {
           calendarId: string;
           timeMin: string;
           timeMax: string;
@@ -38,25 +38,27 @@ declare namespace gapi {
           orderBy?: string;
         }): Promise<{ result: { items: any[] } }>;
 
-        function insert(params: {
+        insert(params: {
           calendarId: string;
           resource: any;
         }): Promise<{ result: { id: string } }>;
 
-        function update(params: {
+        update(params: {
           calendarId: string;
           eventId: string;
           resource: any;
         }): Promise<any>;
 
-        function delete(params: {
+        delete(params: {
           calendarId: string;
           eventId: string;
         }): Promise<void>;
       }
 
-      namespace calendars {
-        function insert(params: {
+      const events: EventsResource;
+
+      interface CalendarsResource {
+        insert(params: {
           resource: {
             summary: string;
             description?: string;
@@ -64,10 +66,12 @@ declare namespace gapi {
           };
         }): Promise<{ result: { id: string; summary: string } }>;
 
-        function delete(params: {
+        delete(params: {
           calendarId: string;
         }): Promise<void>;
       }
+
+      const calendars: CalendarsResource;
 
       namespace calendarList {
         function list(): Promise<{ 

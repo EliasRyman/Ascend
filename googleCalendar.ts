@@ -563,6 +563,12 @@ export async function deleteGoogleCalendarEvent(eventId: string): Promise<void> 
     throw new Error('Not signed in to Google');
   }
 
+  // Ensure token is valid (refresh if needed)
+  const isValid = await ensureValidToken();
+  if (!isValid) {
+    throw new Error('Google token expired. Please reconnect Google Calendar.');
+  }
+
   const calendarId = await getAscendCalendarId();
 
   try {
@@ -586,6 +592,12 @@ export async function updateGoogleCalendarEvent(
 ): Promise<void> {
   if (!accessToken) {
     throw new Error('Not signed in to Google');
+  }
+
+  // Ensure token is valid (refresh if needed)
+  const isValid = await ensureValidToken();
+  if (!isValid) {
+    throw new Error('Google token expired. Please reconnect Google Calendar.');
   }
 
   const calendarId = await getAscendCalendarId();
