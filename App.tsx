@@ -57,6 +57,14 @@ import {
   onAuthStateChange,
   getCurrentUser
 } from './supabase';
+import {
+  loadTasks,
+  createTask,
+  deleteTask as deleteTaskFromDb,
+  loadScheduleBlocks,
+  createScheduleBlock,
+  deleteScheduleBlock
+} from './database';
 
 // --- Context ---
 
@@ -242,6 +250,53 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [laterTasks, setLaterTasks] = useState<Task[]>(LATER_TASKS);
   const [schedule, setSchedule] = useState<ScheduleBlock[]>(TIME_BLOCKS);
   const [newTaskInput, setNewTaskInput] = useState("");
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // Load data from database on mount
+  useEffect(() => {
+    const loadData = async () => {
+      if (!user) return;
+      
+      try {
+        const [activeData, laterData, blocksData] = await Promise.all([
+          loadTasks('active'),
+          loadTasks('later'),
+          loadScheduleBlocks()
+        ]);
+
+        if (activeData.length > 0 || laterData.length > 0) {
+          setActiveTasks(activeData.length > 0 ? activeData.map(t => ({
+            id: t.id,
+            title: t.title,
+            tag: t.tag,
+            tagColor: t.tagColor,
+            time: t.time,
+            completed: t.completed
+          })) : INITIAL_TASKS);
+          
+          setLaterTasks(laterData.length > 0 ? laterData.map(t => ({
+            id: t.id,
+            title: t.title,
+            tag: t.tag,
+            tagColor: t.tagColor,
+            time: t.time,
+            completed: t.completed
+          })) : LATER_TASKS);
+        }
+
+        if (blocksData.length > 0) {
+          setSchedule(blocksData);
+        }
+
+        setIsDataLoaded(true);
+      } catch (error) {
+        console.error('Error loading data:', error);
+        setIsDataLoaded(true);
+      }
+    };
+
+    loadData();
+  }, [user]);
   
   // Drag State
   const [draggedItem, setDraggedItem] = useState(null);
@@ -322,22 +377,40 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     };
   }, [resizingBlockId, resizeStartY, resizeStartDuration]);
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newTaskInput.trim()) {
-        const newTask: Task = {
-            id: Date.now(),
-            title: newTaskInput,
-            tag: null,
-            tagColor: null,
-            time: null,
-            completed: false
-        };
-        setActiveTasks([...activeTasks, newTask]);
+        // Create task in database
+        const savedTask = await createTask(newTaskInput.trim(), 'active');
+        
+        if (savedTask) {
+          const newTask: Task = {
+              id: savedTask.id,
+              title: savedTask.title,
+              tag: savedTask.tag,
+              tagColor: savedTask.tagColor,
+              time: savedTask.time,
+              completed: savedTask.completed
+          };
+          setActiveTasks([...activeTasks, newTask]);
+        } else {
+          // Fallback to local-only if not logged in
+          const newTask: Task = {
+              id: Date.now(),
+              title: newTaskInput.trim(),
+              tag: null,
+              tagColor: null,
+              time: null,
+              completed: false
+          };
+          setActiveTasks([...activeTasks, newTask]);
+        }
         setNewTaskInput("");
     }
   };
 
-  const handleDeleteTask = (taskId, listType) => {
+  const handleDeleteTask = async (taskId: number | string, listType: string) => {
+    // Delete from database
+    await deleteTaskFromDb(String(taskId));
       if (listType === 'active') {
           setActiveTasks(activeTasks.filter(t => t.id !== taskId));
       } else {
@@ -345,7 +418,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       }
   };
 
-  const handleDeleteBlock = (blockId) => {
+  const handleDeleteBlock = async (blockId: number | string) => {
+      // Delete from database
+      await deleteScheduleBlock(String(blockId));
       setSchedule(schedule.filter(b => b.id !== blockId));
   };
 
@@ -421,8 +496,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       if (!draggedItem) return;
       const { task } = draggedItem;
 
-      const newBlock: ScheduleBlock = {
-          id: Date.now(),
+      const blockData = {
           title: task.title,
           tag: task.tag || 'work',
           start: hour,
@@ -430,6 +504,16 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           color: "bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500", 
           textColor: "text-indigo-950 dark:text-indigo-50",
           isGoogle: googleAccount !== null
+      };
+
+      // Save to database
+      const savedBlock = await createScheduleBlock(blockData);
+      
+      const newBlock: ScheduleBlock = savedBlock ? {
+          ...savedBlock
+      } : {
+          id: Date.now(),
+          ...blockData
       };
 
       setSchedule(prev => [...prev, newBlock]);
