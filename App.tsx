@@ -37,8 +37,16 @@ import {
   Settings,
   Globe,
   LayoutDashboard,
-  Activity
+  Activity,
+  Unlink
 } from 'lucide-react';
+import {
+  initGoogleApi,
+  initGoogleIdentity,
+  requestAccessToken,
+  revokeAccessToken,
+  getGoogleUserInfo
+} from './googleCalendar';
 
 // --- Context ---
 
@@ -177,6 +185,46 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     timeFormat: '12h', // '12h' | '24h'
     timezone: 'Local'
   });
+
+  // Google Calendar State
+  const [googleAccount, setGoogleAccount] = useState<{
+    email: string;
+    name: string;
+    picture: string;
+  } | null>(null);
+  const [isGoogleConnecting, setIsGoogleConnecting] = useState(false);
+  const [googleApiReady, setGoogleApiReady] = useState(false);
+
+  // Initialize Google APIs on mount
+  useEffect(() => {
+    const initGoogle = async () => {
+      try {
+        await initGoogleApi();
+        initGoogleIdentity(async (token) => {
+          // Token received, get user info
+          const userInfo = await getGoogleUserInfo();
+          if (userInfo) {
+            setGoogleAccount(userInfo);
+          }
+          setIsGoogleConnecting(false);
+        });
+        setGoogleApiReady(true);
+      } catch (error) {
+        console.error('Failed to initialize Google APIs:', error);
+      }
+    };
+    initGoogle();
+  }, []);
+
+  const handleConnectGoogle = () => {
+    setIsGoogleConnecting(true);
+    requestAccessToken();
+  };
+
+  const handleDisconnectGoogle = () => {
+    revokeAccessToken();
+    setGoogleAccount(null);
+  };
 
   // State for Lists and Schedule
   const [activeTasks, setActiveTasks] = useState<Task[]>(INITIAL_TASKS);
@@ -510,6 +558,52 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         </div>
                         <p className="text-xs text-slate-500 mt-2">Your calendar events will be displayed in this timezone.</p>
+                    </div>
+
+                    {/* Google Calendar Connection */}
+                    <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <label className="block text-sm font-medium mb-3 text-slate-700 dark:text-slate-300">Google Calendar</label>
+                        {googleAccount ? (
+                            <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                <div className="flex items-center gap-3">
+                                    <img 
+                                        src={googleAccount.picture} 
+                                        alt={googleAccount.name}
+                                        className="w-8 h-8 rounded-full"
+                                    />
+                                    <div>
+                                        <p className="text-sm font-medium text-green-800 dark:text-green-200">{googleAccount.name}</p>
+                                        <p className="text-xs text-green-600 dark:text-green-400">{googleAccount.email}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleDisconnectGoogle}
+                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                    title="Disconnect"
+                                >
+                                    <Unlink size={18} />
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={handleConnectGoogle}
+                                disabled={isGoogleConnecting || !googleApiReady}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                            >
+                                {isGoogleConnecting ? (
+                                    <>
+                                        <Loader2 size={18} className="animate-spin" />
+                                        <span>Connecting...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Calendar size={18} className="text-blue-500" />
+                                        <span>Connect Google Calendar</span>
+                                    </>
+                                )}
+                            </button>
+                        )}
+                        <p className="text-xs text-slate-500 mt-2">Sync your schedule with Google Calendar.</p>
                     </div>
                 </div>
                 <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
