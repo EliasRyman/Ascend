@@ -879,8 +879,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       // Save to database
       const savedBlock = await createScheduleBlock(blockData);
       
+      // Preserve taskId and completed since they're not in database
       const newBlock: ScheduleBlock = savedBlock ? {
-          ...savedBlock
+          ...savedBlock,
+          taskId: task.id,  // Keep the link to the original task
+          completed: task.completed || false
       } : {
           id: Date.now(),
           ...blockData
