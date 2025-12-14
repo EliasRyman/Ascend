@@ -615,6 +615,16 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         }
       }
 
+      // Clear the time from the linked task
+      if (block?.taskId) {
+        setActiveTasks(prev => prev.map(t => 
+          t.id === block.taskId ? { ...t, time: null } : t
+        ));
+        setLaterTasks(prev => prev.map(t => 
+          t.id === block.taskId ? { ...t, time: null } : t
+        ));
+      }
+
       // Delete from database
       await deleteScheduleBlock(String(blockId));
       setSchedule(schedule.filter(b => b.id !== blockId));
@@ -788,6 +798,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       setDragOverHour(null);
       if (!draggedItem) return;
       const { task } = draggedItem;
+
+      // Check if this task is already on the timeline
+      const existingBlock = schedule.find(b => b.taskId === task.id);
+      if (existingBlock) {
+        setNotification({ type: 'info', message: 'This task is already on the timeline. Move it instead!' });
+        setDraggedItem(null);
+        return;
+      }
 
       const blockData = {
           title: task.title,
@@ -1227,7 +1245,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   <div 
                     key={block.id}
                     style={{ top: `${topOffset}px`, height: `${height}px` }}
-                    className={`absolute left-16 right-4 rounded-lg p-3 border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group ${block.color} ${block.textColor} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
+                    className={`absolute left-16 right-4 rounded-lg p-3 border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 text-slate-500 dark:text-slate-400' : `${block.color} ${block.textColor}`} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
                     onMouseDown={(e) => {
                       // Don't start drag if clicking on buttons or resize handle
                       if ((e.target as HTMLElement).closest('button') || 
@@ -1256,14 +1274,17 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                         <div 
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleToggleComplete(block.taskId!, activeTasks.find(t => t.id === block.taskId) ? 'active' : 'later');
+                            e.preventDefault();
+                            const listType = activeTasks.find(t => t.id === block.taskId) ? 'active' : 'later';
+                            handleToggleComplete(block.taskId!, listType);
                           }}
-                          className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${block.completed ? 'bg-white/30 border-white/50' : 'border-white/30 hover:border-white/60'}`}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-slate-400 dark:border-slate-500 hover:border-emerald-500 bg-white/80 dark:bg-slate-800/80'}`}
                         >
-                          {block.completed && <Check size={12} className="text-white" />}
+                          {block.completed && <Check size={14} className="text-white" strokeWidth={3} />}
                         </div>
                       )}
-                      <h3 className={`font-bold text-sm pointer-events-none ${block.completed ? 'line-through opacity-60' : ''}`}>{block.title}</h3>
+                      <h3 className={`font-bold text-sm pointer-events-none ${block.completed ? 'line-through' : ''}`}>{block.title}</h3>
                     </div>
                     <div className="mt-auto flex items-center gap-2 pointer-events-none">
                         {block.tag && <span className="text-[10px] uppercase font-bold opacity-60 bg-black/5 dark:bg-white/10 px-1.5 rounded">{block.tag}</span>}
