@@ -42,7 +42,13 @@ import {
   Activity,
   Unlink,
   Tag,
-  Palette
+  Palette,
+  Flame,
+  Trophy,
+  TrendingUp,
+  Zap,
+  Edit3,
+  Repeat
 } from 'lucide-react';
 import {
   initGoogleApi,
@@ -102,6 +108,9 @@ interface ScheduleBlock {
   googleEventId?: string;
   completed?: boolean;
   taskId?: number | string; // Link to original task
+  habitId?: string; // Link to habit
+  calendarColor?: string;
+  calendarName?: string;
 }
 
 interface Task {
@@ -112,6 +121,49 @@ interface Task {
   time: string | null;
   completed: boolean;
 }
+
+interface Habit {
+  id: string;
+  name: string;
+  emoji: string;
+  category: 'health' | 'productivity' | 'mindfulness' | 'learning' | 'fitness' | 'other';
+  frequency: 'daily' | 'weekly';
+  scheduledDays: number[]; // 0-6 for Sunday-Saturday, empty = daily
+  scheduledTime: string | null; // "HH:MM" format, null = no specific time
+  color: string;
+  currentStreak: number;
+  longestStreak: number;
+  completedDates: string[]; // ISO date strings "YYYY-MM-DD"
+  createdAt: string;
+}
+
+interface HabitCompletion {
+  habitId: string;
+  date: string; // ISO date "YYYY-MM-DD"
+  completedAt: string; // ISO timestamp
+}
+
+// Habit category configurations
+const HABIT_CATEGORIES = {
+  health: { label: 'Health', emoji: '💊', color: 'bg-emerald-500' },
+  productivity: { label: 'Productivity', emoji: '⚡', color: 'bg-amber-500' },
+  mindfulness: { label: 'Mindfulness', emoji: '🧘', color: 'bg-purple-500' },
+  learning: { label: 'Learning', emoji: '📚', color: 'bg-blue-500' },
+  fitness: { label: 'Fitness', emoji: '💪', color: 'bg-rose-500' },
+  other: { label: 'Other', emoji: '✨', color: 'bg-slate-500' },
+};
+
+const HABIT_EMOJIS = ['💪', '📚', '🧘', '💊', '🏃', '💧', '🥗', '😴', '✍️', '🎯', '🧠', '🌅', '🎵', '💻', '🌿', '❤️'];
+
+const HABIT_COLORS = [
+  'bg-rose-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500',
+  'bg-lime-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500',
+  'bg-sky-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500',
+  'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-slate-500'
+];
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // --- Data Models for Demo ---
 
@@ -687,6 +739,238 @@ const TagModal = ({ isOpen, onClose, onSave, existingTags }: TagModalProps) => {
   );
 };
 
+// --- Habit Form Component ---
+interface HabitFormProps {
+  initialHabit?: Habit | null;
+  onSave: (data: Omit<Habit, 'id' | 'currentStreak' | 'longestStreak' | 'completedDates' | 'createdAt'>) => void;
+  onCancel: () => void;
+}
+
+const HabitForm = ({ initialHabit, onSave, onCancel }: HabitFormProps) => {
+  const [name, setName] = useState(initialHabit?.name || '');
+  const [emoji, setEmoji] = useState(initialHabit?.emoji || '💪');
+  const [category, setCategory] = useState<Habit['category']>(initialHabit?.category || 'health');
+  const [frequency, setFrequency] = useState<'daily' | 'weekly'>(initialHabit?.frequency || 'daily');
+  const [scheduledDays, setScheduledDays] = useState<number[]>(initialHabit?.scheduledDays || []);
+  const [scheduledTime, setScheduledTime] = useState(initialHabit?.scheduledTime || '');
+  const [color, setColor] = useState(initialHabit?.color || 'bg-emerald-500');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  const toggleDay = (day: number) => {
+    setScheduledDays(prev => 
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort()
+    );
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    onSave({
+      name: name.trim(),
+      emoji,
+      category,
+      frequency,
+      scheduledDays: frequency === 'daily' ? [] : scheduledDays,
+      scheduledTime: scheduledTime || null,
+      color,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Name & Emoji */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          Habit Name
+        </label>
+        <div className="flex gap-2">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className={`w-12 h-12 rounded-xl ${color} text-2xl flex items-center justify-center hover:opacity-90 transition-all`}
+            >
+              {emoji}
+            </button>
+            {showEmojiPicker && (
+              <div className="absolute top-full mt-2 left-0 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-3 z-10 grid grid-cols-8 gap-1">
+                {HABIT_EMOJIS.map(e => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => { setEmoji(e); setShowEmojiPicker(false); }}
+                    className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-lg flex items-center justify-center"
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., Morning workout"
+            className="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] focus:border-transparent"
+            autoFocus
+          />
+        </div>
+      </div>
+
+      {/* Category */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          Category
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {Object.entries(HABIT_CATEGORIES).map(([key, { label, emoji: catEmoji }]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setCategory(key as Habit['category'])}
+              className={`px-3 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-all ${
+                category === key
+                  ? 'bg-[#6F00FF] text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <span>{catEmoji}</span>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Frequency */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          Frequency
+        </label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setFrequency('daily')}
+            className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+              frequency === 'daily'
+                ? 'bg-[#6F00FF] text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            <Repeat size={16} className="inline mr-2" />
+            Every Day
+          </button>
+          <button
+            type="button"
+            onClick={() => setFrequency('weekly')}
+            className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+              frequency === 'weekly'
+                ? 'bg-[#6F00FF] text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            <Calendar size={16} className="inline mr-2" />
+            Specific Days
+          </button>
+        </div>
+      </div>
+
+      {/* Day Selection (if weekly) */}
+      {frequency === 'weekly' && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            Select Days
+          </label>
+          <div className="flex gap-1">
+            {WEEKDAYS.map((day, idx) => (
+              <button
+                key={day}
+                type="button"
+                onClick={() => toggleDay(idx)}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                  scheduledDays.includes(idx)
+                    ? 'bg-[#6F00FF] text-white'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                {day}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Scheduled Time */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          Scheduled Time <span className="text-slate-400 font-normal">(optional - syncs to Timebox)</span>
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="time"
+            value={scheduledTime}
+            onChange={(e) => setScheduledTime(e.target.value)}
+            className="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] focus:border-transparent"
+          />
+          {scheduledTime && (
+            <button
+              type="button"
+              onClick={() => setScheduledTime('')}
+              className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+        {scheduledTime && (
+          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+            <Clock size={12} />
+            This habit will appear in your Timebox timeline
+          </p>
+        )}
+      </div>
+
+      {/* Color */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          Color
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {HABIT_COLORS.map(c => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setColor(c)}
+              className={`w-8 h-8 rounded-lg ${c} transition-all ${
+                color === c ? 'ring-2 ring-offset-2 ring-[#6F00FF] dark:ring-offset-slate-900' : 'hover:scale-110'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-3 pt-4">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={!name.trim()}
+          className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-[#6F00FF] text-white hover:bg-[#5800cc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {initialHabit ? 'Update Habit' : 'Create Habit'}
+        </button>
+      </div>
+    </form>
+  );
+};
+
 const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const { isDark, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'timebox' | 'habittracker'>('timebox');
@@ -736,6 +1020,156 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   });
   const [newWeight, setNewWeight] = useState('');
   const [weightDate, setWeightDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // State for Habits
+  const [habits, setHabits] = useState<Habit[]>(() => {
+    const saved = localStorage.getItem('ascend_habits');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [isAddHabitOpen, setIsAddHabitOpen] = useState(false);
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const [habitViewDate, setHabitViewDate] = useState(new Date());
+
+  // Save habits to localStorage
+  useEffect(() => {
+    localStorage.setItem('ascend_habits', JSON.stringify(habits));
+  }, [habits]);
+
+  // Helper functions for habits
+  const getTodayString = () => new Date().toISOString().split('T')[0];
+  
+  const isHabitScheduledForDay = (habit: Habit, date: Date) => {
+    const dayOfWeek = date.getDay();
+    if (habit.frequency === 'daily') return true;
+    return habit.scheduledDays.includes(dayOfWeek);
+  };
+
+  const isHabitCompletedOnDate = (habit: Habit, dateString: string) => {
+    return habit.completedDates.includes(dateString);
+  };
+
+  const calculateStreak = (habit: Habit): number => {
+    const today = new Date();
+    let streak = 0;
+    let currentDate = new Date(today);
+    
+    // Check if completed today first
+    const todayString = currentDate.toISOString().split('T')[0];
+    if (!isHabitScheduledForDay(habit, currentDate)) {
+      // Skip today if not scheduled
+      currentDate.setDate(currentDate.getDate() - 1);
+    }
+    
+    while (true) {
+      const dateString = currentDate.toISOString().split('T')[0];
+      
+      // Check if this day is scheduled
+      if (isHabitScheduledForDay(habit, currentDate)) {
+        if (habit.completedDates.includes(dateString)) {
+          streak++;
+        } else {
+          // Allow today to be incomplete without breaking streak
+          if (dateString === todayString) {
+            currentDate.setDate(currentDate.getDate() - 1);
+            continue;
+          }
+          break;
+        }
+      }
+      
+      currentDate.setDate(currentDate.getDate() - 1);
+      
+      // Limit search to last 365 days
+      if (streak > 365) break;
+    }
+    
+    return streak;
+  };
+
+  const toggleHabitCompletion = (habitId: string, date?: Date) => {
+    const targetDate = date || new Date();
+    const dateString = targetDate.toISOString().split('T')[0];
+    
+    setHabits(prev => prev.map(habit => {
+      if (habit.id !== habitId) return habit;
+      
+      const isCompleted = habit.completedDates.includes(dateString);
+      let newCompletedDates: string[];
+      
+      if (isCompleted) {
+        newCompletedDates = habit.completedDates.filter(d => d !== dateString);
+      } else {
+        newCompletedDates = [...habit.completedDates, dateString];
+      }
+      
+      const updatedHabit = {
+        ...habit,
+        completedDates: newCompletedDates,
+      };
+      
+      // Recalculate streaks
+      const newStreak = calculateStreak(updatedHabit);
+      
+      return {
+        ...updatedHabit,
+        currentStreak: newStreak,
+        longestStreak: Math.max(updatedHabit.longestStreak, newStreak),
+      };
+    }));
+  };
+
+  const addHabit = (newHabit: Omit<Habit, 'id' | 'currentStreak' | 'longestStreak' | 'completedDates' | 'createdAt'>) => {
+    const habit: Habit = {
+      ...newHabit,
+      id: crypto.randomUUID(),
+      currentStreak: 0,
+      longestStreak: 0,
+      completedDates: [],
+      createdAt: new Date().toISOString(),
+    };
+    setHabits(prev => [...prev, habit]);
+    setIsAddHabitOpen(false);
+  };
+
+  const updateHabit = (habitId: string, updates: Partial<Habit>) => {
+    setHabits(prev => prev.map(h => h.id === habitId ? { ...h, ...updates } : h));
+    setEditingHabit(null);
+  };
+
+  const deleteHabit = (habitId: string) => {
+    setHabits(prev => prev.filter(h => h.id !== habitId));
+  };
+
+  // Get habits scheduled for today
+  const getTodaysHabits = () => {
+    const today = new Date();
+    return habits.filter(h => isHabitScheduledForDay(h, today));
+  };
+
+  // Get weekly completion data for a habit
+  const getWeeklyData = (habit: Habit) => {
+    const result = [];
+    const today = new Date();
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateString = date.toISOString().split('T')[0];
+      const isScheduled = isHabitScheduledForDay(habit, date);
+      const isCompleted = habit.completedDates.includes(dateString);
+      
+      result.push({
+        date,
+        dateString,
+        dayName: WEEKDAYS[date.getDay()],
+        isScheduled,
+        isCompleted,
+        isToday: i === 0,
+      });
+    }
+    
+    return result;
+  };
 
   // Google Calendar State
   const [googleAccount, setGoogleAccount] = useState<{
@@ -973,6 +1407,29 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       // Load blocks from database for this date
       const blocksData = await loadScheduleBlocks(date);
       
+      // Get habits scheduled for this date with specific times
+      const dateString = date.toISOString().split('T')[0];
+      const habitBlocks: ScheduleBlock[] = habits
+        .filter(h => h.scheduledTime && isHabitScheduledForDay(h, date))
+        .map(habit => {
+          const [hours, minutes] = habit.scheduledTime!.split(':').map(Number);
+          const startTime = hours + minutes / 60;
+          const isCompleted = habit.completedDates.includes(dateString);
+          
+          return {
+            id: `habit-${habit.id}-${dateString}`,
+            title: `${habit.emoji} ${habit.name}`,
+            tag: HABIT_CATEGORIES[habit.category].label,
+            start: startTime,
+            duration: 0.5, // Default 30 min for habits
+            color: habit.color,
+            textColor: 'text-white',
+            isGoogle: false,
+            completed: isCompleted,
+            habitId: habit.id, // Link to habit
+          };
+        });
+      
       // If Google is connected, also fetch Google Calendar events
       if (googleAccount && isSignedIn()) {
         const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
@@ -1002,13 +1459,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           };
         });
         
-        // Combine: DB blocks + Google events (avoiding duplicates by googleEventId)
+        // Combine: DB blocks + Google events + Habit blocks (avoiding duplicates by googleEventId)
         const dbBlockIds = new Set(blocksData.map(b => b.googleEventId).filter(Boolean));
         const uniqueGoogleBlocks = googleBlocks.filter(g => !dbBlockIds.has(g.googleEventId));
         
-        setSchedule([...blocksData, ...uniqueGoogleBlocks]);
+        setSchedule([...blocksData, ...uniqueGoogleBlocks, ...habitBlocks]);
       } else {
-        setSchedule(blocksData.length > 0 ? blocksData : []);
+        setSchedule([...(blocksData.length > 0 ? blocksData : []), ...habitBlocks]);
       }
     } catch (error) {
       console.error('Failed to load schedule for date:', error);
@@ -1266,6 +1723,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         String(t.id) === String(block.taskId) ? { ...t, completed: newCompleted } : t
       ));
       console.log('Block toggle synced to task:', { blockId, taskId: block.taskId, newCompleted });
+    }
+    
+    // If this block is linked to a habit, also update the habit
+    if (block.habitId) {
+      toggleHabitCompletion(block.habitId, selectedDate);
+      console.log('Block toggle synced to habit:', { blockId, habitId: block.habitId, newCompleted });
     }
   };
 
@@ -2107,10 +2570,321 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       )}
 
       {activeTab === 'habittracker' && (
-        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 animate-fade-in-up">
-            <Activity size={64} className="mb-4 opacity-20" />
-            <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-300">Habit Tracker View</h2>
-            <p className="mt-2">Track your daily streaks and habits here.</p>
+        <div className="flex-1 overflow-hidden animate-fade-in-up">
+          <div className="h-full overflow-y-auto">
+            <div className="max-w-4xl mx-auto p-6 space-y-6">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center">
+                      <Flame size={20} className="text-white" />
+                    </div>
+                    Habit Tracker
+                  </h1>
+                  <p className="text-slate-500 dark:text-slate-400 mt-1">Build consistency, one day at a time</p>
+                </div>
+                <button
+                  onClick={() => setIsAddHabitOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-[#6F00FF] text-white rounded-xl font-semibold hover:bg-[#5800cc] transition-all shadow-lg shadow-purple-500/25"
+                >
+                  <Plus size={18} />
+                  New Habit
+                </button>
+              </div>
+
+              {/* Stats Overview */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm mb-1">
+                    <Target size={14} />
+                    Active Habits
+                  </div>
+                  <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{habits.length}</div>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm mb-1">
+                    <Check size={14} />
+                    Done Today
+                  </div>
+                  <div className="text-2xl font-bold text-emerald-500">
+                    {getTodaysHabits().filter(h => isHabitCompletedOnDate(h, getTodayString())).length}
+                    <span className="text-slate-400 text-lg font-normal">/{getTodaysHabits().length}</span>
+                  </div>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm mb-1">
+                    <Flame size={14} />
+                    Best Streak
+                  </div>
+                  <div className="text-2xl font-bold text-orange-500">
+                    {habits.length > 0 ? Math.max(...habits.map(h => h.longestStreak)) : 0}
+                    <span className="text-slate-400 text-sm font-normal ml-1">days</span>
+                  </div>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm mb-1">
+                    <TrendingUp size={14} />
+                    Weekly Rate
+                  </div>
+                  <div className="text-2xl font-bold text-blue-500">
+                    {habits.length > 0 ? Math.round(
+                      habits.reduce((acc, h) => {
+                        const weekData = getWeeklyData(h);
+                        const scheduled = weekData.filter(d => d.isScheduled).length;
+                        const completed = weekData.filter(d => d.isScheduled && d.isCompleted).length;
+                        return acc + (scheduled > 0 ? (completed / scheduled) * 100 : 0);
+                      }, 0) / habits.length
+                    ) : 0}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Today's Habits Section */}
+              <div>
+                <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
+                  <Zap size={18} className="text-amber-500" />
+                  Today's Habits
+                  <span className="text-sm font-normal text-slate-400 ml-2">
+                    {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                  </span>
+                </h2>
+                
+                {getTodaysHabits().length === 0 ? (
+                  <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-700">
+                    <Activity size={48} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+                    <p className="text-slate-500 dark:text-slate-400 font-medium">No habits scheduled for today</p>
+                    <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Create a new habit to get started!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {getTodaysHabits().map(habit => {
+                      const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
+                      const weekData = getWeeklyData(habit);
+                      
+                      return (
+                        <div 
+                          key={habit.id}
+                          className={`bg-white dark:bg-slate-800 rounded-2xl p-4 border transition-all ${
+                            isCompleted 
+                              ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/20' 
+                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            {/* Completion Button */}
+                            <button
+                              onClick={() => toggleHabitCompletion(habit.id)}
+                              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+                                isCompleted
+                                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                                  : `${habit.color} text-white opacity-60 hover:opacity-100`
+                              }`}
+                            >
+                              {isCompleted ? <Check size={24} strokeWidth={3} /> : <span className="text-2xl">{habit.emoji}</span>}
+                            </button>
+                            
+                            {/* Habit Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h3 className={`font-semibold text-slate-800 dark:text-slate-100 ${isCompleted ? 'line-through opacity-60' : ''}`}>
+                                  {habit.name}
+                                </h3>
+                                {habit.scheduledTime && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                    <Clock size={10} />
+                                    {habit.scheduledTime}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                                  <span className={`inline-block w-2 h-2 rounded-full ${habit.color}`}></span>
+                                  {HABIT_CATEGORIES[habit.category].label}
+                                </span>
+                                {habit.currentStreak > 0 && (
+                                  <span className="text-xs font-medium text-orange-500 flex items-center gap-1">
+                                    <Flame size={12} />
+                                    {habit.currentStreak} day streak
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Weekly Progress Mini */}
+                            <div className="hidden sm:flex items-center gap-1">
+                              {weekData.map((day, idx) => (
+                                <div
+                                  key={idx}
+                                  className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-medium transition-all ${
+                                    day.isToday ? 'ring-2 ring-[#6F00FF] ring-offset-1 dark:ring-offset-slate-800' : ''
+                                  } ${
+                                    !day.isScheduled 
+                                      ? 'bg-slate-100 dark:bg-slate-700 text-slate-300 dark:text-slate-600'
+                                      : day.isCompleted
+                                        ? 'bg-emerald-500 text-white'
+                                        : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400'
+                                  }`}
+                                  title={`${day.dayName}: ${day.isScheduled ? (day.isCompleted ? 'Done!' : 'Not done') : 'Not scheduled'}`}
+                                >
+                                  {day.dayName.charAt(0)}
+                                </div>
+                              ))}
+                            </div>
+                            
+                            {/* Actions */}
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setEditingHabit(habit)}
+                                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                              >
+                                <Edit3 size={16} />
+                              </button>
+                              <button
+                                onClick={() => deleteHabit(habit.id)}
+                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* All Habits Section */}
+              {habits.length > 0 && habits.filter(h => !isHabitScheduledForDay(h, new Date())).length > 0 && (
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
+                    <Repeat size={18} className="text-slate-400" />
+                    Other Habits
+                  </h2>
+                  <div className="space-y-3">
+                    {habits.filter(h => !isHabitScheduledForDay(h, new Date())).map(habit => {
+                      const weekData = getWeeklyData(habit);
+                      
+                      return (
+                        <div 
+                          key={habit.id}
+                          className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 opacity-70"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-xl ${habit.color} flex items-center justify-center text-2xl`}>
+                              {habit.emoji}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-slate-800 dark:text-slate-100">{habit.name}</h3>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="text-xs text-slate-400 dark:text-slate-500">
+                                  {habit.frequency === 'daily' ? 'Daily' : habit.scheduledDays.map(d => WEEKDAYS[d]).join(', ')}
+                                </span>
+                                {habit.currentStreak > 0 && (
+                                  <span className="text-xs font-medium text-orange-500 flex items-center gap-1">
+                                    <Flame size={12} />
+                                    {habit.currentStreak} days
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="hidden sm:flex items-center gap-1">
+                              {weekData.map((day, idx) => (
+                                <div
+                                  key={idx}
+                                  className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-medium ${
+                                    !day.isScheduled 
+                                      ? 'bg-slate-100 dark:bg-slate-700 text-slate-300 dark:text-slate-600'
+                                      : day.isCompleted
+                                        ? 'bg-emerald-500 text-white'
+                                        : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400'
+                                  }`}
+                                >
+                                  {day.dayName.charAt(0)}
+                                </div>
+                              ))}
+                            </div>
+                            
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setEditingHabit(habit)}
+                                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                              >
+                                <Edit3 size={16} />
+                              </button>
+                              <button
+                                onClick={() => deleteHabit(habit.id)}
+                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty State */}
+              {habits.length === 0 && (
+                <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-12 text-center">
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center shadow-xl shadow-purple-500/20">
+                    <Target size={40} className="text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Start Building Better Habits</h3>
+                  <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-6">
+                    Create your first habit and start tracking your progress. Small consistent actions lead to big results!
+                  </p>
+                  <button
+                    onClick={() => setIsAddHabitOpen(true)}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-[#6F00FF] text-white rounded-xl font-semibold hover:bg-[#5800cc] transition-all shadow-lg shadow-purple-500/25"
+                  >
+                    <Plus size={18} />
+                    Create First Habit
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Add/Edit Habit Modal */}
+          {(isAddHabitOpen || editingHabit) && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">
+                      {editingHabit ? 'Edit Habit' : 'Create New Habit'}
+                    </h2>
+                    <button
+                      onClick={() => { setIsAddHabitOpen(false); setEditingHabit(null); }}
+                      className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                  
+                  <HabitForm
+                    initialHabit={editingHabit}
+                    onSave={(data) => {
+                      if (editingHabit) {
+                        updateHabit(editingHabit.id, data);
+                      } else {
+                        addHabit(data);
+                      }
+                    }}
+                    onCancel={() => { setIsAddHabitOpen(false); setEditingHabit(null); }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
