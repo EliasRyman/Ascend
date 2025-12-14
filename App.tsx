@@ -258,13 +258,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     initGoogle();
   }, []);
 
-  // Auto-sync when Google account is connected
-  useEffect(() => {
-    if (googleAccount && isSignedIn() && user && isDataLoaded) {
-      console.log('Auto-syncing Google Calendar...');
-      handleSync();
-    }
-  }, [googleAccount, user, isDataLoaded]);
+  // Auto-sync flag to prevent multiple syncs
+  const [hasAutoSynced, setHasAutoSynced] = useState(false);
 
   const handleConnectGoogle = () => {
     setIsGoogleConnecting(true);
@@ -626,6 +621,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       setIsSyncing(false);
     }
   };
+
+  // Auto-sync when Google account is connected (only once per session)
+  useEffect(() => {
+    if (googleAccount && isSignedIn() && user && isDataLoaded && !hasAutoSynced && !isSyncing) {
+      console.log('Auto-syncing Google Calendar...');
+      setHasAutoSynced(true);
+      handleSync();
+    }
+  }, [googleAccount, user, isDataLoaded, hasAutoSynced, isSyncing]);
 
   const handleTaskDragStart = (e, task, sourceList) => {
     setDraggedItem({ task, sourceList });
