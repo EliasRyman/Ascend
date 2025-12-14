@@ -1700,24 +1700,39 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         </div>
 
         {/* Center Navigation Tabs */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center gap-8 font-bold text-xl tracking-tight">
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center bg-slate-100 dark:bg-slate-800 rounded-full p-1">
           <button 
             onClick={() => setActiveTab('dashboard')}
-            className={`transition-colors uppercase ${activeTab === 'dashboard' ? 'text-[#6F00FF]' : 'text-slate-300 hover:text-slate-500 dark:text-slate-700 dark:hover:text-slate-500'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+              activeTab === 'dashboard' 
+                ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' 
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            }`}
           >
+            <LayoutDashboard size={16} />
             Dashboard
           </button>
           <button 
             onClick={() => setActiveTab('timebox')}
-            className={`transition-colors uppercase ${activeTab === 'timebox' ? 'text-[#6F00FF]' : 'text-slate-300 hover:text-slate-500 dark:text-slate-700 dark:hover:text-slate-500'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+              activeTab === 'timebox' 
+                ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' 
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            }`}
           >
+            <Clock size={16} />
             Timebox
           </button>
           <button 
             onClick={() => setActiveTab('habittracker')}
-            className={`transition-colors uppercase ${activeTab === 'habittracker' ? 'text-[#6F00FF]' : 'text-slate-300 hover:text-slate-500 dark:text-slate-700 dark:hover:text-slate-500'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+              activeTab === 'habittracker' 
+                ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' 
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            }`}
           >
-            Habittracker
+            <Target size={16} />
+            Habits
           </button>
         </div>
 
