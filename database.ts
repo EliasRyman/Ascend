@@ -142,6 +142,15 @@ export async function updateTask(taskId: string, updates: Partial<Task>): Promis
 }
 
 export async function deleteTask(taskId: string): Promise<boolean> {
+  // Check if taskId looks like a UUID (contains dashes and is ~36 chars)
+  // Demo tasks have simple numeric IDs which shouldn't be sent to database
+  const isUuid = taskId.includes('-') && taskId.length >= 32;
+  
+  if (!isUuid) {
+    console.log('Task ID is not a UUID, skipping database delete:', taskId);
+    return true; // Return true since there's nothing to delete in DB
+  }
+  
   const { error } = await supabase
     .from('tasks')
     .delete()
