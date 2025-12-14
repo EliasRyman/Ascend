@@ -49,6 +49,14 @@ import {
   createGoogleCalendarEvent,
   isSignedIn
 } from './googleCalendar';
+import {
+  signIn,
+  signUp,
+  signOut,
+  signInWithGoogle,
+  onAuthStateChange,
+  getCurrentUser
+} from './supabase';
 
 // --- Context ---
 
@@ -934,7 +942,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
 // --- Landing Page & Root App ---
 
-const LandingPage = ({ onLogin }: { onLogin: () => void }) => {
+const LandingPage = ({ onGetStarted }: { onGetStarted: () => void }) => {
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <div className="w-20 h-20 bg-gradient-to-tr from-violet-600 to-fuchsia-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-violet-600/30 mb-8 transform rotate-3 hover:rotate-6 transition-transform">
@@ -947,7 +955,7 @@ const LandingPage = ({ onLogin }: { onLogin: () => void }) => {
         The all-in-one timeboxing workspace for <span className="text-slate-800 dark:text-slate-200 font-semibold">deep work</span>.
       </p>
       <button 
-        onClick={onLogin} 
+        onClick={onGetStarted} 
         className="group flex items-center gap-3 px-8 py-4 bg-[#6F00FF] text-white rounded-full font-bold text-xl hover:bg-violet-700 hover:shadow-xl hover:shadow-violet-600/20 transition-all transform hover:-translate-y-1"
       >
         Get Started 
@@ -963,12 +971,194 @@ const LandingPage = ({ onLogin }: { onLogin: () => void }) => {
   );
 };
 
+// Auth Page Component
+const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (isSignUp) {
+        await signUp(email, password);
+        setError('Konto skapat! Du kan nu logga in.');
+        setIsSignUp(false);
+      } else {
+        await signIn(email, password);
+        onSuccess();
+      }
+    } catch (err: any) {
+      setError(err.message || 'Ett fel uppstod');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      setError(err.message || 'Google-inloggning misslyckades');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-gradient-to-tr from-violet-600 to-fuchsia-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-violet-600/30 mx-auto mb-4">
+            <Target size={36} strokeWidth={2.5} />
+          </div>
+          <h1 className="text-3xl font-bold">
+            {isSignUp ? 'Skapa konto' : 'Logga in'}
+          </h1>
+          <p className="text-slate-500 mt-2">
+            {isSignUp ? 'Skapa ett konto för att börja' : 'Välkommen tillbaka!'}
+          </p>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-200 dark:border-slate-800">
+          {error && (
+            <div className={`p-3 rounded-lg mb-4 text-sm ${error.includes('skapat') ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'}`}>
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none"
+                placeholder="din@email.com"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Lösenord</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none"
+                placeholder="••••••••"
+                required
+                minLength={6}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-[#6F00FF] hover:bg-violet-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                isSignUp ? 'Skapa konto' : 'Logga in'
+              )}
+            </button>
+          </form>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white dark:bg-slate-900 text-slate-500">eller</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleGoogleSignIn}
+            disabled={loading}
+            className="w-full py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium rounded-lg transition-colors flex items-center justify-center gap-3"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Fortsätt med Google
+          </button>
+
+          <p className="text-center text-sm text-slate-500 mt-6">
+            {isSignUp ? 'Har du redan ett konto?' : 'Inget konto?'}{' '}
+            <button
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError(null);
+              }}
+              className="text-[#6F00FF] hover:underline font-medium"
+            >
+              {isSignUp ? 'Logga in' : 'Skapa konto'}
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const App = () => {
   const [isDark, setIsDark] = useState(false);
-  const [user, setUser] = useState<{name: string, avatar: string} | null>(null);
-  const [view, setView] = useState<'landing' | 'app'>('landing');
+  const [user, setUser] = useState<{id: string; name: string; avatar: string; email: string} | null>(null);
+  const [view, setView] = useState<'landing' | 'auth' | 'app'>('landing');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load theme from localStorage or system preference could be added here
+  // Check for existing session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const currentUser = await getCurrentUser();
+        if (currentUser) {
+          setUser({
+            id: currentUser.id,
+            name: currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'User',
+            avatar: (currentUser.user_metadata?.full_name || currentUser.email || 'U').substring(0, 2).toUpperCase(),
+            email: currentUser.email || ''
+          });
+          setView('app');
+        }
+      } catch (error) {
+        console.error('Session check error:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        setUser({
+          id: session.user.id,
+          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+          avatar: (session.user.user_metadata?.full_name || session.user.email || 'U').substring(0, 2).toUpperCase(),
+          email: session.user.email || ''
+        });
+        setView('app');
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setView('landing');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Load theme
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -979,25 +1169,37 @@ const App = () => {
 
   const toggleTheme = () => setIsDark(!isDark);
 
-  const handleLogin = () => {
-    // Simulating login
-    setUser({ name: 'Demo User', avatar: 'DU' });
-    setView('app');
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      setUser(null);
+      setView('landing');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    setView('landing');
-  };
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-950">
+        <Loader2 size={48} className="animate-spin text-violet-600" />
+      </div>
+    );
+  }
 
   return (
     <ThemeContext.Provider value={{ isDark, toggleTheme }}>
-      {view === 'landing' ? (
-        <LandingPage onLogin={handleLogin} />
-      ) : (
+      {view === 'landing' && (
+        <LandingPage onGetStarted={() => setView('auth')} />
+      )}
+      {view === 'auth' && (
+        <AuthPage onSuccess={() => {}} />
+      )}
+      {view === 'app' && user && (
         <TimeboxApp 
           user={user} 
-          onLogin={handleLogin} 
+          onLogin={() => setView('auth')} 
           onLogout={handleLogout}
           onBack={() => setView('landing')}
         />
