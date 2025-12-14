@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { 
   Check, 
   Menu, 
@@ -21,6 +21,7 @@ import {
   MoreHorizontal,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Bold,
   Italic,
   Underline,
@@ -218,6 +219,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     timeFormat: '12h', // '12h' | '24h'
     timezone: 'Local'
   });
+  
+  // State for Calendar Picker
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [calendarViewDate, setCalendarViewDate] = useState(new Date());
+  const calendarRef = useRef<HTMLDivElement>(null);
 
   // Google Calendar State
   const [googleAccount, setGoogleAccount] = useState<{
@@ -412,6 +419,50 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       timelineRef.current.scrollTop = scrollPosition;
     }
   }, [isDataLoaded]); // Only run once when data is loaded
+
+  // Close calendar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (calendarRef.current && !calendarRef.current.contains(event.target as Node)) {
+        setIsCalendarOpen(false);
+      }
+    };
+    if (isCalendarOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isCalendarOpen]);
+
+  // --- Calendar Helper Functions ---
+  const getDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (year: number, month: number) => {
+    return new Date(year, month, 1).getDay();
+  };
+
+  const isSameDay = (date1: Date, date2: Date) => {
+    return date1.getFullYear() === date2.getFullYear() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getDate() === date2.getDate();
+  };
+
+  const isToday = (date: Date) => isSameDay(date, new Date());
+
+  const handleDateSelect = (day: number) => {
+    const newDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
+    setSelectedDate(newDate);
+    setIsCalendarOpen(false);
+  };
+
+  const handlePrevMonth = () => {
+    setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1));
+  };
 
   // --- Handlers ---
 
@@ -1373,11 +1424,97 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           </div>
 
           {/* Date Selector Footer */}
-          <div className="h-14 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center shrink-0">
-             <div className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors">
-                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                {new Date().toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' })}
-                <User size={14} className="ml-1 text-slate-400" />
+          <div className="h-14 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center shrink-0 relative">
+             <div 
+               ref={calendarRef}
+               className="relative"
+             >
+               <div 
+                 onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+                 className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+               >
+                  <div className={`w-2 h-2 rounded-full ${isToday(selectedDate) ? 'bg-emerald-500' : 'bg-slate-400'}`}></div>
+                  {selectedDate.toLocaleDateString('sv-SE', { month: 'long', day: 'numeric' })}
+                  <User size={14} className="ml-1 text-slate-400" />
+               </div>
+               
+               {/* Calendar Popup */}
+               {isCalendarOpen && (
+                 <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 z-50 min-w-[280px]">
+                   {/* Month Navigation */}
+                   <div className="flex items-center justify-between mb-4">
+                     <button 
+                       onClick={handlePrevMonth}
+                       className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                     >
+                       <ChevronLeft size={18} className="text-slate-500" />
+                     </button>
+                     <span className="font-semibold text-slate-800 dark:text-slate-200">
+                       {calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                     </span>
+                     <button 
+                       onClick={handleNextMonth}
+                       className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                     >
+                       <ChevronRight size={18} className="text-slate-500" />
+                     </button>
+                   </div>
+                   
+                   {/* Weekday Headers */}
+                   <div className="grid grid-cols-7 gap-1 mb-2">
+                     {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                       <div key={day} className="text-center text-xs font-medium text-slate-400 py-1">
+                         {day}
+                       </div>
+                     ))}
+                   </div>
+                   
+                   {/* Days Grid */}
+                   <div className="grid grid-cols-7 gap-1">
+                     {/* Empty cells for days before first of month */}
+                     {Array.from({ length: getFirstDayOfMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => (
+                       <div key={`empty-${i}`} className="w-9 h-9" />
+                     ))}
+                     
+                     {/* Day cells */}
+                     {Array.from({ length: getDaysInMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => {
+                       const day = i + 1;
+                       const date = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
+                       const isSelected = isSameDay(date, selectedDate);
+                       const isTodayDate = isToday(date);
+                       
+                       return (
+                         <button
+                           key={day}
+                           onClick={() => handleDateSelect(day)}
+                           className={`w-9 h-9 rounded-lg text-sm font-medium transition-all
+                             ${isSelected 
+                               ? 'bg-emerald-500 text-white ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900' 
+                               : isTodayDate 
+                                 ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100' 
+                                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                             }`}
+                         >
+                           {day}
+                         </button>
+                       );
+                     })}
+                   </div>
+                   
+                   {/* Today Button */}
+                   <button
+                     onClick={() => {
+                       const today = new Date();
+                       setSelectedDate(today);
+                       setCalendarViewDate(today);
+                       setIsCalendarOpen(false);
+                     }}
+                     className="mt-3 w-full py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
+                   >
+                     Today
+                   </button>
+                 </div>
+               )}
              </div>
           </div>
         </div>
