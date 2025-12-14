@@ -730,6 +730,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     return saved ? JSON.parse(saved) : [];
   });
   const [newWeight, setNewWeight] = useState('');
+  const [weightDate, setWeightDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Google Calendar State
   const [googleAccount, setGoogleAccount] = useState<{
@@ -1289,28 +1290,31 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     const weight = parseFloat(newWeight);
     if (isNaN(weight) || weight <= 0) return;
     
-    const today = new Date().toISOString().split('T')[0];
-    const existingIndex = weightEntries.findIndex(e => e.date === today);
+    const dateToLog = weightDate;
+    const existingIndex = weightEntries.findIndex(e => e.date === dateToLog);
     
     let updatedEntries;
     if (existingIndex >= 0) {
-      // Update today's entry
+      // Update existing entry for that date
       updatedEntries = [...weightEntries];
-      updatedEntries[existingIndex] = { date: today, weight };
+      updatedEntries[existingIndex] = { date: dateToLog, weight };
     } else {
       // Add new entry
-      updatedEntries = [...weightEntries, { date: today, weight }].sort((a, b) => a.date.localeCompare(b.date));
+      updatedEntries = [...weightEntries, { date: dateToLog, weight }].sort((a, b) => a.date.localeCompare(b.date));
     }
     
-    // Keep only last 30 days
-    if (updatedEntries.length > 30) {
-      updatedEntries = updatedEntries.slice(-30);
+    // Keep only last 90 days (increased from 30)
+    if (updatedEntries.length > 90) {
+      updatedEntries = updatedEntries.slice(-90);
     }
     
     setWeightEntries(updatedEntries);
     localStorage.setItem('ascend_weight_entries', JSON.stringify(updatedEntries));
     setNewWeight('');
-    setNotification({ type: 'success', message: `Weight logged: ${weight} kg` });
+    setWeightDate(new Date().toISOString().split('T')[0]); // Reset to today
+    
+    const isToday = dateToLog === new Date().toISOString().split('T')[0];
+    setNotification({ type: 'success', message: `Weight logged: ${weight} kg${isToday ? '' : ` for ${dateToLog}`}` });
   };
 
   const handleAddTagToTask = async (taskId: number | string, tagName: string, tagColor: string) => {
@@ -1991,11 +1995,18 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   {/* Weight Input */}
                   <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
                     <input
+                      type="date"
+                      value={weightDate}
+                      onChange={(e) => setWeightDate(e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
+                    />
+                    <input
                       type="number"
                       step="0.1"
                       value={newWeight}
                       onChange={(e) => setNewWeight(e.target.value)}
-                      placeholder="Log today's weight (kg)"
+                      placeholder="Weight (kg)"
                       className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
                       onKeyDown={(e) => e.key === 'Enter' && handleAddWeight()}
                     />
@@ -2003,7 +2014,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       onClick={handleAddWeight}
                       className="px-4 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors"
                     >
-                      Log Weight
+                      Log
                     </button>
                   </div>
                 </div>
@@ -2483,22 +2494,31 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                  
                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm p-4">
                     {/* Weight Input */}
-                    <div className="flex gap-2 mb-4">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={newWeight}
-                        onChange={(e) => setNewWeight(e.target.value)}
-                        placeholder="Today's weight (kg)"
-                        className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddWeight()}
-                      />
-                      <button
-                        onClick={handleAddWeight}
-                        className="px-4 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors"
-                      >
-                        Log
-                      </button>
+                    <div className="space-y-2 mb-4">
+                      <div className="flex gap-2">
+                        <input
+                          type="date"
+                          value={weightDate}
+                          onChange={(e) => setWeightDate(e.target.value)}
+                          max={new Date().toISOString().split('T')[0]}
+                          className="px-2 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
+                        />
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={newWeight}
+                          onChange={(e) => setNewWeight(e.target.value)}
+                          placeholder="kg"
+                          className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddWeight()}
+                        />
+                        <button
+                          onClick={handleAddWeight}
+                          className="px-3 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors"
+                        >
+                          Log
+                        </button>
+                      </div>
                     </div>
                     
                     {/* Weight Chart */}
