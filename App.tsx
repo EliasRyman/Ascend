@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { SpeedInsights } from '@vercel/speed-insights/react';
+import React, { useState, useEffect, useContext } from 'react';
 import { 
   Check, 
   Menu, 
@@ -38,46 +37,8 @@ import {
   Settings,
   Globe,
   LayoutDashboard,
-  Activity,
-  Unlink,
-  Mail,
-  Lock,
-  Eye,
-  EyeOff
+  Activity
 } from 'lucide-react';
-import {
-  initGoogleApi,
-  initGoogleIdentity,
-  requestAccessToken,
-  revokeAccessToken,
-  fetchGoogleCalendarEvents,
-  createGoogleCalendarEvent,
-  getGoogleUserInfo
-} from './googleCalendar';
-import { 
-  supabase, 
-  signIn, 
-  signUp, 
-  signOut, 
-  signInWithGoogle as supabaseSignInWithGoogle,
-  onAuthStateChange,
-  getCurrentUser 
-} from './supabase';
-import {
-  loadTasks,
-  createTask,
-  updateTask,
-  deleteTask as dbDeleteTask,
-  moveTask,
-  loadScheduleBlocks,
-  createScheduleBlock,
-  updateScheduleBlock,
-  deleteScheduleBlock,
-  loadUserSettings,
-  saveUserSettings,
-  Task as DbTaskType,
-  ScheduleBlock as DbScheduleBlockType
-} from './database';
 
 // --- Context ---
 
@@ -169,16 +130,10 @@ const EXTERNAL_GOOGLE_EVENTS: ScheduleBlock[] = [
 
 // --- Timebox App Components ---
 
-interface TaskItemProps {
-  task: Task;
-  onDragStart: (e: React.DragEvent) => void;
-  onDelete: (id: number | string) => void | Promise<void>;
-}
-
-const TaskItem: React.FC<TaskItemProps> = ({ task, onDragStart, onDelete }) => (
+const TaskItem = ({ task, onDragStart, onDelete }) => (
   <div 
     draggable="true"
-    onDragStart={onDragStart}
+    onDragStart={(e) => onDragStart(e, task)}
     className={`group flex items-center gap-3 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-[#6F00FF]/50 cursor-grab active:cursor-grabbing transition-all shadow-sm ${task.completed ? 'opacity-60' : ''}`}
   >
     <div className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${task.completed ? 'bg-[#6F00FF] border-[#6F00FF]' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}>
@@ -211,12 +166,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onDragStart, onDelete }) => (
   </div>
 );
 
-const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
-  onBack: () => void;
-  user: { id: string; name: string; avatar: string; email: string } | null;
-  onLogin: () => void;
-  onLogout: () => void;
-}) => {
+const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const { isDark, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'timebox' | 'habittracker'>('timebox');
   const [isLaterOpen, setIsLaterOpen] = useState(true);
@@ -248,103 +198,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isCalendarSynced, setIsCalendarSynced] = useState(false);
 
-  // Google Calendar State
-  const [googleAccount, setGoogleAccount] = useState<{
-    email: string;
-    name: string;
-    picture: string;
-  } | null>(null);
-  const [isGoogleConnecting, setIsGoogleConnecting] = useState(false);
-  const [googleApiReady, setGoogleApiReady] = useState(false);
-
   // Time labels from 7 AM to 3 PM for the demo view
   const timeLabels = [7, 8, 9, 10, 11, 12, 13, 14, 15];
-
-  // Data loading state
-  const [isDataLoading, setIsDataLoading] = useState(true);
-
-  // Load data from database on mount
-  useEffect(() => {
-    const loadData = async () => {
-      if (!user) return;
-      
-      setIsDataLoading(true);
-      try {
-        // Load tasks
-        const [activeTasksData, laterTasksData, blocksData, settingsData] = await Promise.all([
-          loadTasks('active'),
-          loadTasks('later'),
-          loadScheduleBlocks(),
-          loadUserSettings()
-        ]);
-
-        if (activeTasksData.length > 0 || laterTasksData.length > 0) {
-          setActiveTasks(activeTasksData);
-          setLaterTasks(laterTasksData);
-        }
-
-        if (blocksData.length > 0) {
-          // blocksData is already in the correct ScheduleBlock format from database.ts
-          setSchedule(blocksData);
-        }
-
-        if (settingsData) {
-          setSettings({
-            timeFormat: settingsData.timeFormat,
-            timezone: settingsData.timezone
-          });
-        }
-      } catch (error) {
-        console.error('Failed to load data:', error);
-      } finally {
-        setIsDataLoading(false);
-      }
-    };
-
-    loadData();
-  }, [user]);
-
-  // Initialize Google APIs on mount
-  useEffect(() => {
-    const initGoogle = async () => {
-      try {
-        await initGoogleApi();
-        initGoogleIdentity(async () => {
-          const userInfo = await getGoogleUserInfo();
-          if (userInfo) {
-            setGoogleAccount(userInfo);
-            setIsCalendarSynced(true);
-          }
-          setIsGoogleConnecting(false);
-        });
-        setGoogleApiReady(true);
-      } catch (error) {
-        console.error('Failed to initialize Google APIs:', error);
-      }
-    };
-    
-    const timer = setTimeout(initGoogle, 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Handle Google Calendar connection
-  const handleConnectGoogle = useCallback(() => {
-    if (!googleApiReady) {
-      alert('Google APIs are still loading. Please try again in a moment.');
-      return;
-    }
-    setIsGoogleConnecting(true);
-    requestAccessToken();
-    setTimeout(() => setIsGoogleConnecting(false), 30000);
-  }, [googleApiReady]);
-
-  // Handle Google Calendar disconnection
-  const handleDisconnectGoogle = useCallback(() => {
-    revokeAccessToken();
-    setGoogleAccount(null);
-    setIsCalendarSynced(false);
-    setSchedule(prev => prev.filter(block => !block.isGoogle || typeof block.id === 'number'));
-  }, []);
 
   // --- Handlers ---
 
@@ -408,33 +263,22 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
     };
   }, [resizingBlockId, resizeStartY, resizeStartDuration]);
 
-  const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e) => {
     if (e.key === 'Enter' && newTaskInput.trim()) {
-        // Create task in database
-        const dbTask = await createTask(newTaskInput, 'active');
-        
-        if (dbTask) {
-          setActiveTasks([...activeTasks, dbTask]);
-        } else {
-          // Fallback to local-only task if DB fails
-          const newTask: Task = {
-              id: String(Date.now()),
-              title: newTaskInput,
-              tag: null,
-              tagColor: null,
-              time: null,
-              completed: false
-          };
-          setActiveTasks([...activeTasks, newTask]);
-        }
+        const newTask: Task = {
+            id: Date.now(),
+            title: newTaskInput,
+            tag: null,
+            tagColor: null,
+            time: null,
+            completed: false
+        };
+        setActiveTasks([...activeTasks, newTask]);
         setNewTaskInput("");
     }
   };
 
-  const handleDeleteTask = async (taskId: number | string, listType: 'active' | 'later') => {
-      // Delete from database
-      await dbDeleteTask(String(taskId));
-      
+  const handleDeleteTask = (taskId, listType) => {
       if (listType === 'active') {
           setActiveTasks(activeTasks.filter(t => t.id !== taskId));
       } else {
@@ -442,50 +286,33 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
       }
   };
 
-  const handleDeleteBlock = async (blockId: number | string) => {
-      // Delete from database
-      await deleteScheduleBlock(String(blockId));
+  const handleDeleteBlock = (blockId) => {
       setSchedule(schedule.filter(b => b.id !== blockId));
   };
 
-  const handleSync = async () => {
-    if (!googleAccount) {
-      alert("Please connect your Google Calendar in Settings first!");
-      setIsSettingsOpen(true);
+  const handleSync = () => {
+    if (!user) {
+      alert("Please sign in to sync your calendar!");
       return;
     }
     
     setIsSyncing(true);
-    try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      
-      const googleEvents = await fetchGoogleCalendarEvents(today, tomorrow);
-      
-      setSchedule(prev => {
-        const localBlocks = prev.filter(block => !block.isGoogle);
-        const newGoogleBlocks: ScheduleBlock[] = googleEvents.map(event => ({
-          id: event.id,
-          title: event.title,
-          tag: 'meeting',
-          start: event.start,
-          duration: event.duration,
-          color: "bg-blue-100 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800",
-          textColor: "text-blue-700 dark:text-blue-300",
-          isGoogle: true
-        }));
-        return [...localBlocks, ...newGoogleBlocks];
-      });
-      
-      setIsCalendarSynced(true);
-    } catch (error) {
-      console.error('Sync failed:', error);
-      alert('Failed to sync with Google Calendar. Please try reconnecting in Settings.');
-    } finally {
-      setIsSyncing(false);
-    }
+    // Simulate API call to Google Calendar
+    setTimeout(() => {
+        setIsSyncing(false);
+        setIsCalendarSynced(true);
+        
+        // 1. Pull changes FROM Google (Simulated)
+        setSchedule(prev => {
+            const existingIds = new Set(prev.map(b => b.id));
+            const newEvents = EXTERNAL_GOOGLE_EVENTS.filter(e => !existingIds.has(e.id));
+            // In a real app, we would also check for updates/deletions from GCal
+            return [...prev, ...newEvents];
+        });
+
+        console.log("Pushing local schedule to Google Calendar...", schedule);
+
+    }, 1500);
   };
 
   const handleTaskDragStart = (e, task, sourceList) => {
@@ -529,47 +356,21 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
       e.dataTransfer.dropEffect = 'copy';
   };
 
-  const handleHourDrop = async (e: React.DragEvent, hour: number) => {
+  const handleHourDrop = (e, hour) => {
       e.preventDefault();
       setDragOverHour(null);
       if (!draggedItem) return;
       const { task } = draggedItem;
 
-      const blockData = {
+      const newBlock: ScheduleBlock = {
+          id: Date.now(),
           title: task.title,
           tag: task.tag || 'work',
           start: hour,
           duration: 1,
           color: "bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500", 
           textColor: "text-indigo-950 dark:text-indigo-50",
-          isGoogle: false
-      };
-
-      // If connected to Google Calendar, create the event there too
-      if (googleAccount) {
-          try {
-              await createGoogleCalendarEvent(
-                  task.title,
-                  hour,
-                  1 // 1 hour duration
-              );
-              blockData.isGoogle = true;
-              blockData.color = "bg-blue-100 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800";
-              blockData.textColor = "text-blue-700 dark:text-blue-300";
-          } catch (error) {
-              console.error('Failed to create Google Calendar event:', error);
-          }
-      }
-
-      // Save to database
-      const dbBlock = await createScheduleBlock(blockData);
-      
-      const newBlock: ScheduleBlock = dbBlock ? {
-        ...dbBlock,
-        id: dbBlock.id
-      } : {
-        id: String(Date.now()),
-        ...blockData
+          isGoogle: true // Assuming dropping on timeline pushes to GCal immediately in this mental model
       };
 
       setSchedule(prev => [...prev, newBlock]);
@@ -578,8 +379,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
       if (draggedItem.sourceList === 'active') {
           const timeString = formatTime(hour);
           setActiveTasks(prev => prev.map(t => t.id === task.id ? { ...t, time: timeString } : t));
-          // Update task in database
-          await updateTask(String(task.id), { time: timeString });
       }
       setDraggedItem(null);
   };
@@ -677,62 +476,19 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
                     <button onClick={() => setIsSettingsOpen(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500"><X size={20}/></button>
                 </div>
                 <div className="p-6 space-y-6">
-                    {/* Google Calendar Connection */}
-                    <div>
-                        <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Google Calendar</label>
-                        {googleAccount ? (
-                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                                <div className="flex items-center gap-3">
-                                    <img src={googleAccount.picture} alt={googleAccount.name} className="w-10 h-10 rounded-full" />
-                                    <div className="flex-1">
-                                        <p className="font-medium text-green-800 dark:text-green-200">{googleAccount.name}</p>
-                                        <p className="text-xs text-green-600 dark:text-green-400">{googleAccount.email}</p>
-                                    </div>
-                                    <button onClick={handleDisconnectGoogle} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                                        <Unlink size={14} /> Disconnect
-                                    </button>
-                                </div>
-                                <div className="mt-3 flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
-                                    <CalendarCheck size={14} />
-                                    <span>Calendar connected and syncing</span>
-                                </div>
-                            </div>
-                        ) : (
-                            <button onClick={handleConnectGoogle} disabled={isGoogleConnecting || !googleApiReady}
-                                className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                {isGoogleConnecting ? <Loader2 size={20} className="animate-spin text-slate-400" /> : 
-                                    <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google Calendar" className="w-5 h-5" />}
-                                <span className="font-medium text-slate-700 dark:text-slate-200">
-                                    {isGoogleConnecting ? 'Connecting...' : !googleApiReady ? 'Loading...' : 'Connect Google Calendar'}
-                                </span>
-                            </button>
-                        )}
-                        <p className="text-xs text-slate-500 mt-2">Connect your Google account to sync events.</p>
-                    </div>
-
-                    <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
                     {/* Time Format */}
                     <div>
                         <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Time Format</label>
                         <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
                             <button 
-                                onClick={() => {
-                                  const newSettings = {...settings, timeFormat: '12h' as const};
-                                  setSettings(newSettings);
-                                  saveUserSettings({ timeFormat: '12h' });
-                                }}
+                                onClick={() => setSettings({...settings, timeFormat: '12h'})}
                                 className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '12h' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                             >12-hour (9:00 AM)</button>
                             <button 
-                                onClick={() => {
-                                  const newSettings = {...settings, timeFormat: '24h' as const};
-                                  setSettings(newSettings);
-                                  saveUserSettings({ timeFormat: '24h' });
-                                }}
+                                onClick={() => setSettings({...settings, timeFormat: '24h'})}
                                 className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '24h' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                             >24-hour (09:00)</button>
                         </div>
-                    </div>
                     </div>
 
                     {/* Timezone */}
@@ -741,11 +497,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
                         <div className="relative">
                             <select 
                                 value={settings.timezone}
-                                onChange={(e) => {
-                                  const newSettings = {...settings, timezone: e.target.value};
-                                  setSettings(newSettings);
-                                  saveUserSettings({ timezone: e.target.value });
-                                }}
+                                onChange={(e) => setSettings({...settings, timezone: e.target.value})}
                                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm appearance-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
                             >
                                 <option value="Local">Local Time</option>
@@ -1062,131 +814,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
   );
 };
 
-// --- Auth Form Component ---
-
-const AuthForm = ({ onSuccess }: { onSuccess: () => void }) => {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      if (isSignUp) {
-        await signUp(email, password);
-        setError('Check your email for confirmation link!');
-      } else {
-        await signIn(email, password);
-        onSuccess();
-      }
-    } catch (err: any) {
-      setError(err.message || 'Authentication failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    try {
-      await supabaseSignInWithGoogle();
-    } catch (err: any) {
-      setError(err.message || 'Google sign in failed');
-    }
-  };
-
-  return (
-    <div className="w-full max-w-sm mx-auto">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
-          <div className="relative">
-            <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/20 focus:border-[#6F00FF] transition-all"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
-          <div className="relative">
-            <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              minLength={6}
-              className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/20 focus:border-[#6F00FF] transition-all"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
-        </div>
-
-        {error && (
-          <p className={`text-sm ${error.includes('Check your email') ? 'text-green-600' : 'text-red-500'}`}>
-            {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-2.5 bg-[#6F00FF] text-white rounded-lg font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {loading && <Loader2 size={18} className="animate-spin" />}
-          {isSignUp ? 'Create Account' : 'Sign In'}
-        </button>
-      </form>
-
-      <div className="my-6 flex items-center gap-4">
-        <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
-        <span className="text-sm text-slate-400">or</span>
-        <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
-      </div>
-
-      <button
-        onClick={handleGoogleSignIn}
-        className="w-full py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-3"
-      >
-        <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
-        Continue with Google
-      </button>
-
-      <p className="mt-6 text-center text-sm text-slate-500">
-        {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
-        <button
-          onClick={() => { setIsSignUp(!isSignUp); setError(null); }}
-          className="text-[#6F00FF] font-semibold hover:underline"
-        >
-          {isSignUp ? 'Sign In' : 'Sign Up'}
-        </button>
-      </p>
-    </div>
-  );
-};
-
 // --- Landing Page & Root App ---
 
-const LandingPage = ({ onGetStarted }: { onGetStarted: () => void }) => {
+const LandingPage = ({ onLogin }: { onLogin: () => void }) => {
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <div className="w-20 h-20 bg-gradient-to-tr from-violet-600 to-fuchsia-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-violet-600/30 mb-8 transform rotate-3 hover:rotate-6 transition-transform">
@@ -1199,7 +829,7 @@ const LandingPage = ({ onGetStarted }: { onGetStarted: () => void }) => {
         The all-in-one timeboxing workspace for <span className="text-slate-800 dark:text-slate-200 font-semibold">deep work</span>.
       </p>
       <button 
-        onClick={onGetStarted} 
+        onClick={onLogin} 
         className="group flex items-center gap-3 px-8 py-4 bg-[#6F00FF] text-white rounded-full font-bold text-xl hover:bg-violet-700 hover:shadow-xl hover:shadow-violet-600/20 transition-all transform hover:-translate-y-1"
       >
         Get Started 
@@ -1215,74 +845,12 @@ const LandingPage = ({ onGetStarted }: { onGetStarted: () => void }) => {
   );
 };
 
-const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4">
-      <div className="w-16 h-16 bg-gradient-to-tr from-violet-600 to-fuchsia-600 rounded-xl flex items-center justify-center text-white shadow-xl shadow-violet-600/20 mb-6">
-        <Target size={36} strokeWidth={2.5} />
-      </div>
-      <h1 className="text-3xl font-extrabold mb-2 tracking-tight">
-        Welcome to Ascend<span className="text-[#6F00FF]">.</span>
-      </h1>
-      <p className="text-slate-500 dark:text-slate-400 mb-8">Sign in to sync your data across devices</p>
-      
-      <AuthForm onSuccess={onSuccess} />
-    </div>
-  );
-};
-
 const App = () => {
   const [isDark, setIsDark] = useState(false);
-  const [user, setUser] = useState<{id: string; name: string; avatar: string; email: string} | null>(null);
-  const [view, setView] = useState<'landing' | 'auth' | 'app'>('landing');
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<{name: string, avatar: string} | null>(null);
+  const [view, setView] = useState<'landing' | 'app'>('landing');
 
-  // Check for existing session on mount
-  useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const currentUser = await getCurrentUser();
-        if (currentUser) {
-          const initials = currentUser.email?.slice(0, 2).toUpperCase() || 'U';
-          setUser({
-            id: currentUser.id,
-            name: currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'User',
-            avatar: initials,
-            email: currentUser.email || ''
-          });
-          setView('app');
-        }
-      } catch (error) {
-        console.error('Session check failed:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkSession();
-
-    // Listen for auth changes
-    const { data: { subscription } } = onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        const u = session.user;
-        const initials = u.email?.slice(0, 2).toUpperCase() || 'U';
-        setUser({
-          id: u.id,
-          name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'User',
-          avatar: initials,
-          email: u.email || ''
-        });
-        setView('app');
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setView('landing');
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // Theme handling
+  // Load theme from localStorage or system preference could be added here
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -1293,41 +861,29 @@ const App = () => {
 
   const toggleTheme = () => setIsDark(!isDark);
 
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      setUser(null);
-      setView('landing');
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
+  const handleLogin = () => {
+    // Simulating login
+    setUser({ name: 'Demo User', avatar: 'DU' });
+    setView('app');
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-950">
-        <Loader2 size={32} className="animate-spin text-[#6F00FF]" />
-      </div>
-    );
-  }
+  const handleLogout = () => {
+    setUser(null);
+    setView('landing');
+  };
 
   return (
     <ThemeContext.Provider value={{ isDark, toggleTheme }}>
-      {view === 'landing' && (
-        <LandingPage onGetStarted={() => setView('auth')} />
-      )}
-      {view === 'auth' && (
-        <AuthPage onSuccess={() => {}} />
-      )}
-      {view === 'app' && user && (
+      {view === 'landing' ? (
+        <LandingPage onLogin={handleLogin} />
+      ) : (
         <TimeboxApp 
           user={user} 
-          onLogin={() => setView('auth')} 
+          onLogin={handleLogin} 
           onLogout={handleLogout}
           onBack={() => setView('landing')}
         />
       )}
-      <SpeedInsights />
     </ThemeContext.Provider>
   );
 };
