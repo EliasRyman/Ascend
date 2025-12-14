@@ -31,18 +31,34 @@ let ascendCalendarId: string | null = null;
 
 // LocalStorage keys
 const STORAGE_KEY_TOKEN = 'ascend_google_token';
+const STORAGE_KEY_TOKEN_EXPIRY = 'ascend_google_token_expiry';
 const STORAGE_KEY_CALENDAR_ID = 'ascend_calendar_id';
 const STORAGE_KEY_USER = 'ascend_google_user';
+
+// Token expiry buffer (refresh 5 minutes before expiry)
+const TOKEN_EXPIRY_BUFFER = 5 * 60 * 1000; // 5 minutes in ms
 
 // Load saved token from localStorage
 function loadSavedToken(): void {
   try {
     const savedToken = localStorage.getItem(STORAGE_KEY_TOKEN);
     const savedCalendarId = localStorage.getItem(STORAGE_KEY_CALENDAR_ID);
-    if (savedToken) {
-      accessToken = savedToken;
-      console.log('Loaded saved Google token');
+    const savedExpiry = localStorage.getItem(STORAGE_KEY_TOKEN_EXPIRY);
+    
+    // Check if token is still valid
+    if (savedToken && savedExpiry) {
+      const expiryTime = parseInt(savedExpiry, 10);
+      if (Date.now() < expiryTime - TOKEN_EXPIRY_BUFFER) {
+        accessToken = savedToken;
+        console.log('Loaded saved Google token (valid)');
+      } else {
+        console.log('Saved token expired, will need refresh');
+        // Clear expired token
+        localStorage.removeItem(STORAGE_KEY_TOKEN);
+        localStorage.removeItem(STORAGE_KEY_TOKEN_EXPIRY);
+      }
     }
+    
     if (savedCalendarId) {
       ascendCalendarId = savedCalendarId;
       console.log('Loaded saved Ascend calendar ID');
@@ -52,13 +68,103 @@ function loadSavedToken(): void {
   }
 }
 
-// Save token to localStorage
-function saveToken(token: string): void {
+// Save token to localStorage with expiry
+function saveToken(token: string, expiresIn: number): void {
   try {
+    const expiryTime = Date.now() + (expiresIn * 1000);
     localStorage.setItem(STORAGE_KEY_TOKEN, token);
+    localStorage.setItem(STORAGE_KEY_TOKEN_EXPIRY, expiryTime.toString());
   } catch (error) {
     console.error('Error saving token:', error);
   }
+}
+
+// Check if token is expired or about to expire
+function isTokenExpired(): boolean {
+  try {
+    const savedExpiry = localStorage.getItem(STORAGE_KEY_TOKEN_EXPIRY);
+    if (!savedExpiry) return true;
+    
+    const expiryTime = parseInt(savedExpiry, 10);
+    return Date.now() >= expiryTime - TOKEN_EXPIRY_BUFFER;
+  } catch {
+    return true;
+  }
+}
+
+// Silent token refresh
+let isRefreshing = false;
+let refreshPromise: Promise<boolean> | null = null;
+
+async function silentRefreshToken(): Promise<boolean> {
+  if (!tokenClient) {
+    console.error('Token client not initialized');
+    return false;
+  }
+
+  // Avoid multiple simultaneous refresh attempts
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
+  isRefreshing = true;
+  refreshPromise = new Promise((resolve) => {
+    try {
+      console.log('Attempting silent token refresh...');
+      
+      // Store original callback
+      const originalCallback = tokenClient!.requestAccessToken;
+      
+      // Request new token without prompt (silent refresh)
+      tokenClient!.requestAccessToken({ prompt: '' });
+      
+      // The callback in initGoogleIdentity will handle the new token
+      // We'll resolve after a timeout or when token is updated
+      const checkInterval = setInterval(() => {
+        if (accessToken && !isTokenExpired()) {
+          clearInterval(checkInterval);
+          isRefreshing = false;
+          refreshPromise = null;
+          console.log('Silent token refresh successful');
+          resolve(true);
+        }
+      }, 100);
+
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        isRefreshing = false;
+        refreshPromise = null;
+        if (isTokenExpired()) {
+          console.log('Silent token refresh failed or timed out');
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      }, 10000);
+    } catch (error) {
+      console.error('Error during silent refresh:', error);
+      isRefreshing = false;
+      refreshPromise = null;
+      resolve(false);
+    }
+  });
+
+  return refreshPromise;
+}
+
+// Ensure valid token before API calls
+export async function ensureValidToken(): Promise<boolean> {
+  if (!accessToken) {
+    return false;
+  }
+  
+  if (!isTokenExpired()) {
+    return true;
+  }
+  
+  // Try silent refresh
+  return await silentRefreshToken();
 }
 
 // Save calendar ID to localStorage
@@ -96,6 +202,7 @@ export function loadSavedGoogleUser(): { email: string; name: string; picture: s
 function clearSavedData(): void {
   try {
     localStorage.removeItem(STORAGE_KEY_TOKEN);
+    localStorage.removeItem(STORAGE_KEY_TOKEN_EXPIRY);
     localStorage.removeItem(STORAGE_KEY_CALENDAR_ID);
     localStorage.removeItem(STORAGE_KEY_USER);
   } catch (error) {
@@ -145,7 +252,8 @@ export function initGoogleIdentity(onTokenReceived: (token: string) => void): vo
         return;
       }
       accessToken = response.access_token;
-      saveToken(response.access_token);
+      // Save token with expiry (expires_in is in seconds)
+      saveToken(response.access_token, response.expires_in || 3600);
       
       // Find or create Ascend calendar
       try {
@@ -339,6 +447,12 @@ export async function createGoogleCalendarEvent(
 ): Promise<string> {
   if (!accessToken) {
     throw new Error('Not signed in to Google');
+  }
+
+  // Ensure token is valid (refresh if needed)
+  const isValid = await ensureValidToken();
+  if (!isValid) {
+    throw new Error('Google token expired. Please reconnect Google Calendar.');
   }
 
   // Get or create Ascend calendar
