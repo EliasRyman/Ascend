@@ -527,6 +527,22 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const [tagModalTaskId, setTagModalTaskId] = useState<string | number | null>(null);
 
+  // State for Notes
+  const [notesContent, setNotesContent] = useState(() => {
+    const saved = localStorage.getItem('ascend_notes');
+    return saved || '';
+  });
+  
+  // State for Promo Section collapse
+  const [isPromoOpen, setIsPromoOpen] = useState(true);
+  
+  // State for Weight Tracking
+  const [weightEntries, setWeightEntries] = useState<{ date: string; weight: number }[]>(() => {
+    const saved = localStorage.getItem('ascend_weight_entries');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [newWeight, setNewWeight] = useState('');
+
   // Google Calendar State
   const [googleAccount, setGoogleAccount] = useState<{
     email: string;
@@ -1072,6 +1088,41 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       handleAddTagToTask(tagModalTaskId, tagName, tagColor);
     }
     setTagModalTaskId(null);
+  };
+
+  // Notes handler
+  const handleNotesChange = (content: string) => {
+    setNotesContent(content);
+    localStorage.setItem('ascend_notes', content);
+  };
+
+  // Weight tracking handler
+  const handleAddWeight = () => {
+    const weight = parseFloat(newWeight);
+    if (isNaN(weight) || weight <= 0) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const existingIndex = weightEntries.findIndex(e => e.date === today);
+    
+    let updatedEntries;
+    if (existingIndex >= 0) {
+      // Update today's entry
+      updatedEntries = [...weightEntries];
+      updatedEntries[existingIndex] = { date: today, weight };
+    } else {
+      // Add new entry
+      updatedEntries = [...weightEntries, { date: today, weight }].sort((a, b) => a.date.localeCompare(b.date));
+    }
+    
+    // Keep only last 30 days
+    if (updatedEntries.length > 30) {
+      updatedEntries = updatedEntries.slice(-30);
+    }
+    
+    setWeightEntries(updatedEntries);
+    localStorage.setItem('ascend_weight_entries', JSON.stringify(updatedEntries));
+    setNewWeight('');
+    setNotification({ type: 'success', message: `Weight logged: ${weight} kg` });
   };
 
   const handleAddTagToTask = async (taskId: number | string, tagName: string, tagColor: string) => {
@@ -1985,69 +2036,116 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                     <h2 className="font-bold text-lg">Notes</h2>
                  </div>
                  
-                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden min-h-[200px] flex flex-col">
-                    {/* Fake Toolbar */}
-                    <div className="flex items-center gap-1 p-2 border-b border-slate-100 dark:border-slate-800 text-slate-400">
-                        <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><Bold size={14}/></button>
-                        <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><Italic size={14}/></button>
-                        <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><Underline size={14}/></button>
-                        <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                        <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><List size={14}/></button>
-                        <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><ListOrdered size={14}/></button>
-                    </div>
-                    
-                    {/* Editor Content (Static for demo) */}
-                    <div className="p-3 text-sm text-slate-700 dark:text-slate-300 space-y-3 outline-none flex-1">
-                        <h3 className="font-bold text-lg">🌟 Welcome to the Demo for timebox.so!</h3>
-                        <p>✨ This would be your space for daily notes. But for now.. let's get you started with this demo:</p>
-                        
-                        <div className="mt-4">
-                            <h4 className="font-bold flex items-center gap-2 mb-2">🧠 Main Focus</h4>
-                            <ul className="space-y-1">
-                                {["Create some new to-dos", "Drag and re-order some to-dos", "Drop a to-do in the timebox scheduler", "Check off a to-do to complete it!"].map((item, i) => (
-                                    <li key={i} className="flex items-start gap-2 opacity-50 line-through decoration-slate-400">
-                                        <div className="mt-1 min-w-[14px] h-[14px] bg-emerald-500 rounded flex items-center justify-center"><Check size={10} className="text-white"/></div>
-                                        <span>{item}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-
-                        <div className="mt-4">
-                            <h4 className="font-bold flex items-center gap-2 mb-2">🤔 Extras</h4>
-                            <ul className="space-y-2">
-                                <li className="flex items-start gap-2">
-                                    <div className="mt-1 min-w-[14px] h-[14px] border border-slate-300 dark:border-slate-600 rounded"></div>
-                                    <span>Tag a to-do with the # symbol (like #work)</span>
-                                </li>
-                                <li className="flex items-start gap-2">
-                                    <div className="mt-1 min-w-[14px] h-[14px] border border-slate-300 dark:border-slate-600 rounded"></div>
-                                    <span>Drag a to-do into the to-do later list</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
+                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden">
+                    <textarea
+                      value={notesContent}
+                      onChange={(e) => handleNotesChange(e.target.value)}
+                      placeholder="Write your notes for today..."
+                      className="w-full min-h-[180px] p-3 text-sm text-slate-700 dark:text-slate-300 bg-transparent resize-none focus:outline-none placeholder:text-slate-400"
+                    />
                  </div>
               </div>
 
-              {/* Promo Section */}
-              <div className="bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/10 dark:to-indigo-900/10 rounded-xl p-4 border border-violet-100 dark:border-violet-900/20">
-                  <h4 className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
-                      <span className="text-xl">👩‍🚀</span> What else does Ascend offer?
-                  </h4>
-                  <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
-                      <li className="flex items-center gap-2">
-                          <div className={`w-4 h-4 border rounded flex items-center justify-center ${isCalendarSynced ? 'bg-green-500 border-green-500' : 'bg-white dark:bg-slate-800'}`}>
-                              {isCalendarSynced && <Check size={10} className="text-white"/>}
-                          </div> 
-                          Google Calendar Sync
-                      </li>
-                      <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Planners for every day of the year</li>
-                      <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Everything saved to the cloud instantly</li>
-                      <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Accountability and deep work tracking!</li>
-                  </ul>
-                  {!user && (
-                      <button onClick={onLogin} className="inline-block mt-4 text-[#6F00FF] font-bold hover:underline">Sign in to start timeboxing!</button>
+              {/* Weight Tracking Section */}
+              <div>
+                 <div className="flex items-center gap-2 mb-3 text-slate-800 dark:text-slate-100">
+                    <div className="text-[#6F00FF]">
+                        <Activity size={20} />
+                    </div>
+                    <h2 className="font-bold text-lg">Weight Tracker</h2>
+                 </div>
+                 
+                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm p-4">
+                    {/* Weight Input */}
+                    <div className="flex gap-2 mb-4">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={newWeight}
+                        onChange={(e) => setNewWeight(e.target.value)}
+                        placeholder="Today's weight (kg)"
+                        className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddWeight()}
+                      />
+                      <button
+                        onClick={handleAddWeight}
+                        className="px-4 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors"
+                      >
+                        Log
+                      </button>
+                    </div>
+                    
+                    {/* Weight Chart */}
+                    {weightEntries.length > 0 ? (
+                      <div className="space-y-2">
+                        {/* Mini chart visualization */}
+                        <div className="h-24 flex items-end gap-1">
+                          {weightEntries.slice(-14).map((entry, idx) => {
+                            const weights = weightEntries.slice(-14).map(e => e.weight);
+                            const min = Math.min(...weights);
+                            const max = Math.max(...weights);
+                            const range = max - min || 1;
+                            const height = ((entry.weight - min) / range) * 80 + 20;
+                            return (
+                              <div 
+                                key={idx}
+                                className="flex-1 bg-gradient-to-t from-[#6F00FF] to-violet-400 rounded-t-sm transition-all hover:opacity-80"
+                                style={{ height: `${height}%` }}
+                                title={`${entry.date}: ${entry.weight} kg`}
+                              />
+                            );
+                          })}
+                        </div>
+                        
+                        {/* Stats */}
+                        <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <span>Latest: <strong className="text-slate-700 dark:text-slate-300">{weightEntries[weightEntries.length - 1]?.weight} kg</strong></span>
+                          {weightEntries.length > 1 && (
+                            <span>
+                              Change: <strong className={`${weightEntries[weightEntries.length - 1].weight < weightEntries[weightEntries.length - 2].weight ? 'text-emerald-600' : 'text-red-500'}`}>
+                                {(weightEntries[weightEntries.length - 1].weight - weightEntries[weightEntries.length - 2].weight).toFixed(1)} kg
+                              </strong>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-center text-sm text-slate-400 py-4">No weight entries yet. Start tracking!</p>
+                    )}
+                 </div>
+              </div>
+
+              {/* Promo Section (Collapsible) */}
+              <div className="bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/10 dark:to-indigo-900/10 rounded-xl border border-violet-100 dark:border-violet-900/20 overflow-hidden">
+                  <button 
+                    onClick={() => setIsPromoOpen(!isPromoOpen)}
+                    className="w-full p-4 flex items-center justify-between text-left"
+                  >
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <span className="text-xl">👩‍🚀</span> What else does Ascend offer?
+                    </h4>
+                    <div className={`transform transition-transform ${isPromoOpen ? 'rotate-180' : ''}`}>
+                      <ChevronDown size={20} className="text-slate-400" />
+                    </div>
+                  </button>
+                  
+                  {isPromoOpen && (
+                    <div className="px-4 pb-4">
+                      <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                          <li className="flex items-center gap-2">
+                              <div className={`w-4 h-4 border rounded flex items-center justify-center ${isCalendarSynced ? 'bg-green-500 border-green-500' : 'bg-white dark:bg-slate-800'}`}>
+                                  {isCalendarSynced && <Check size={10} className="text-white"/>}
+                              </div> 
+                              Google Calendar Sync
+                          </li>
+                          <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Planners for every day of the year</li>
+                          <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Everything saved to the cloud instantly</li>
+                          <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Accountability and deep work tracking!</li>
+                      </ul>
+                      {!user && (
+                          <button onClick={onLogin} className="inline-block mt-4 text-[#6F00FF] font-bold hover:underline">Sign in to start timeboxing!</button>
+                      )}
+                    </div>
                   )}
               </div>
 
