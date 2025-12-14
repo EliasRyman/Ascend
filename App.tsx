@@ -93,6 +93,8 @@ interface ScheduleBlock {
   textColor: string;
   isGoogle?: boolean;
   googleEventId?: string;
+  completed?: boolean;
+  taskId?: number | string; // Link to original task
 }
 
 interface Task {
@@ -165,13 +167,16 @@ const EXTERNAL_GOOGLE_EVENTS: ScheduleBlock[] = [
 
 // --- Timebox App Components ---
 
-const TaskItem = ({ task, onDragStart, onDelete }) => (
+const TaskItem = ({ task, onDragStart, onDelete, onToggleComplete }) => (
   <div 
     draggable="true"
     onDragStart={(e) => onDragStart(e, task)}
     className={`group flex items-center gap-3 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-[#6F00FF]/50 cursor-grab active:cursor-grabbing transition-all shadow-sm ${task.completed ? 'opacity-60' : ''}`}
   >
-    <div className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${task.completed ? 'bg-[#6F00FF] border-[#6F00FF]' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}>
+    <div 
+      onClick={() => onToggleComplete(task.id)}
+      className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${task.completed ? 'bg-[#6F00FF] border-[#6F00FF]' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}
+    >
       {task.completed && <Check size={14} className="text-white" />}
     </div>
     <span className={`flex-1 text-sm font-medium ${task.completed ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}>
@@ -577,6 +582,24 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       }
   };
 
+  const handleToggleComplete = (taskId: number | string, listType: 'active' | 'later') => {
+    // Toggle completion in the task list
+    if (listType === 'active') {
+      setActiveTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, completed: !t.completed } : t
+      ));
+    } else {
+      setLaterTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, completed: !t.completed } : t
+      ));
+    }
+    
+    // Also toggle completion in any linked schedule block
+    setSchedule(prev => prev.map(block => 
+      block.taskId === taskId ? { ...block, completed: !block.completed } : block
+    ));
+  };
+
   const handleDeleteBlock = async (blockId: number | string) => {
       // Find the block to get Google event ID
       const block = schedule.find(b => b.id === blockId);
@@ -773,7 +796,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           duration: 1,
           color: "bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500", 
           textColor: "text-indigo-950 dark:text-indigo-50",
-          isGoogle: googleAccount !== null
+          isGoogle: googleAccount !== null,
+          completed: task.completed || false,
+          taskId: task.id
       };
 
       // Save to database
@@ -1099,6 +1124,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                     task={task} 
                     onDragStart={(e) => handleTaskDragStart(e, task, 'active')}
                     onDelete={(id) => handleDeleteTask(id, 'active')}
+                    onToggleComplete={(id) => handleToggleComplete(id, 'active')}
                 />
               ))}
             </div>
@@ -1128,6 +1154,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             task={task} 
                             onDragStart={(e) => handleTaskDragStart(e, task, 'later')} 
                             onDelete={(id) => handleDeleteTask(id, 'later')}
+                            onToggleComplete={(id) => handleToggleComplete(id, 'later')}
                         />
                     </div>
                   ))}
@@ -1223,7 +1250,21 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             <button onClick={() => handleDeleteBlock(block.id)} className="hover:text-red-600"><X size={14}/></button>
                         </div>
                     </div>
-                    <h3 className="font-bold text-sm mt-1 pointer-events-none">{block.title}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      {/* Completion checkbox for blocks linked to tasks */}
+                      {block.taskId && (
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleComplete(block.taskId!, activeTasks.find(t => t.id === block.taskId) ? 'active' : 'later');
+                          }}
+                          className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${block.completed ? 'bg-white/30 border-white/50' : 'border-white/30 hover:border-white/60'}`}
+                        >
+                          {block.completed && <Check size={12} className="text-white" />}
+                        </div>
+                      )}
+                      <h3 className={`font-bold text-sm pointer-events-none ${block.completed ? 'line-through opacity-60' : ''}`}>{block.title}</h3>
+                    </div>
                     <div className="mt-auto flex items-center gap-2 pointer-events-none">
                         {block.tag && <span className="text-[10px] uppercase font-bold opacity-60 bg-black/5 dark:bg-white/10 px-1.5 rounded">{block.tag}</span>}
                     </div>
