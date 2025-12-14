@@ -48,7 +48,8 @@ import {
   TrendingUp,
   Zap,
   Edit3,
-  Repeat
+  Repeat,
+  Info
 } from 'lucide-react';
 import {
   initGoogleApi,
@@ -891,9 +892,21 @@ const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: Ha
 
       {/* Scheduled Time (Start - End) */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Scheduled Time <span className="text-slate-400 font-normal">(syncs to Timebox)</span>
-        </label>
+        <div className="flex items-center gap-2 mb-2">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            Scheduled Time <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <div className="relative group">
+            <Info size={14} className="text-slate-400 cursor-help" />
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 dark:bg-slate-700 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
+              <div className="font-medium mb-1">With time:</div>
+              <div className="text-slate-300">Appears directly on your timeline</div>
+              <div className="font-medium mt-2 mb-1">Without time:</div>
+              <div className="text-slate-300">Appears in To-Do list to schedule later</div>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800 dark:border-t-slate-700"></div>
+            </div>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           <div className="flex-1">
             <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Start</label>
@@ -924,10 +937,15 @@ const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: Ha
             </button>
           )}
         </div>
-        {startTime && endTime && (
+        {startTime && endTime ? (
           <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-1">
             <Clock size={12} />
-            This habit will appear in your Timebox timeline
+            Will appear directly on your Timebox timeline
+          </p>
+        ) : (
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1">
+            <ListTodo size={12} />
+            Will appear in To-Do list for manual scheduling
           </p>
         )}
       </div>
@@ -1126,6 +1144,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const getTodaysHabits = () => {
     const today = new Date();
     return habits.filter(h => isHabitScheduledForDay(h, today));
+  };
+
+  // Get today's habits without scheduled time (for To-Do list)
+  const getUnscheduledTodaysHabits = () => {
+    return getTodaysHabits().filter(h => !h.scheduledStartTime);
   };
 
   // Get weekly completion data for a habit
@@ -2041,6 +2064,51 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const handleHourDrop = async (e, hour) => {
       e.preventDefault();
       setDragOverHour(null);
+      
+      // Check if a habit was dropped
+      const habitId = e.dataTransfer.getData('habitId');
+      if (habitId) {
+        const habitName = e.dataTransfer.getData('habitName');
+        const habitTag = e.dataTransfer.getData('habitTag') || null;
+        const habitTagColor = e.dataTransfer.getData('habitTagColor') || null;
+        
+        // Check if this habit is already on the timeline for today
+        const dateString = selectedDate.toISOString().split('T')[0];
+        const existingBlock = schedule.find(b => b.habitId === habitId);
+        if (existingBlock) {
+          setNotification({ type: 'info', message: 'This habit is already on the timeline. Move it instead!' });
+          return;
+        }
+        
+        // Create a block for the habit
+        const bgColor = habitTagColor ? `bg-[${habitTagColor}]` : 'bg-[#6F00FF]';
+        const habitBlock: ScheduleBlock = {
+          id: `habit-${habitId}-${dateString}-${hour}`,
+          title: habitName,
+          tag: habitTag,
+          start: hour,
+          duration: 1,
+          color: bgColor,
+          textColor: 'text-white',
+          isGoogle: false,
+          completed: false,
+          habitId: habitId,
+          calendarColor: habitTagColor,
+        };
+        
+        setSchedule(prev => [...prev, habitBlock]);
+        
+        // Update the habit's scheduled time in state
+        setHabits(prev => prev.map(h => 
+          h.id === habitId 
+            ? { ...h, scheduledStartTime: `${hour.toString().padStart(2, '0')}:00`, scheduledEndTime: `${(hour + 1).toString().padStart(2, '0')}:00` }
+            : h
+        ));
+        
+        setNotification({ type: 'success', message: `Scheduled "${habitName}" at ${formatTime(hour)}` });
+        return;
+      }
+      
       if (!draggedItem) return;
       const { task } = draggedItem;
 
@@ -2939,7 +3007,58 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 onDrop={(e) => handleListDrop(e, 'active')}
                 onDragLeave={() => setDragOverList(null)}
             >
-              {activeTasks.length === 0 && <p className="text-center text-sm text-slate-400 py-8">Drop tasks here</p>}
+              {activeTasks.length === 0 && getUnscheduledTodaysHabits().length === 0 && <p className="text-center text-sm text-slate-400 py-8">Drop tasks here</p>}
+              
+              {/* Unscheduled habits for today */}
+              {getUnscheduledTodaysHabits().map(habit => {
+                const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
+                return (
+                  <div
+                    key={`habit-${habit.id}`}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('habitId', habit.id);
+                      e.dataTransfer.setData('habitName', habit.name);
+                      e.dataTransfer.setData('habitTag', habit.tag || '');
+                      e.dataTransfer.setData('habitTagColor', habit.tagColor || '');
+                    }}
+                    className={`flex items-center gap-3 p-2.5 bg-white dark:bg-slate-800 rounded-lg border transition-all cursor-grab active:cursor-grabbing hover:shadow-sm ${
+                      isCompleted 
+                        ? 'border-emerald-200 dark:border-emerald-800 opacity-60' 
+                        : 'border-slate-200 dark:border-slate-700 hover:border-[#6F00FF]/30'
+                    }`}
+                  >
+                    <button
+                      onClick={() => toggleHabitCompletion(habit.id)}
+                      className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${
+                        isCompleted 
+                          ? 'bg-emerald-500 border-emerald-500' 
+                          : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'
+                      }`}
+                    >
+                      {isCompleted && <Check size={12} className="text-white" strokeWidth={3} />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <span className={`text-sm font-medium text-slate-700 dark:text-slate-200 ${isCompleted ? 'line-through' : ''}`}>
+                        {habit.name}
+                      </span>
+                      {habit.tag && (
+                        <span 
+                          className="ml-2 text-[10px] px-1.5 py-0.5 rounded text-white font-medium"
+                          style={{ backgroundColor: habit.tagColor || '#6F00FF' }}
+                        >
+                          {habit.tag}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-slate-400">
+                      <Flame size={12} className="text-orange-400" />
+                      <span className="font-medium">{habit.currentStreak}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              
               {activeTasks.map(task => (
                 <TaskItem 
                     key={task.id} 
