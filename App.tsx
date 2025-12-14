@@ -551,10 +551,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
       
       // Get all Google Calendar events (both primary and Ascend)
+      console.log('Fetching Google Calendar events...');
       const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
+      console.log('Google events received:', googleEvents);
       
       // Perform two-way sync
       const syncResult = await syncCalendarEvents(localBlocksForSync, new Date());
+      console.log('Sync result:', syncResult);
 
       setSchedule(prev => {
         let updated = [...prev];
@@ -565,6 +568,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         );
 
         // Add ALL Google Calendar events (from both primary and Ascend calendars)
+        console.log('Existing Google IDs:', Array.from(existingGoogleIds));
+        console.log('Events to add:', googleEvents.filter(event => !existingGoogleIds.has(event.id)));
+        
         const allNewBlocks = googleEvents
           .filter(event => !existingGoogleIds.has(event.id))
           .map(event => ({

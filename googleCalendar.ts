@@ -453,10 +453,13 @@ export async function fetchGoogleCalendarEvents(
 
   try {
     // Fetch from Ascend calendar
-    if (includeAscendCalendar && ascendCalendarId) {
+    if (includeAscendCalendar) {
       try {
+        // Ensure Ascend calendar exists (creates if needed)
+        const calendarId = await getAscendCalendarId();
+        
         const ascendResponse = await gapi.client.calendar.events.list({
-          calendarId: ascendCalendarId,
+          calendarId: calendarId,
           timeMin: timeMin.toISOString(),
           timeMax: timeMax.toISOString(),
           singleEvents: true,
@@ -464,6 +467,7 @@ export async function fetchGoogleCalendarEvents(
         });
 
         const ascendEvents: GoogleCalendarEvent[] = ascendResponse.result.items || [];
+        console.log(`Fetched ${ascendEvents.length} events from Ascend calendar`);
         allEvents.push(...ascendEvents
           .filter(event => event.start?.dateTime)
           .map(event => mapGoogleEventToCalendarEvent(event, true))
@@ -485,6 +489,7 @@ export async function fetchGoogleCalendarEvents(
         });
 
         const primaryEvents: GoogleCalendarEvent[] = primaryResponse.result.items || [];
+        console.log(`Fetched ${primaryEvents.length} events from primary calendar`);
         allEvents.push(...primaryEvents
           .filter(event => event.start?.dateTime)
           .map(event => mapGoogleEventToCalendarEvent(event, false))
@@ -493,6 +498,8 @@ export async function fetchGoogleCalendarEvents(
         console.error('Error fetching primary calendar events:', error);
       }
     }
+    
+    console.log(`Total events fetched: ${allEvents.length}`);
 
     return allEvents;
   } catch (error) {
