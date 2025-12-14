@@ -353,8 +353,27 @@ async function findOrCreateAscendCalendar(): Promise<string> {
 
 // Get Ascend calendar ID (creates if needed)
 export async function getAscendCalendarId(): Promise<string> {
+  // If we have a cached ID, verify it's still valid
   if (ascendCalendarId) {
-    return ascendCalendarId;
+    try {
+      // Quick check if calendar still exists
+      const listResponse = await gapi.client.calendar.calendarList.list();
+      const calendars = listResponse.result.items || [];
+      const exists = calendars.some((cal: any) => cal.id === ascendCalendarId);
+      
+      if (exists) {
+        return ascendCalendarId;
+      } else {
+        console.log('Cached Ascend calendar ID is invalid, recreating...');
+        ascendCalendarId = null;
+        localStorage.removeItem(STORAGE_KEY_CALENDAR_ID);
+      }
+    } catch (error) {
+      console.error('Error validating calendar ID:', error);
+      // Clear invalid ID and recreate
+      ascendCalendarId = null;
+      localStorage.removeItem(STORAGE_KEY_CALENDAR_ID);
+    }
   }
   return await findOrCreateAscendCalendar();
 }

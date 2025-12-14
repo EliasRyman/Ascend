@@ -230,9 +230,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         
         // Check for saved Google user (persisted connection)
         const savedUser = loadSavedGoogleUser();
-        if (savedUser && isSignedIn()) {
-          console.log('Restored Google Calendar connection');
-          setGoogleAccount(savedUser);
+        if (savedUser) {
+          if (isSignedIn()) {
+            console.log('Restored Google Calendar connection');
+            setGoogleAccount(savedUser);
+          } else {
+            // Token expired or invalid, clear saved user
+            console.log('Saved Google user found but token is invalid, clearing...');
+            revokeAccessToken(); // This clears localStorage
+          }
         }
         
         initGoogleIdentity(async (token) => {
@@ -688,9 +694,16 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       : b
               ));
               setNotification({ type: 'success', message: `Added "${task.title}" to Google Calendar` });
-          } catch (error) {
+          } catch (error: any) {
               console.error('Failed to create Google Calendar event:', error);
-              setNotification({ type: 'error', message: 'Failed to add to Google Calendar' });
+              const errorMessage = error?.message || 'Unknown error';
+              if (errorMessage.includes('token expired') || errorMessage.includes('Not signed in')) {
+                setNotification({ type: 'error', message: 'Google session expired. Please reconnect in Settings.' });
+                // Clear the stale Google account
+                setGoogleAccount(null);
+              } else {
+                setNotification({ type: 'error', message: `Failed to add to Google Calendar: ${errorMessage}` });
+              }
           }
       }
   };
