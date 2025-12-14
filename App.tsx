@@ -722,7 +722,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   });
   
   // State for Promo Section collapse
-  const [isPromoOpen, setIsPromoOpen] = useState(true);
+  const [isPromoOpen, setIsPromoOpen] = useState(() => {
+    const saved = localStorage.getItem('ascend_promo_open');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  
+  // State for notes saved indicator
+  const [notesSaved, setNotesSaved] = useState(false);
   
   // State for Weight Tracking
   const [weightEntries, setWeightEntries] = useState<{ date: string; weight: number }[]>(() => {
@@ -1279,10 +1285,19 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     setTagModalTaskId(null);
   };
 
-  // Notes handler
+  // Notes handler with saved indicator
   const handleNotesChange = (content: string) => {
     setNotesContent(content);
     localStorage.setItem('ascend_notes', content);
+    setNotesSaved(true);
+    setTimeout(() => setNotesSaved(false), 2000);
+  };
+  
+  // Promo collapse handler
+  const handlePromoToggle = () => {
+    const newState = !isPromoOpen;
+    setIsPromoOpen(newState);
+    localStorage.setItem('ascend_promo_open', JSON.stringify(newState));
   };
 
   // Weight tracking handler
@@ -2466,11 +2481,18 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               
               {/* Notes Section */}
               <div>
-                 <div className="flex items-center gap-2 mb-3 text-slate-800 dark:text-slate-100">
-                    <div className="text-[#6F00FF]">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/></svg>
+                 <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100">
+                      <div className="text-[#6F00FF]">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/></svg>
+                      </div>
+                      <h2 className="font-bold text-lg">Notes</h2>
                     </div>
-                    <h2 className="font-bold text-lg">Notes</h2>
+                    {notesSaved && (
+                      <span className="text-xs text-emerald-500 flex items-center gap-1">
+                        <Check size={12} /> Saved
+                      </span>
+                    )}
                  </div>
                  
                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden">
@@ -2545,7 +2567,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               {/* Promo Section (Collapsible) */}
               <div className="bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/10 dark:to-indigo-900/10 rounded-xl border border-violet-100 dark:border-violet-900/20 overflow-hidden">
                   <button 
-                    onClick={() => setIsPromoOpen(!isPromoOpen)}
+                    onClick={handlePromoToggle}
                     className="w-full p-4 flex items-center justify-between text-left"
                   >
                     <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
