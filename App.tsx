@@ -1526,7 +1526,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
             onClick={() => setActiveTab('habittracker')}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'habittracker' ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
           >
-            <Target size={16} /> Habits
+            <Flame size={16} /> Habits
           </button>
         </div>
 
