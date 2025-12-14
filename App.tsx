@@ -1500,11 +1500,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="flex items-center gap-2 group cursor-pointer">
             <div className="w-8 h-8 bg-[#6F00FF] rounded-lg flex items-center justify-center text-white shadow-md shadow-violet-600/20 overflow-hidden">
-              <svg width="20" height="20" viewBox="0 0 100 80" fill="currentColor">
-                <path d="M50 5 L95 75 L75 75 L50 35 L25 75 L5 75 Z" opacity="0.7"/>
-                <path d="M30 45 L5 75 L20 75 L35 55 Z" opacity="0.5"/>
-                <path d="M70 45 L95 75 L80 75 L65 55 Z" opacity="0.5"/>
-                <path d="M50 5 L55 5 L55 25 L60 25 L50 10 L40 25 L45 25 L45 5 Z" fill="white"/>
+              <svg width="22" height="22" viewBox="0 0 100 85" fill="none">
+                {/* Left small mountain */}
+                <path d="M5 80 L25 45 L40 80 Z" fill="currentColor" opacity="0.5"/>
+                {/* Right small mountain */}
+                <path d="M60 80 L75 45 L95 80 Z" fill="currentColor" opacity="0.5"/>
+                {/* Main mountain with A cutout */}
+                <path d="M50 8 L85 80 L65 80 L50 50 L35 80 L15 80 Z" fill="currentColor" opacity="0.9"/>
+                {/* Arrow pointing up */}
+                <path d="M50 5 L58 18 L53 18 L53 35 L47 35 L47 18 L42 18 Z" fill="white"/>
               </svg>
             </div>
             <span className="font-bold text-lg tracking-tight">Ascend<span className="text-[#6F00FF]">.</span></span>
@@ -2260,11 +2264,11 @@ const LandingPage = ({ onGetStarted }: { onGetStarted: () => void }) => {
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <div className="w-20 h-20 bg-gradient-to-tr from-violet-600 to-fuchsia-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-violet-600/30 mb-8 transform rotate-3 hover:rotate-6 transition-transform overflow-hidden">
-        <svg width="50" height="50" viewBox="0 0 100 80" fill="currentColor">
-          <path d="M50 5 L95 75 L75 75 L50 35 L25 75 L5 75 Z" opacity="0.85"/>
-          <path d="M30 45 L5 75 L20 75 L35 55 Z" opacity="0.6"/>
-          <path d="M70 45 L95 75 L80 75 L65 55 Z" opacity="0.6"/>
-          <path d="M50 5 L55 5 L55 25 L60 25 L50 10 L40 25 L45 25 L45 5 Z" fill="white"/>
+        <svg width="55" height="55" viewBox="0 0 100 85" fill="none">
+          <path d="M5 80 L25 45 L40 80 Z" fill="currentColor" opacity="0.5"/>
+          <path d="M60 80 L75 45 L95 80 Z" fill="currentColor" opacity="0.5"/>
+          <path d="M50 8 L85 80 L65 80 L50 50 L35 80 L15 80 Z" fill="currentColor" opacity="0.9"/>
+          <path d="M50 5 L58 18 L53 18 L53 35 L47 35 L47 18 L42 18 Z" fill="white"/>
         </svg>
       </div>
       <h1 className="text-6xl font-extrabold mb-6 tracking-tight text-center">
@@ -2334,11 +2338,11 @@ const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-gradient-to-tr from-violet-600 to-fuchsia-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-violet-600/30 mx-auto mb-4 overflow-hidden">
-            <svg width="40" height="40" viewBox="0 0 100 80" fill="currentColor">
-              <path d="M50 5 L95 75 L75 75 L50 35 L25 75 L5 75 Z" opacity="0.85"/>
-              <path d="M30 45 L5 75 L20 75 L35 55 Z" opacity="0.6"/>
-              <path d="M70 45 L95 75 L80 75 L65 55 Z" opacity="0.6"/>
-              <path d="M50 5 L55 5 L55 25 L60 25 L50 10 L40 25 L45 25 L45 5 Z" fill="white"/>
+            <svg width="45" height="45" viewBox="0 0 100 85" fill="none">
+              <path d="M5 80 L25 45 L40 80 Z" fill="currentColor" opacity="0.5"/>
+              <path d="M60 80 L75 45 L95 80 Z" fill="currentColor" opacity="0.5"/>
+              <path d="M50 8 L85 80 L65 80 L50 50 L35 80 L15 80 Z" fill="currentColor" opacity="0.9"/>
+              <path d="M50 5 L58 18 L53 18 L53 35 L47 35 L47 18 L42 18 Z" fill="white"/>
             </svg>
           </div>
           <h1 className="text-3xl font-bold">
