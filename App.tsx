@@ -397,6 +397,194 @@ interface TagModalProps {
   existingTags: { name: string; color: string }[];
 }
 
+// --- Weight Line Chart Component ---
+interface WeightLineChartProps {
+  entries: { date: string; weight: number }[];
+  height?: number;
+}
+
+const WeightLineChart = ({ entries, height = 200 }: WeightLineChartProps) => {
+  if (entries.length < 2) {
+    return (
+      <div className="flex items-center justify-center h-40 text-slate-400 text-sm">
+        Need at least 2 entries to show chart
+      </div>
+    );
+  }
+
+  const padding = { top: 20, right: 20, bottom: 40, left: 50 };
+  const width = 100; // percentage
+  const chartWidth = 400;
+  const chartHeight = height;
+  const innerWidth = chartWidth - padding.left - padding.right;
+  const innerHeight = chartHeight - padding.top - padding.bottom;
+
+  const weights = entries.map(e => e.weight);
+  const minWeight = Math.floor(Math.min(...weights) - 1);
+  const maxWeight = Math.ceil(Math.max(...weights) + 1);
+  const weightRange = maxWeight - minWeight;
+
+  // Calculate points
+  const points = entries.map((entry, idx) => {
+    const x = padding.left + (idx / (entries.length - 1)) * innerWidth;
+    const y = padding.top + innerHeight - ((entry.weight - minWeight) / weightRange) * innerHeight;
+    return { x, y, ...entry };
+  });
+
+  // Create smooth curve path
+  const linePath = points.reduce((path, point, idx) => {
+    if (idx === 0) return `M ${point.x} ${point.y}`;
+    
+    const prev = points[idx - 1];
+    const cpx1 = prev.x + (point.x - prev.x) / 3;
+    const cpx2 = point.x - (point.x - prev.x) / 3;
+    return `${path} C ${cpx1} ${prev.y}, ${cpx2} ${point.y}, ${point.x} ${point.y}`;
+  }, '');
+
+  // Create area path (for gradient fill)
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${padding.top + innerHeight} L ${padding.left} ${padding.top + innerHeight} Z`;
+
+  // Y-axis labels
+  const yLabels = [];
+  const ySteps = 4;
+  for (let i = 0; i <= ySteps; i++) {
+    const value = minWeight + (weightRange * i) / ySteps;
+    const y = padding.top + innerHeight - (i / ySteps) * innerHeight;
+    yLabels.push({ value: value.toFixed(1), y });
+  }
+
+  // X-axis labels (show first, middle, last)
+  const xLabels = [
+    { label: new Date(entries[0].date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' }), x: padding.left },
+    { label: new Date(entries[Math.floor(entries.length / 2)].date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' }), x: padding.left + innerWidth / 2 },
+    { label: new Date(entries[entries.length - 1].date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' }), x: padding.left + innerWidth },
+  ];
+
+  return (
+    <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full" style={{ height }}>
+      <defs>
+        <linearGradient id="weightGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#6F00FF" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#6F00FF" stopOpacity="0.05" />
+        </linearGradient>
+      </defs>
+
+      {/* Grid lines */}
+      {yLabels.map((label, idx) => (
+        <line
+          key={idx}
+          x1={padding.left}
+          y1={label.y}
+          x2={padding.left + innerWidth}
+          y2={label.y}
+          stroke="currentColor"
+          strokeOpacity="0.1"
+          strokeDasharray="4 4"
+        />
+      ))}
+
+      {/* Area fill */}
+      <path d={areaPath} fill="url(#weightGradient)" />
+
+      {/* Main line */}
+      <path
+        d={linePath}
+        fill="none"
+        stroke="#6F00FF"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* Moving average line (thinner, smoother) */}
+      {entries.length >= 7 && (() => {
+        const maPoints = entries.map((entry, idx) => {
+          const start = Math.max(0, idx - 3);
+          const end = Math.min(entries.length, idx + 4);
+          const slice = entries.slice(start, end);
+          const avg = slice.reduce((sum, e) => sum + e.weight, 0) / slice.length;
+          const x = padding.left + (idx / (entries.length - 1)) * innerWidth;
+          const y = padding.top + innerHeight - ((avg - minWeight) / weightRange) * innerHeight;
+          return { x, y };
+        });
+        
+        const maPath = maPoints.reduce((path, point, idx) => {
+          if (idx === 0) return `M ${point.x} ${point.y}`;
+          const prev = maPoints[idx - 1];
+          const cpx1 = prev.x + (point.x - prev.x) / 3;
+          const cpx2 = point.x - (point.x - prev.x) / 3;
+          return `${path} C ${cpx1} ${prev.y}, ${cpx2} ${point.y}, ${point.x} ${point.y}`;
+        }, '');
+        
+        return (
+          <path
+            d={maPath}
+            fill="none"
+            stroke="#a78bfa"
+            strokeWidth="2"
+            strokeLinecap="round"
+            opacity="0.7"
+          />
+        );
+      })()}
+
+      {/* Data points */}
+      {points.map((point, idx) => (
+        <g key={idx}>
+          <circle
+            cx={point.x}
+            cy={point.y}
+            r="4"
+            fill="#6F00FF"
+            stroke="white"
+            strokeWidth="2"
+            className="cursor-pointer hover:r-6 transition-all"
+          />
+          <title>{`${point.date}: ${point.weight} kg`}</title>
+        </g>
+      ))}
+
+      {/* Y-axis labels */}
+      {yLabels.map((label, idx) => (
+        <text
+          key={idx}
+          x={padding.left - 8}
+          y={label.y}
+          textAnchor="end"
+          dominantBaseline="middle"
+          className="fill-slate-400 text-[10px]"
+        >
+          {label.value}
+        </text>
+      ))}
+
+      {/* X-axis labels */}
+      {xLabels.map((label, idx) => (
+        <text
+          key={idx}
+          x={label.x}
+          y={chartHeight - 10}
+          textAnchor="middle"
+          className="fill-slate-400 text-[10px]"
+        >
+          {label.label}
+        </text>
+      ))}
+
+      {/* Y-axis title */}
+      <text
+        x={12}
+        y={chartHeight / 2}
+        textAnchor="middle"
+        transform={`rotate(-90, 12, ${chartHeight / 2})`}
+        className="fill-slate-400 text-[10px]"
+      >
+        kg
+      </text>
+    </svg>
+  );
+};
+
 const TagModal = ({ isOpen, onClose, onSave, existingTags }: TagModalProps) => {
   const [tagName, setTagName] = useState('');
   const [selectedColor, setSelectedColor] = useState(GOOGLE_COLORS[0].hex);
@@ -1680,10 +1868,248 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
       {/* Main Content Area */}
       {activeTab === 'dashboard' && (
-        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 animate-fade-in-up">
-            <LayoutDashboard size={64} className="mb-4 opacity-20" />
-            <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-300">Dashboard View</h2>
-            <p className="mt-2">Analytics and high-level overview coming soon.</p>
+        <div className="flex-1 overflow-y-auto animate-fade-in-up">
+          <div className="max-w-6xl mx-auto p-6 space-y-6">
+            
+            {/* Header / Greeting */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-slate-800 dark:text-white">
+                  {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}{user ? `, ${user.name.split(' ')[0]}` : ''}! 👋
+                </h1>
+                <p className="text-slate-500 dark:text-slate-400 mt-1">
+                  {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                </p>
+              </div>
+              <div className="flex items-center gap-4">
+                {/* Quick Stats */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl px-4 py-3 shadow-sm border border-slate-200 dark:border-slate-700">
+                  <div className="text-2xl font-bold text-[#6F00FF]">{activeTasks.filter(t => t.completed).length}/{activeTasks.length}</div>
+                  <div className="text-xs text-slate-500">Tasks done</div>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl px-4 py-3 shadow-sm border border-slate-200 dark:border-slate-700">
+                  <div className="text-2xl font-bold text-emerald-500">{schedule.reduce((sum, b) => sum + b.duration, 0).toFixed(1)}h</div>
+                  <div className="text-xs text-slate-500">Scheduled</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Today's Tasks - Takes 1 column */}
+              <div className="lg:col-span-1">
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 h-full">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2">
+                      <ListTodo size={20} className="text-[#6F00FF]" />
+                      Today's Tasks
+                    </h2>
+                    <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-full">
+                      {activeTasks.filter(t => t.completed).length} of {activeTasks.length}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {activeTasks.length === 0 ? (
+                      <p className="text-center text-slate-400 py-8 text-sm">No tasks for today</p>
+                    ) : (
+                      activeTasks.map(task => (
+                        <div 
+                          key={task.id}
+                          className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
+                            task.completed 
+                              ? 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 opacity-60' 
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-[#6F00FF]/50'
+                          }`}
+                        >
+                          <button
+                            onClick={() => handleToggleComplete(task.id, 'active')}
+                            className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                              task.completed 
+                                ? 'bg-emerald-500 border-emerald-500' 
+                                : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'
+                            }`}
+                          >
+                            {task.completed && <Check size={12} className="text-white" />}
+                          </button>
+                          <span className={`flex-1 text-sm ${task.completed ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                            {task.title}
+                          </span>
+                          {task.tag && (
+                            <span 
+                              className="text-[10px] px-1.5 py-0.5 rounded font-semibold text-white"
+                              style={{ backgroundColor: task.tagColor || '#6F00FF' }}
+                            >
+                              {task.tag}
+                            </span>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  
+                  <button 
+                    onClick={() => setActiveTab('timebox')}
+                    className="w-full mt-4 py-2 text-sm text-[#6F00FF] hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-lg transition-colors font-medium"
+                  >
+                    Open Timebox →
+                  </button>
+                </div>
+              </div>
+
+              {/* Weight Tracker - Takes 2 columns */}
+              <div className="lg:col-span-2">
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2">
+                      <Activity size={20} className="text-[#6F00FF]" />
+                      Weight Tracker
+                    </h2>
+                    {weightEntries.length > 0 && (
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className="text-slate-500">
+                          Current: <strong className="text-slate-800 dark:text-white">{weightEntries[weightEntries.length - 1]?.weight} kg</strong>
+                        </span>
+                        {weightEntries.length > 1 && (
+                          <span className={`font-medium ${
+                            weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight 
+                              ? 'text-emerald-500' 
+                              : 'text-red-500'
+                          }`}>
+                            {weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight ? '↓' : '↑'}
+                            {Math.abs(weightEntries[weightEntries.length - 1].weight - weightEntries[0].weight).toFixed(1)} kg
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Line Chart */}
+                  <WeightLineChart entries={weightEntries} height={220} />
+                  
+                  {/* Weight Input */}
+                  <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={newWeight}
+                      onChange={(e) => setNewWeight(e.target.value)}
+                      placeholder="Log today's weight (kg)"
+                      className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddWeight()}
+                    />
+                    <button
+                      onClick={handleAddWeight}
+                      className="px-4 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors"
+                    >
+                      Log Weight
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Streak Counter */}
+              <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl shadow-sm p-4 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-4xl font-bold">
+                      {(() => {
+                        // Calculate streak
+                        let streak = 0;
+                        const today = new Date().toISOString().split('T')[0];
+                        const completedToday = activeTasks.some(t => t.completed);
+                        if (completedToday) streak = 1;
+                        // Add more streak logic here based on historical data
+                        return streak;
+                      })()}
+                    </div>
+                    <div className="text-amber-100 text-sm mt-1">Day streak 🔥</div>
+                  </div>
+                  <div className="text-6xl opacity-20">🔥</div>
+                </div>
+              </div>
+
+              {/* Focus Time Today */}
+              <div className="bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl shadow-sm p-4 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-4xl font-bold">
+                      {schedule.reduce((sum, b) => sum + b.duration, 0).toFixed(1)}h
+                    </div>
+                    <div className="text-emerald-100 text-sm mt-1">Focus time today</div>
+                  </div>
+                  <div className="text-6xl opacity-20">⏱️</div>
+                </div>
+              </div>
+
+              {/* Upcoming Events */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-3">
+                  <Calendar size={18} className="text-[#6F00FF]" />
+                  Today's Schedule
+                </h3>
+                <div className="space-y-2">
+                  {schedule.length === 0 ? (
+                    <p className="text-sm text-slate-400 py-4 text-center">No events scheduled</p>
+                  ) : (
+                    schedule.slice(0, 4).map(block => (
+                      <div key={block.id} className="flex items-center gap-3 text-sm">
+                        <div className="text-slate-400 font-mono w-16">{formatTime(block.start)}</div>
+                        <div 
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: block.calendarColor || '#6F00FF' }}
+                        />
+                        <div className="flex-1 text-slate-700 dark:text-slate-200 truncate">{block.title}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Motivational Quote */}
+              <div className="lg:col-span-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl shadow-sm p-6 text-white">
+                <div className="flex items-start gap-4">
+                  <div className="text-4xl">💡</div>
+                  <div>
+                    <p className="text-lg font-medium italic">
+                      "The secret of getting ahead is getting started."
+                    </p>
+                    <p className="text-violet-200 text-sm mt-2">— Mark Twain</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Weekly Progress */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-3">
+                  <BarChart3 size={18} className="text-[#6F00FF]" />
+                  This Week
+                </h3>
+                <div className="grid grid-cols-7 gap-1">
+                  {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => {
+                    const isToday = idx === (new Date().getDay() + 6) % 7;
+                    const hasTasks = Math.random() > 0.5; // Placeholder - would check real data
+                    return (
+                      <div key={idx} className="text-center">
+                        <div className={`text-xs mb-1 ${isToday ? 'text-[#6F00FF] font-bold' : 'text-slate-400'}`}>{day}</div>
+                        <div className={`w-8 h-8 rounded-lg mx-auto flex items-center justify-center ${
+                          isToday 
+                            ? 'bg-[#6F00FF] text-white' 
+                            : hasTasks 
+                              ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' 
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-400'
+                        }`}>
+                          {isToday ? '●' : hasTasks ? '✓' : '○'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
+          </div>
         </div>
       )}
 
