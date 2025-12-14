@@ -54,7 +54,42 @@ declare namespace gapi {
           eventId: string;
         }): Promise<void>;
       }
+
+      namespace calendars {
+        function insert(params: {
+          resource: {
+            summary: string;
+            description?: string;
+            timeZone?: string;
+          };
+        }): Promise<{ result: { id: string; summary: string } }>;
+
+        function delete(params: {
+          calendarId: string;
+        }): Promise<void>;
+      }
+
+      namespace calendarList {
+        function list(): Promise<{ 
+          result: { 
+            items: Array<{
+              id: string;
+              summary: string;
+              description?: string;
+              backgroundColor?: string;
+              foregroundColor?: string;
+            }> 
+          } 
+        }>;
+
+        function patch(params: {
+          calendarId: string;
+          resource: {
+            backgroundColor?: string;
+            foregroundColor?: string;
+          };
+        }): Promise<any>;
+      }
     }
   }
 }
-
