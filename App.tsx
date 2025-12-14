@@ -583,43 +583,53 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   };
 
   const handleToggleComplete = (taskId: number | string, listType: 'active' | 'later') => {
+    // Find the current task to get its new completed state
+    const currentTask = listType === 'active' 
+      ? activeTasks.find(t => String(t.id) === String(taskId))
+      : laterTasks.find(t => String(t.id) === String(taskId));
+    
+    const newCompleted = currentTask ? !currentTask.completed : true;
+    
     // Toggle completion in the task list
     if (listType === 'active') {
       setActiveTasks(prev => prev.map(t => 
-        t.id === taskId ? { ...t, completed: !t.completed } : t
+        String(t.id) === String(taskId) ? { ...t, completed: newCompleted } : t
       ));
     } else {
       setLaterTasks(prev => prev.map(t => 
-        t.id === taskId ? { ...t, completed: !t.completed } : t
+        String(t.id) === String(taskId) ? { ...t, completed: newCompleted } : t
       ));
     }
     
-    // Also toggle completion in any linked schedule block
+    // Also toggle completion in any linked schedule block (compare as strings)
     setSchedule(prev => prev.map(block => 
-      block.taskId === taskId ? { ...block, completed: !block.completed } : block
+      String(block.taskId) === String(taskId) ? { ...block, completed: newCompleted } : block
     ));
+    
+    console.log('Toggle complete:', { taskId, newCompleted, listType });
   };
 
   // Toggle completion directly on a schedule block
   const handleToggleBlockComplete = (blockId: number | string) => {
-    const block = schedule.find(b => b.id === blockId);
+    const block = schedule.find(b => String(b.id) === String(blockId));
     if (!block) return;
     
     const newCompleted = !block.completed;
     
     // Update the block
     setSchedule(prev => prev.map(b => 
-      b.id === blockId ? { ...b, completed: newCompleted } : b
+      String(b.id) === String(blockId) ? { ...b, completed: newCompleted } : b
     ));
     
     // If this block is linked to a task, also update the task
     if (block.taskId) {
       setActiveTasks(prev => prev.map(t => 
-        t.id === block.taskId ? { ...t, completed: newCompleted } : t
+        String(t.id) === String(block.taskId) ? { ...t, completed: newCompleted } : t
       ));
       setLaterTasks(prev => prev.map(t => 
-        t.id === block.taskId ? { ...t, completed: newCompleted } : t
+        String(t.id) === String(block.taskId) ? { ...t, completed: newCompleted } : t
       ));
+      console.log('Block toggle synced to task:', { blockId, taskId: block.taskId, newCompleted });
     }
   };
 
