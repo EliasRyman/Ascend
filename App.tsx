@@ -19,6 +19,7 @@ import {
   Moon,
   Plus,
   MoreHorizontal,
+  MoreVertical,
   ChevronDown,
   ChevronRight,
   ChevronLeft,
@@ -39,7 +40,9 @@ import {
   Globe,
   LayoutDashboard,
   Activity,
-  Unlink
+  Unlink,
+  Tag,
+  Palette
 } from 'lucide-react';
 import {
   initGoogleApi,
@@ -72,8 +75,10 @@ import {
   loadScheduleBlocks,
   createScheduleBlock,
   deleteScheduleBlock,
+  updateScheduleBlock,
   loadUserSettings,
-  saveUserSettings
+  saveUserSettings,
+  updateTask
 } from './database';
 
 // --- Context ---
@@ -167,46 +172,336 @@ const EXTERNAL_GOOGLE_EVENTS: ScheduleBlock[] = [
   }
 ];
 
+// --- Google Calendar Color Palette ---
+const GOOGLE_COLORS = [
+  { id: '1', name: 'Lavender', hex: '#7986cb', tailwind: 'bg-[#7986cb] text-white' },
+  { id: '2', name: 'Sage', hex: '#33b679', tailwind: 'bg-[#33b679] text-white' },
+  { id: '3', name: 'Grape', hex: '#8e24aa', tailwind: 'bg-[#8e24aa] text-white' },
+  { id: '4', name: 'Flamingo', hex: '#e67c73', tailwind: 'bg-[#e67c73] text-white' },
+  { id: '5', name: 'Banana', hex: '#f6bf26', tailwind: 'bg-[#f6bf26] text-slate-800' },
+  { id: '6', name: 'Tangerine', hex: '#f4511e', tailwind: 'bg-[#f4511e] text-white' },
+  { id: '7', name: 'Peacock', hex: '#039be5', tailwind: 'bg-[#039be5] text-white' },
+  { id: '8', name: 'Graphite', hex: '#616161', tailwind: 'bg-[#616161] text-white' },
+  { id: '9', name: 'Blueberry', hex: '#3f51b5', tailwind: 'bg-[#3f51b5] text-white' },
+  { id: '10', name: 'Basil', hex: '#0b8043', tailwind: 'bg-[#0b8043] text-white' },
+  { id: '11', name: 'Tomato', hex: '#d50000', tailwind: 'bg-[#d50000] text-white' },
+];
+
 // --- Timebox App Components ---
 
-const TaskItem = ({ task, onDragStart, onDelete, onToggleComplete }) => (
-  <div 
-    draggable="true"
-    onDragStart={(e) => onDragStart(e, task)}
-    className={`group flex items-center gap-3 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-[#6F00FF]/50 cursor-grab active:cursor-grabbing transition-all shadow-sm ${task.completed ? 'opacity-60' : ''}`}
-  >
+interface TaskItemProps {
+  task: Task;
+  listType: 'active' | 'later';
+  userTags: { name: string; color: string }[];
+  onDragStart: (e: React.DragEvent, task: Task) => void;
+  onDelete: (id: number | string) => void;
+  onToggleComplete: (id: number | string) => void;
+  onMoveToList: (taskId: number | string, targetList: 'active' | 'later') => void;
+  onAddTag: (taskId: number | string, tagName: string, tagColor: string) => void;
+  onRemoveTag: (taskId: number | string) => void;
+  onOpenTagModal: (taskId: number | string) => void;
+}
+
+const TaskItem = ({ 
+  task, 
+  listType,
+  userTags,
+  onDragStart, 
+  onDelete, 
+  onToggleComplete,
+  onMoveToList,
+  onAddTag,
+  onRemoveTag,
+  onOpenTagModal
+}: TaskItemProps) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isTagSubmenuOpen, setIsTagSubmenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+        setIsTagSubmenuOpen(false);
+      }
+    };
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isMenuOpen]);
+
+  return (
     <div 
-      onClick={() => onToggleComplete(task.id)}
-      className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${task.completed ? 'bg-[#6F00FF] border-[#6F00FF]' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}
+      draggable="true"
+      onDragStart={(e) => onDragStart(e, task)}
+      className={`group flex items-center gap-3 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-[#6F00FF]/50 cursor-grab active:cursor-grabbing transition-all shadow-sm ${task.completed ? 'opacity-60' : ''}`}
     >
-      {task.completed && <Check size={14} className="text-white" />}
-    </div>
-    <span className={`flex-1 text-sm font-medium ${task.completed ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}>
-      {task.title}
-    </span>
-    {task.tag && (
-      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide ${task.tagColor}`}>
-        {task.tag}
+      <div 
+        onClick={() => onToggleComplete(task.id)}
+        className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${task.completed ? 'bg-[#6F00FF] border-[#6F00FF]' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}
+      >
+        {task.completed && <Check size={14} className="text-white" />}
+      </div>
+      <span className={`flex-1 text-sm font-medium ${task.completed ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}>
+        {task.title}
       </span>
-    )}
-    {task.time && (
-      <span className="text-[10px] text-slate-400 font-mono border border-slate-100 dark:border-slate-800 px-1 rounded">
-        {task.time}
-      </span>
-    )}
-    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button className="text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-300">
-            <GripVertical size={16} />
-        </button>
-        <button 
-            onClick={() => onDelete(task.id)}
-            className="text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400"
+      {task.tag && (
+        <span 
+          className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide`}
+          style={{ backgroundColor: task.tagColor || '#6F00FF', color: 'white' }}
         >
-            <X size={16} />
+          {task.tag}
+        </span>
+      )}
+      {task.time && (
+        <span className="text-[10px] text-slate-400 font-mono border border-slate-100 dark:border-slate-800 px-1 rounded">
+          {task.time}
+        </span>
+      )}
+      
+      {/* Options Menu */}
+      <div className="relative" ref={menuRef}>
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsMenuOpen(!isMenuOpen);
+          }}
+          className="text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-300 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          <MoreVertical size={16} />
         </button>
+        
+        {isMenuOpen && (
+          <div className="absolute right-0 top-8 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 py-1 text-sm">
+            {/* Mark as Complete */}
+            <button
+              onClick={() => {
+                onToggleComplete(task.id);
+                setIsMenuOpen(false);
+              }}
+              className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
+            >
+              <Check size={14} className={task.completed ? 'text-emerald-500' : ''} />
+              {task.completed ? 'Mark as Incomplete' : 'Mark as Complete'}
+            </button>
+            
+            {/* Move to Later/Active */}
+            <button
+              onClick={() => {
+                onMoveToList(task.id, listType === 'active' ? 'later' : 'active');
+                setIsMenuOpen(false);
+              }}
+              className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
+            >
+              <MoveRight size={14} />
+              {listType === 'active' ? 'Move to Later' : 'Move to Active'}
+            </button>
+            
+            <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+            
+            {/* Create Tag */}
+            <button
+              onClick={() => {
+                onOpenTagModal(task.id);
+                setIsMenuOpen(false);
+              }}
+              className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
+            >
+              <Plus size={14} />
+              Create Tag
+            </button>
+            
+            {/* Add Tag (with submenu) */}
+            <div 
+              className="relative"
+              onMouseEnter={() => setIsTagSubmenuOpen(true)}
+              onMouseLeave={() => setIsTagSubmenuOpen(false)}
+            >
+              <button
+                className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200 justify-between"
+              >
+                <span className="flex items-center gap-2">
+                  <Tag size={14} />
+                  Add Tag
+                </span>
+                <ChevronRight size={14} />
+              </button>
+              
+              {isTagSubmenuOpen && userTags.length > 0 && (
+                <div className="absolute left-full top-0 ml-1 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 py-1">
+                  {userTags.map((tag, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        onAddTag(task.id, tag.name, tag.color);
+                        setIsMenuOpen(false);
+                        setIsTagSubmenuOpen(false);
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                    >
+                      <span 
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      <span className="text-slate-700 dark:text-slate-200 text-sm">{tag.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              
+              {isTagSubmenuOpen && userTags.length === 0 && (
+                <div className="absolute left-full top-0 ml-1 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 py-2 px-3 text-xs text-slate-400">
+                  No tags yet. Create one first!
+                </div>
+              )}
+            </div>
+            
+            {/* Remove Tag */}
+            {task.tag && (
+              <button
+                onClick={() => {
+                  onRemoveTag(task.id);
+                  setIsMenuOpen(false);
+                }}
+                className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
+              >
+                <X size={14} />
+                Remove Tag
+              </button>
+            )}
+            
+            <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+            
+            {/* Delete Task */}
+            <button
+              onClick={() => {
+                onDelete(task.id);
+                setIsMenuOpen(false);
+              }}
+              className="w-full px-3 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400"
+            >
+              <Trash2 size={14} />
+              Delete Task
+            </button>
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
+
+// --- Tag Modal Component ---
+interface TagModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (tagName: string, tagColor: string) => void;
+  existingTags: { name: string; color: string }[];
+}
+
+const TagModal = ({ isOpen, onClose, onSave, existingTags }: TagModalProps) => {
+  const [tagName, setTagName] = useState('');
+  const [selectedColor, setSelectedColor] = useState(GOOGLE_COLORS[0].hex);
+
+  const handleSave = () => {
+    if (tagName.trim()) {
+      onSave(tagName.trim(), selectedColor);
+      setTagName('');
+      setSelectedColor(GOOGLE_COLORS[0].hex);
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-slate-700">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <Tag size={20} className="text-[#6F00FF]" />
+              Create Tag
+            </h3>
+            <button
+              onClick={onClose}
+              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+        
+        <div className="p-4 space-y-4">
+          {/* Tag Name Input */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Tag Name
+            </label>
+            <input
+              type="text"
+              value={tagName}
+              onChange={(e) => setTagName(e.target.value)}
+              placeholder="e.g., Work, Personal, Urgent"
+              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50 focus:border-[#6F00FF]"
+              autoFocus
+            />
+          </div>
+          
+          {/* Color Picker */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Color
+            </label>
+            <div className="grid grid-cols-6 gap-2">
+              {GOOGLE_COLORS.map((color) => (
+                <button
+                  key={color.id}
+                  onClick={() => setSelectedColor(color.hex)}
+                  className={`w-8 h-8 rounded-full transition-all ${selectedColor === color.hex ? 'ring-2 ring-offset-2 ring-[#6F00FF] dark:ring-offset-slate-900 scale-110' : 'hover:scale-105'}`}
+                  style={{ backgroundColor: color.hex }}
+                  title={color.name}
+                />
+              ))}
+            </div>
+          </div>
+          
+          {/* Preview */}
+          {tagName && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Preview
+              </label>
+              <span
+                className="inline-block text-xs px-2 py-1 rounded font-semibold uppercase tracking-wide text-white"
+                style={{ backgroundColor: selectedColor }}
+              >
+                {tagName}
+              </span>
+            </div>
+          )}
+        </div>
+        
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!tagName.trim()}
+            className="px-4 py-2 text-sm font-medium bg-[#6F00FF] text-white rounded-lg hover:bg-[#5800cc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Create Tag
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const { isDark, toggleTheme } = useTheme();
@@ -225,6 +520,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [calendarViewDate, setCalendarViewDate] = useState(new Date());
   const calendarRef = useRef<HTMLDivElement>(null);
+  
+  // State for Tags
+  const [userTags, setUserTags] = useState<{ name: string; color: string }[]>(() => {
+    // Load from localStorage on init
+    const saved = localStorage.getItem('ascend_user_tags');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
+  const [tagModalTaskId, setTagModalTaskId] = useState<string | number | null>(null);
 
   // Google Calendar State
   const [googleAccount, setGoogleAccount] = useState<{
@@ -758,6 +1062,74 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     }
   };
 
+  // --- Tag Management Handlers ---
+  
+  const handleCreateTag = (tagName: string, tagColor: string) => {
+    const newTag = { name: tagName, color: tagColor };
+    const updatedTags = [...userTags, newTag];
+    setUserTags(updatedTags);
+    localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
+    
+    // If we have a task ID, apply the tag to it
+    if (tagModalTaskId) {
+      handleAddTagToTask(tagModalTaskId, tagName, tagColor);
+    }
+    setTagModalTaskId(null);
+  };
+
+  const handleAddTagToTask = async (taskId: number | string, tagName: string, tagColor: string) => {
+    // Update in active tasks
+    setActiveTasks(prev => prev.map(t => 
+      String(t.id) === String(taskId) ? { ...t, tag: tagName, tagColor: tagColor } : t
+    ));
+    // Update in later tasks
+    setLaterTasks(prev => prev.map(t => 
+      String(t.id) === String(taskId) ? { ...t, tag: tagName, tagColor: tagColor } : t
+    ));
+    // Update in database
+    await updateTask(String(taskId), { tag: tagName, tagColor: tagColor });
+  };
+
+  const handleRemoveTagFromTask = async (taskId: number | string) => {
+    // Update in active tasks
+    setActiveTasks(prev => prev.map(t => 
+      String(t.id) === String(taskId) ? { ...t, tag: null, tagColor: null } : t
+    ));
+    // Update in later tasks
+    setLaterTasks(prev => prev.map(t => 
+      String(t.id) === String(taskId) ? { ...t, tag: null, tagColor: null } : t
+    ));
+    // Update in database
+    await updateTask(String(taskId), { tag: null, tagColor: null });
+  };
+
+  const handleOpenTagModal = (taskId: number | string) => {
+    setTagModalTaskId(taskId);
+    setIsTagModalOpen(true);
+  };
+
+  const handleMoveTaskToList = async (taskId: number | string, targetList: 'active' | 'later') => {
+    // Find the task in both lists
+    const taskInActive = activeTasks.find(t => String(t.id) === String(taskId));
+    const taskInLater = laterTasks.find(t => String(t.id) === String(taskId));
+    const task = taskInActive || taskInLater;
+    
+    if (!task) return;
+    
+    if (taskInActive && targetList === 'later') {
+      // Move from active to later
+      setActiveTasks(prev => prev.filter(t => String(t.id) !== String(taskId)));
+      setLaterTasks(prev => [...prev, { ...task, time: null }]);
+    } else if (taskInLater && targetList === 'active') {
+      // Move from later to active
+      setLaterTasks(prev => prev.filter(t => String(t.id) !== String(taskId)));
+      setActiveTasks(prev => [...prev, task]);
+    }
+    
+    // Update in database
+    await moveTask(String(taskId), targetList);
+  };
+
   const handleDeleteBlock = async (blockId: number | string) => {
       // Find the block to get Google event ID
       const block = schedule.find(b => String(b.id) === String(blockId));
@@ -970,7 +1342,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
       const blockData = {
           title: task.title,
-          tag: task.tag || 'work',
+          tag: task.tag || null,
           start: hour,
           duration: 1,
           color: "bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500", 
@@ -1012,7 +1384,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   hour,
                   newBlock.duration, // Use actual block duration
                   selectedDate, // Use selected date instead of today
-                  task.tag || 'work' // Pass tag for color coding
+                  task.tag || undefined // Pass tag for color coding
               );
               console.log('Created Google Calendar event:', eventId);
               // Update the block with the Google event ID
@@ -1247,6 +1619,17 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         </div>
       )}
 
+      {/* Tag Modal */}
+      <TagModal
+        isOpen={isTagModalOpen}
+        onClose={() => {
+          setIsTagModalOpen(false);
+          setTagModalTaskId(null);
+        }}
+        onSave={handleCreateTag}
+        existingTags={userTags}
+      />
+
       {/* Main Content Area */}
       {activeTab === 'dashboard' && (
         <div className="flex-1 flex flex-col items-center justify-center text-slate-400 animate-fade-in-up">
@@ -1303,10 +1686,16 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               {activeTasks.map(task => (
                 <TaskItem 
                     key={task.id} 
-                    task={task} 
+                    task={task}
+                    listType="active"
+                    userTags={userTags}
                     onDragStart={(e) => handleTaskDragStart(e, task, 'active')}
                     onDelete={(id) => handleDeleteTask(id, 'active')}
                     onToggleComplete={(id) => handleToggleComplete(id, 'active')}
+                    onMoveToList={handleMoveTaskToList}
+                    onAddTag={handleAddTagToTask}
+                    onRemoveTag={handleRemoveTagFromTask}
+                    onOpenTagModal={handleOpenTagModal}
                 />
               ))}
             </div>
@@ -1333,10 +1722,16 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   {laterTasks.map(task => (
                     <div key={task.id} className="pl-4">
                        <TaskItem 
-                            task={task} 
+                            task={task}
+                            listType="later"
+                            userTags={userTags}
                             onDragStart={(e) => handleTaskDragStart(e, task, 'later')} 
                             onDelete={(id) => handleDeleteTask(id, 'later')}
                             onToggleComplete={(id) => handleToggleComplete(id, 'later')}
+                            onMoveToList={handleMoveTaskToList}
+                            onAddTag={handleAddTagToTask}
+                            onRemoveTag={handleRemoveTagFromTask}
+                            onOpenTagModal={handleOpenTagModal}
                         />
                     </div>
                   ))}

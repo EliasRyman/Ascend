@@ -49,7 +49,7 @@ function dbBlockToBlock(dbBlock: DbScheduleBlock): ScheduleBlock {
   return {
     id: dbBlock.id,
     title: dbBlock.title,
-    tag: dbBlock.tag || 'work',
+    tag: dbBlock.tag || null,
     start: dbBlock.start_hour,
     duration: dbBlock.duration,
     color: dbBlock.color || 'bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500',
