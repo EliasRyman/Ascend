@@ -45,7 +45,9 @@ import {
   initGoogleIdentity,
   requestAccessToken,
   revokeAccessToken,
-  getGoogleUserInfo
+  getGoogleUserInfo,
+  createGoogleCalendarEvent,
+  isSignedIn
 } from './googleCalendar';
 
 // --- Context ---
@@ -66,6 +68,7 @@ interface ScheduleBlock {
   color: string;
   textColor: string;
   isGoogle?: boolean;
+  googleEventId?: string;
 }
 
 interface Task {
@@ -404,7 +407,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       e.dataTransfer.dropEffect = 'copy';
   };
 
-  const handleHourDrop = (e, hour) => {
+  const handleHourDrop = async (e, hour) => {
       e.preventDefault();
       setDragOverHour(null);
       if (!draggedItem) return;
@@ -418,7 +421,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           duration: 1,
           color: "bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500", 
           textColor: "text-indigo-950 dark:text-indigo-50",
-          isGoogle: true // Assuming dropping on timeline pushes to GCal immediately in this mental model
+          isGoogle: googleAccount !== null
       };
 
       setSchedule(prev => [...prev, newBlock]);
@@ -429,6 +432,27 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           setActiveTasks(prev => prev.map(t => t.id === task.id ? { ...t, time: timeString } : t));
       }
       setDraggedItem(null);
+
+      // Push to Google Calendar if connected
+      if (googleAccount && isSignedIn()) {
+          try {
+              const eventId = await createGoogleCalendarEvent(
+                  task.title,
+                  hour,
+                  1, // 1 hour duration
+                  new Date()
+              );
+              console.log('Created Google Calendar event:', eventId);
+              // Update the block with the Google event ID
+              setSchedule(prev => prev.map(b => 
+                  b.id === newBlock.id 
+                      ? { ...b, googleEventId: eventId }
+                      : b
+              ));
+          } catch (error) {
+              console.error('Failed to create Google Calendar event:', error);
+          }
+      }
   };
 
   return (
