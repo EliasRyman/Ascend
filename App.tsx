@@ -67,6 +67,7 @@ import {
   loadTasks,
   createTask,
   deleteTask as deleteTaskFromDb,
+  moveTask,
   loadScheduleBlocks,
   createScheduleBlock,
   deleteScheduleBlock,
@@ -821,7 +822,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleListDrop = (e, targetListId) => {
+  const handleListDrop = async (e: React.DragEvent, targetListId: 'active' | 'later') => {
     e.preventDefault();
     setDragOverList(null);
     if (!draggedItem) return;
@@ -842,6 +843,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     } else {
         setLaterTasks(prev => [...prev, newTask]);
     }
+    
+    // Save to database
+    await moveTask(String(task.id), targetListId);
+    
     setDraggedItem(null);
   };
 
