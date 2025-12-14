@@ -83,15 +83,23 @@ function maybeEnableButtons(): void {
 export function requestAccessToken(): void {
   if (!tokenClient) {
     console.error('Token client not initialized');
+    alert('Google API not ready. Please refresh the page and try again.');
     return;
   }
 
-  if (accessToken === null) {
-    // First time - prompt for consent
-    tokenClient.requestAccessToken({ prompt: 'consent' });
-  } else {
-    // Already have token, just request without prompt
-    tokenClient.requestAccessToken({ prompt: '' });
+  try {
+    if (accessToken === null) {
+      // First time - prompt for consent
+      console.log('Requesting Google OAuth token with consent...');
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    } else {
+      // Already have token, just request without prompt
+      console.log('Requesting Google OAuth token (refresh)...');
+      tokenClient.requestAccessToken({ prompt: '' });
+    }
+  } catch (error) {
+    console.error('Error requesting access token:', error);
+    alert('Failed to open Google sign-in. Please check if popups are blocked.');
   }
 }
 

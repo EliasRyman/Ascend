@@ -38,7 +38,11 @@ import {
   Globe,
   LayoutDashboard,
   Activity,
-  Unlink
+  Unlink,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import {
   initGoogleApi,
@@ -51,6 +55,30 @@ import {
   getGoogleUserInfo,
   setAccessToken
 } from './googleCalendar';
+import { 
+  supabase, 
+  signIn, 
+  signUp, 
+  signOut, 
+  signInWithGoogle as supabaseSignInWithGoogle,
+  onAuthStateChange,
+  getCurrentUser 
+} from './supabase';
+import {
+  loadTasks,
+  createTask,
+  updateTask,
+  deleteTask as dbDeleteTask,
+  moveTask,
+  loadScheduleBlocks,
+  createScheduleBlock,
+  updateScheduleBlock,
+  deleteScheduleBlock,
+  loadUserSettings,
+  saveUserSettings,
+  Task as DbTaskType,
+  ScheduleBlock as DbScheduleBlockType
+} from './database';
 
 // --- Context ---
 
@@ -184,7 +212,7 @@ const TaskItem = ({ task, onDragStart, onDelete }: {
 
 const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
   onBack: () => void;
-  user: { name: string; avatar: string } | null;
+  user: { id: string; name: string; avatar: string; email: string } | null;
   onLogin: () => void;
   onLogout: () => void;
 }) => {
@@ -231,6 +259,60 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
   // Time labels from 7 AM to 3 PM for the demo view
   const timeLabels = [7, 8, 9, 10, 11, 12, 13, 14, 15];
 
+  // Data loading state
+  const [isDataLoading, setIsDataLoading] = useState(true);
+
+  // Load data from database on mount
+  useEffect(() => {
+    const loadData = async () => {
+      if (!user) return;
+      
+      setIsDataLoading(true);
+      try {
+        // Load tasks
+        const [activeTasksData, laterTasksData, blocksData, settingsData] = await Promise.all([
+          loadTasks('active'),
+          loadTasks('later'),
+          loadScheduleBlocks(),
+          loadUserSettings()
+        ]);
+
+        if (activeTasksData.length > 0 || laterTasksData.length > 0) {
+          setActiveTasks(activeTasksData);
+          setLaterTasks(laterTasksData);
+        }
+
+        if (blocksData.length > 0) {
+          // Convert database blocks to app format
+          const appBlocks: ScheduleBlock[] = blocksData.map(b => ({
+            id: b.id,
+            title: b.title,
+            tag: b.tag,
+            start: b.start,
+            duration: b.duration,
+            color: b.color,
+            textColor: b.textColor,
+            isGoogle: b.isGoogle
+          }));
+          setSchedule(appBlocks);
+        }
+
+        if (settingsData) {
+          setSettings({
+            timeFormat: settingsData.timeFormat,
+            timezone: settingsData.timezone
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load data:', error);
+      } finally {
+        setIsDataLoading(false);
+      }
+    };
+
+    loadData();
+  }, [user]);
+
   // Initialize Google APIs on mount
   useEffect(() => {
     const initGoogle = async () => {
@@ -264,6 +346,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
     }
     setIsGoogleConnecting(true);
     requestAccessToken();
+    
+    // Timeout after 30 seconds if no response
+    setTimeout(() => {
+      setIsGoogleConnecting(false);
+    }, 30000);
   }, [googleApiReady]);
 
   // Handle Google Calendar disconnection
@@ -337,22 +424,33 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
     };
   }, [resizingBlockId, resizeStartY, resizeStartDuration]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newTaskInput.trim()) {
-        const newTask: Task = {
-            id: Date.now(),
+        // Create task in database
+        const dbTask = await createTask(newTaskInput, 'active');
+        
+        if (dbTask) {
+          setActiveTasks([...activeTasks, dbTask]);
+        } else {
+          // Fallback to local-only task if DB fails
+          const newTask: Task = {
+            id: String(Date.now()),
             title: newTaskInput,
             tag: null,
             tagColor: null,
             time: null,
             completed: false
-        };
-        setActiveTasks([...activeTasks, newTask]);
+          };
+          setActiveTasks([...activeTasks, newTask]);
+        }
         setNewTaskInput("");
     }
   };
 
-  const handleDeleteTask = (taskId: number | string, listType: 'active' | 'later') => {
+  const handleDeleteTask = async (taskId: number | string, listType: 'active' | 'later') => {
+      // Delete from database
+      await dbDeleteTask(String(taskId));
+      
       if (listType === 'active') {
           setActiveTasks(activeTasks.filter(t => t.id !== taskId));
       } else {
@@ -360,7 +458,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
       }
   };
 
-  const handleDeleteBlock = (blockId: number | string) => {
+  const handleDeleteBlock = async (blockId: number | string) => {
+      // Delete from database
+      await deleteScheduleBlock(String(blockId));
       setSchedule(schedule.filter(b => b.id !== blockId));
   };
 
@@ -461,8 +561,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
       if (!draggedItem) return;
       const { task } = draggedItem;
 
-      const newBlock: ScheduleBlock = {
-          id: Date.now(),
+      const blockData = {
           title: task.title,
           tag: task.tag || 'work',
           start: hour,
@@ -480,15 +579,24 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
                   hour,
                   1 // 1 hour duration
               );
-              newBlock.id = googleEventId;
-              newBlock.isGoogle = true;
-              newBlock.color = "bg-blue-100 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800";
-              newBlock.textColor = "text-blue-700 dark:text-blue-300";
+              blockData.isGoogle = true;
+              blockData.color = "bg-blue-100 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800";
+              blockData.textColor = "text-blue-700 dark:text-blue-300";
           } catch (error) {
               console.error('Failed to create Google Calendar event:', error);
-              // Continue with local block even if Google fails
           }
       }
+
+      // Save to database
+      const dbBlock = await createScheduleBlock(blockData);
+      
+      const newBlock: ScheduleBlock = dbBlock ? {
+        ...dbBlock,
+        id: dbBlock.id
+      } : {
+        id: String(Date.now()),
+        ...blockData
+      };
 
       setSchedule(prev => [...prev, newBlock]);
       
@@ -496,6 +604,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
       if (draggedItem.sourceList === 'active') {
           const timeString = formatTime(hour);
           setActiveTasks(prev => prev.map(t => t.id === task.id ? { ...t, time: timeString } : t));
+          // Update task in database
+          await updateTask(String(task.id), { time: timeString });
       }
       setDraggedItem(null);
   };
@@ -652,11 +762,19 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
                             <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Time Format</label>
                             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
                                 <button 
-                                    onClick={() => setSettings({...settings, timeFormat: '12h'})}
+                                    onClick={() => {
+                                      const newSettings = {...settings, timeFormat: '12h' as const};
+                                      setSettings(newSettings);
+                                      saveUserSettings({ timeFormat: '12h' });
+                                    }}
                                     className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '12h' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                                 >12-hour (9:00 AM)</button>
                                 <button 
-                                    onClick={() => setSettings({...settings, timeFormat: '24h'})}
+                                    onClick={() => {
+                                      const newSettings = {...settings, timeFormat: '24h' as const};
+                                      setSettings(newSettings);
+                                      saveUserSettings({ timeFormat: '24h' });
+                                    }}
                                     className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '24h' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                                 >24-hour (09:00)</button>
                             </div>
@@ -669,7 +787,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
                         <div className="relative">
                             <select 
                                 value={settings.timezone}
-                                onChange={(e) => setSettings({...settings, timezone: e.target.value})}
+                                onChange={(e) => {
+                                  const newSettings = {...settings, timezone: e.target.value};
+                                  setSettings(newSettings);
+                                  saveUserSettings({ timezone: e.target.value });
+                                }}
                                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm appearance-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
                             >
                                 <option value="Local">Local Time</option>
@@ -986,9 +1108,131 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: {
   );
 };
 
+// --- Auth Form Component ---
+
+const AuthForm = ({ onSuccess }: { onSuccess: () => void }) => {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (isSignUp) {
+        await signUp(email, password);
+        setError('Check your email for confirmation link!');
+      } else {
+        await signIn(email, password);
+        onSuccess();
+      }
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      await supabaseSignInWithGoogle();
+    } catch (err: any) {
+      setError(err.message || 'Google sign in failed');
+    }
+  };
+
+  return (
+    <div className="w-full max-w-sm mx-auto">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+          <div className="relative">
+            <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/20 focus:border-[#6F00FF] transition-all"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
+          <div className="relative">
+            <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              minLength={6}
+              className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/20 focus:border-[#6F00FF] transition-all"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <p className={`text-sm ${error.includes('Check your email') ? 'text-green-600' : 'text-red-500'}`}>
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-2.5 bg-[#6F00FF] text-white rounded-lg font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {loading && <Loader2 size={18} className="animate-spin" />}
+          {isSignUp ? 'Create Account' : 'Sign In'}
+        </button>
+      </form>
+
+      <div className="my-6 flex items-center gap-4">
+        <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
+        <span className="text-sm text-slate-400">or</span>
+        <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
+      </div>
+
+      <button
+        onClick={handleGoogleSignIn}
+        className="w-full py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-3"
+      >
+        <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+        Continue with Google
+      </button>
+
+      <p className="mt-6 text-center text-sm text-slate-500">
+        {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+        <button
+          onClick={() => { setIsSignUp(!isSignUp); setError(null); }}
+          className="text-[#6F00FF] font-semibold hover:underline"
+        >
+          {isSignUp ? 'Sign In' : 'Sign Up'}
+        </button>
+      </p>
+    </div>
+  );
+};
+
 // --- Landing Page & Root App ---
 
-const LandingPage = ({ onLogin }: { onLogin: () => void }) => {
+const LandingPage = ({ onGetStarted }: { onGetStarted: () => void }) => {
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <div className="w-20 h-20 bg-gradient-to-tr from-violet-600 to-fuchsia-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-violet-600/30 mb-8 transform rotate-3 hover:rotate-6 transition-transform">
@@ -1001,7 +1245,7 @@ const LandingPage = ({ onLogin }: { onLogin: () => void }) => {
         The all-in-one timeboxing workspace for <span className="text-slate-800 dark:text-slate-200 font-semibold">deep work</span>.
       </p>
       <button 
-        onClick={onLogin} 
+        onClick={onGetStarted} 
         className="group flex items-center gap-3 px-8 py-4 bg-[#6F00FF] text-white rounded-full font-bold text-xl hover:bg-violet-700 hover:shadow-xl hover:shadow-violet-600/20 transition-all transform hover:-translate-y-1"
       >
         Get Started 
@@ -1017,12 +1261,74 @@ const LandingPage = ({ onLogin }: { onLogin: () => void }) => {
   );
 };
 
+const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4">
+      <div className="w-16 h-16 bg-gradient-to-tr from-violet-600 to-fuchsia-600 rounded-xl flex items-center justify-center text-white shadow-xl shadow-violet-600/20 mb-6">
+        <Target size={36} strokeWidth={2.5} />
+      </div>
+      <h1 className="text-3xl font-extrabold mb-2 tracking-tight">
+        Welcome to Ascend<span className="text-[#6F00FF]">.</span>
+      </h1>
+      <p className="text-slate-500 dark:text-slate-400 mb-8">Sign in to sync your data across devices</p>
+      
+      <AuthForm onSuccess={onSuccess} />
+    </div>
+  );
+};
+
 const App = () => {
   const [isDark, setIsDark] = useState(false);
-  const [user, setUser] = useState<{name: string, avatar: string} | null>(null);
-  const [view, setView] = useState<'landing' | 'app'>('landing');
+  const [user, setUser] = useState<{id: string; name: string; avatar: string; email: string} | null>(null);
+  const [view, setView] = useState<'landing' | 'auth' | 'app'>('landing');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load theme from localStorage or system preference could be added here
+  // Check for existing session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const currentUser = await getCurrentUser();
+        if (currentUser) {
+          const initials = currentUser.email?.slice(0, 2).toUpperCase() || 'U';
+          setUser({
+            id: currentUser.id,
+            name: currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'User',
+            avatar: initials,
+            email: currentUser.email || ''
+          });
+          setView('app');
+        }
+      } catch (error) {
+        console.error('Session check failed:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const u = session.user;
+        const initials = u.email?.slice(0, 2).toUpperCase() || 'U';
+        setUser({
+          id: u.id,
+          name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'User',
+          avatar: initials,
+          email: u.email || ''
+        });
+        setView('app');
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setView('landing');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Theme handling
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -1033,25 +1339,36 @@ const App = () => {
 
   const toggleTheme = () => setIsDark(!isDark);
 
-  const handleLogin = () => {
-    // Simulating login
-    setUser({ name: 'Demo User', avatar: 'DU' });
-    setView('app');
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      setUser(null);
+      setView('landing');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    setView('landing');
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-950">
+        <Loader2 size={32} className="animate-spin text-[#6F00FF]" />
+      </div>
+    );
+  }
 
   return (
     <ThemeContext.Provider value={{ isDark, toggleTheme }}>
-      {view === 'landing' ? (
-        <LandingPage onLogin={handleLogin} />
-      ) : (
+      {view === 'landing' && (
+        <LandingPage onGetStarted={() => setView('auth')} />
+      )}
+      {view === 'auth' && (
+        <AuthPage onSuccess={() => {}} />
+      )}
+      {view === 'app' && user && (
         <TimeboxApp 
           user={user} 
-          onLogin={handleLogin} 
+          onLogin={() => setView('auth')} 
           onLogout={handleLogout}
           onBack={() => setView('landing')}
         />
