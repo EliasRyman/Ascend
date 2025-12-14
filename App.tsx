@@ -2035,40 +2035,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 </div>
               </div>
 
-              {/* Streak Counter */}
-              <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl shadow-sm p-4 text-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-4xl font-bold">
-                      {(() => {
-                        // Calculate streak
-                        let streak = 0;
-                        const today = new Date().toISOString().split('T')[0];
-                        const completedToday = activeTasks.some(t => t.completed);
-                        if (completedToday) streak = 1;
-                        // Add more streak logic here based on historical data
-                        return streak;
-                      })()}
-                    </div>
-                    <div className="text-amber-100 text-sm mt-1">Day streak 🔥</div>
-                  </div>
-                  <div className="text-6xl opacity-20">🔥</div>
-                </div>
-              </div>
-
-              {/* Focus Time Today */}
-              <div className="bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl shadow-sm p-4 text-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-4xl font-bold">
-                      {schedule.reduce((sum, b) => sum + b.duration, 0).toFixed(1)}h
-                    </div>
-                    <div className="text-emerald-100 text-sm mt-1">Focus time today</div>
-                  </div>
-                  <div className="text-6xl opacity-20">⏱️</div>
-                </div>
-              </div>
-
               {/* Upcoming Events */}
               <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
                 <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-3">
@@ -2090,19 +2056,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       </div>
                     ))
                   )}
-                </div>
-              </div>
-
-              {/* Motivational Quote */}
-              <div className="lg:col-span-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl shadow-sm p-6 text-white">
-                <div className="flex items-start gap-4">
-                  <div className="text-4xl">💡</div>
-                  <div>
-                    <p className="text-lg font-medium italic">
-                      "The secret of getting ahead is getting started."
-                    </p>
-                    <p className="text-violet-200 text-sm mt-2">— Mark Twain</p>
-                  </div>
                 </div>
               </div>
 
