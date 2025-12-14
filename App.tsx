@@ -2334,7 +2334,12 @@ const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-gradient-to-tr from-violet-600 to-fuchsia-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-violet-600/30 mx-auto mb-4">
-            <Target size={36} strokeWidth={2.5} />
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 21L12 7L16 21" />
+              <path d="M12 7L15 3" />
+              <path d="M15 3L17 5" />
+              <path d="M15 3L13 5" />
+            </svg>
           </div>
           <h1 className="text-3xl font-bold">
             {isSignUp ? 'Skapa konto' : 'Logga in'}
