@@ -56,7 +56,7 @@ const STORAGE_KEY_USER = 'ascend_google_user';
 // Token expiry buffer (refresh 5 minutes before expiry)
 const TOKEN_EXPIRY_BUFFER = 5 * 60 * 1000; // 5 minutes in ms
 
-// Load saved token from localStorage
+// Load saved token from localStorage and set it on gapi client
 function loadSavedToken(): void {
   try {
     const savedToken = localStorage.getItem(STORAGE_KEY_TOKEN);
@@ -68,7 +68,13 @@ function loadSavedToken(): void {
       const expiryTime = parseInt(savedExpiry, 10);
       if (Date.now() < expiryTime - TOKEN_EXPIRY_BUFFER) {
         accessToken = savedToken;
-        console.log('Loaded saved Google token (valid)');
+        // Also set the token on gapi client so API calls work
+        if (typeof gapi !== 'undefined' && gapi.client) {
+          gapi.client.setToken({ access_token: savedToken });
+          console.log('Loaded saved Google token and set on gapi client');
+        } else {
+          console.log('Loaded saved Google token (gapi not ready yet)');
+        }
       } else {
         console.log('Saved token expired, will need refresh');
         // Clear expired token
@@ -245,6 +251,13 @@ export async function initGoogleApi(): Promise<void> {
           discoveryDocs: [DISCOVERY_DOC],
         });
         gapiInited = true;
+        
+        // Now that gapi is ready, set the saved token if we have one
+        if (accessToken) {
+          gapi.client.setToken({ access_token: accessToken });
+          console.log('Set saved token on gapi client after init');
+        }
+        
         maybeEnableButtons();
         resolve();
       } catch (err) {
@@ -270,6 +283,8 @@ export function initGoogleIdentity(onTokenReceived: (token: string) => void): vo
         return;
       }
       accessToken = response.access_token;
+      // Set token on gapi client
+      gapi.client.setToken({ access_token: response.access_token });
       // Save token with expiry (expires_in is in seconds)
       saveToken(response.access_token, response.expires_in || 3600);
       
