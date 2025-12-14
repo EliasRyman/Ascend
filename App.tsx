@@ -1102,7 +1102,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           <div className="h-14 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center shrink-0">
              <div className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors">
                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                December 13
+                {new Date().toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' })}
                 <User size={14} className="ml-1 text-slate-400" />
              </div>
           </div>
