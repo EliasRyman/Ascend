@@ -7,6 +7,22 @@ const SCOPES = 'https://www.googleapis.com/auth/calendar https://www.googleapis.
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
 const ASCEND_CALENDAR_NAME = 'Ascend';
 
+// Google Calendar color IDs mapping
+// See: https://developers.google.com/calendar/api/v3/reference/colors
+const TAG_COLOR_MAP: Record<string, string> = {
+  work: '9',       // Bold Blue
+  personal: '10',  // Bold Green
+  meeting: '11',   // Bold Red
+  task: '7',       // Peacock (Cyan)
+  focus: '5',      // Banana (Yellow)
+  break: '2',      // Sage (Light Green)
+  urgent: '4',     // Flamingo (Pink)
+  later: '8',      // Graphite (Gray)
+  google: '1',     // Lavender (for synced Google events)
+  demo: '3',       // Grape (Purple)
+  move: '6',       // Tangerine (Orange)
+};
+
 interface GoogleCalendarEvent {
   id: string;
   summary: string;
@@ -21,6 +37,8 @@ interface CalendarEvent {
   start: number; // Hour in decimal (e.g., 9.5 = 9:30 AM)
   duration: number; // Duration in hours
   isGoogle: boolean;
+  isFromAscendCalendar?: boolean;
+  colorId?: string;
 }
 
 let tokenClient: google.accounts.oauth2.TokenClient | null = null;
@@ -395,47 +413,91 @@ export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
 
-// Fetch events from Google Calendar (from primary calendar)
+// Fetch events from Google Calendar
 export async function fetchGoogleCalendarEvents(
   timeMin: Date,
-  timeMax: Date
+  timeMax: Date,
+  includeAscendCalendar: boolean = true,
+  includePrimaryCalendar: boolean = false
 ): Promise<CalendarEvent[]> {
   if (!accessToken) {
     throw new Error('Not signed in to Google');
   }
 
+  // Ensure token is valid
+  const isValid = await ensureValidToken();
+  if (!isValid) {
+    throw new Error('Google token expired. Please reconnect Google Calendar.');
+  }
+
+  const allEvents: CalendarEvent[] = [];
+
   try {
-    const response = await gapi.client.calendar.events.list({
-      calendarId: 'primary',
-      timeMin: timeMin.toISOString(),
-      timeMax: timeMax.toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime',
-    });
+    // Fetch from Ascend calendar
+    if (includeAscendCalendar && ascendCalendarId) {
+      try {
+        const ascendResponse = await gapi.client.calendar.events.list({
+          calendarId: ascendCalendarId,
+          timeMin: timeMin.toISOString(),
+          timeMax: timeMax.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+        });
 
-    const events: GoogleCalendarEvent[] = response.result.items || [];
-    
-    return events
-      .filter(event => event.start?.dateTime) // Only timed events, not all-day
-      .map(event => {
-        const startDate = new Date(event.start.dateTime!);
-        const endDate = new Date(event.end.dateTime || event.start.dateTime!);
-        
-        const startHour = startDate.getHours() + startDate.getMinutes() / 60;
-        const durationHours = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
+        const ascendEvents: GoogleCalendarEvent[] = ascendResponse.result.items || [];
+        allEvents.push(...ascendEvents
+          .filter(event => event.start?.dateTime)
+          .map(event => mapGoogleEventToCalendarEvent(event, true))
+        );
+      } catch (error) {
+        console.error('Error fetching Ascend calendar events:', error);
+      }
+    }
 
-        return {
-          id: event.id,
-          title: event.summary || 'Untitled',
-          start: startHour,
-          duration: Math.max(0.25, durationHours), // Minimum 15 minutes
-          isGoogle: true,
-        };
-      });
+    // Fetch from primary calendar
+    if (includePrimaryCalendar) {
+      try {
+        const primaryResponse = await gapi.client.calendar.events.list({
+          calendarId: 'primary',
+          timeMin: timeMin.toISOString(),
+          timeMax: timeMax.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+        });
+
+        const primaryEvents: GoogleCalendarEvent[] = primaryResponse.result.items || [];
+        allEvents.push(...primaryEvents
+          .filter(event => event.start?.dateTime)
+          .map(event => mapGoogleEventToCalendarEvent(event, false))
+        );
+      } catch (error) {
+        console.error('Error fetching primary calendar events:', error);
+      }
+    }
+
+    return allEvents;
   } catch (error) {
     console.error('Error fetching calendar events:', error);
     throw error;
   }
+}
+
+// Helper function to map Google event to CalendarEvent
+function mapGoogleEventToCalendarEvent(event: GoogleCalendarEvent, isFromAscend: boolean): CalendarEvent {
+  const startDate = new Date(event.start.dateTime!);
+  const endDate = new Date(event.end.dateTime || event.start.dateTime!);
+  
+  const startHour = startDate.getHours() + startDate.getMinutes() / 60;
+  const durationHours = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
+
+  return {
+    id: event.id,
+    title: event.summary || 'Untitled',
+    start: startHour,
+    duration: Math.max(0.25, durationHours),
+    isGoogle: true,
+    isFromAscendCalendar: isFromAscend,
+  };
 }
 
 // Create an event in the Ascend calendar
@@ -443,7 +505,8 @@ export async function createGoogleCalendarEvent(
   title: string,
   startHour: number,
   durationHours: number,
-  date: Date = new Date()
+  date: Date = new Date(),
+  tag?: string
 ): Promise<string> {
   if (!accessToken) {
     throw new Error('Not signed in to Google');
@@ -465,11 +528,16 @@ export async function createGoogleCalendarEvent(
   const endDate = new Date(startDate);
   endDate.setTime(startDate.getTime() + durationHours * 60 * 60 * 1000);
 
+  // Get color ID based on tag
+  const colorId = tag ? (TAG_COLOR_MAP[tag.toLowerCase()] || '9') : '9';
+
   try {
     const response = await gapi.client.calendar.events.insert({
       calendarId: calendarId,
       resource: {
         summary: title,
+        colorId: colorId,
+        description: tag ? `Tag: ${tag}` : undefined,
         start: {
           dateTime: startDate.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -481,7 +549,7 @@ export async function createGoogleCalendarEvent(
       },
     });
 
-    console.log('Created event in Ascend calendar:', response.result.id);
+    console.log('Created event in Ascend calendar:', response.result.id, 'with color:', colorId);
     return response.result.id;
   } catch (error) {
     console.error('Error creating calendar event:', error);
@@ -577,6 +645,101 @@ export async function getGoogleUserInfo(): Promise<{ email: string; name: string
     console.error('Error fetching user info:', error);
     return null;
   }
+}
+
+// Two-way sync interface
+export interface SyncResult {
+  toAdd: CalendarEvent[];
+  toUpdate: Array<{ localId: string | number; event: CalendarEvent }>;
+  toRemove: string[];
+  stats: {
+    added: number;
+    updated: number;
+    removed: number;
+  };
+}
+
+// Two-way sync: Compare local blocks with Google events
+export async function syncCalendarEvents(
+  localBlocks: Array<{
+    id: string | number;
+    title: string;
+    start: number;
+    duration: number;
+    googleEventId?: string;
+  }>,
+  date: Date = new Date()
+): Promise<SyncResult> {
+  if (!accessToken) {
+    throw new Error('Not signed in to Google');
+  }
+
+  // Ensure token is valid
+  const isValid = await ensureValidToken();
+  if (!isValid) {
+    throw new Error('Google token expired. Please reconnect Google Calendar.');
+  }
+
+  // Get start and end of the specified day
+  const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+  const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+
+  // Fetch events from Ascend calendar
+  const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, false);
+
+  const toAdd: CalendarEvent[] = [];
+  const toUpdate: Array<{ localId: string | number; event: CalendarEvent }> = [];
+  const toRemove: string[] = [];
+
+  // Create a map of local blocks by their Google event ID
+  const localBlocksByGoogleId = new Map<string, typeof localBlocks[0]>();
+  localBlocks.forEach(block => {
+    if (block.googleEventId) {
+      localBlocksByGoogleId.set(block.googleEventId, block);
+    }
+  });
+
+  // Create a set of Google event IDs
+  const googleEventIds = new Set(googleEvents.map(e => e.id));
+
+  // Check for new or updated events from Google
+  for (const googleEvent of googleEvents) {
+    const localBlock = localBlocksByGoogleId.get(googleEvent.id);
+    
+    if (!localBlock) {
+      // New event from Google - add it locally
+      toAdd.push(googleEvent);
+    } else {
+      // Event exists locally - check if it was updated in Google
+      const hasChanged = 
+        localBlock.title !== googleEvent.title ||
+        Math.abs(localBlock.start - googleEvent.start) > 0.01 ||
+        Math.abs(localBlock.duration - googleEvent.duration) > 0.01;
+      
+      if (hasChanged) {
+        toUpdate.push({ localId: localBlock.id, event: googleEvent });
+      }
+    }
+  }
+
+  // Check for events deleted from Google
+  for (const localBlock of localBlocks) {
+    if (localBlock.googleEventId && !googleEventIds.has(localBlock.googleEventId)) {
+      // This event was deleted from Google - remove it locally
+      toRemove.push(String(localBlock.id));
+    }
+  }
+
+  return {
+    toAdd,
+    toUpdate,
+    toRemove,
+    stats: {
+      added: toAdd.length,
+      updated: toUpdate.length,
+      removed: toRemove.length,
+    },
+  };
 }
 
 // Type declarations for Google APIs

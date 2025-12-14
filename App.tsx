@@ -47,6 +47,10 @@ import {
   revokeAccessToken,
   getGoogleUserInfo,
   createGoogleCalendarEvent,
+  deleteGoogleCalendarEvent,
+  updateGoogleCalendarEvent,
+  fetchGoogleCalendarEvents,
+  syncCalendarEvents,
   isSignedIn,
   saveGoogleUser,
   loadSavedGoogleUser
@@ -323,6 +327,20 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isCalendarSynced, setIsCalendarSynced] = useState(false);
 
+  // Notification State
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error' | 'info';
+    message: string;
+  } | null>(null);
+
+  // Auto-hide notification after 4 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
   // Time labels from 7 AM to 3 PM for the demo view
   const timeLabels = [7, 8, 9, 10, 11, 12, 13, 14, 15];
 
@@ -369,8 +387,27 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       }
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = async () => {
       if (resizingBlockId !== null) {
+        // Get the resized block
+        const resizedBlock = schedule.find(b => b.id === resizingBlockId);
+        
+        // Sync duration to Google Calendar if connected
+        if (resizedBlock?.googleEventId && googleAccount && isSignedIn()) {
+          try {
+            await updateGoogleCalendarEvent(
+              resizedBlock.googleEventId,
+              resizedBlock.title,
+              resizedBlock.start,
+              resizedBlock.duration,
+              new Date()
+            );
+            console.log('Updated Google Calendar event duration');
+          } catch (error) {
+            console.error('Failed to update Google Calendar event:', error);
+          }
+        }
+
         setResizingBlockId(null);
         setResizeStartY(null);
         setResizeStartDuration(null);
@@ -430,34 +467,106 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   };
 
   const handleDeleteBlock = async (blockId: number | string) => {
+      // Find the block to get Google event ID
+      const block = schedule.find(b => b.id === blockId);
+      
+      // Delete from Google Calendar if it has a googleEventId
+      if (block?.googleEventId && googleAccount && isSignedIn()) {
+        try {
+          await deleteGoogleCalendarEvent(block.googleEventId);
+          console.log('Deleted event from Google Calendar:', block.googleEventId);
+        } catch (error) {
+          console.error('Failed to delete from Google Calendar:', error);
+          // Continue with local delete even if Google delete fails
+        }
+      }
+
       // Delete from database
       await deleteScheduleBlock(String(blockId));
       setSchedule(schedule.filter(b => b.id !== blockId));
   };
 
-  const handleSync = () => {
+  const handleSync = async () => {
     if (!user) {
-      alert("Please sign in to sync your calendar!");
+      setNotification({ type: 'error', message: 'Please sign in to sync your calendar!' });
+      return;
+    }
+
+    if (!googleAccount) {
+      setNotification({ type: 'info', message: 'Connect Google Calendar in Settings first' });
       return;
     }
     
     setIsSyncing(true);
-    // Simulate API call to Google Calendar
-    setTimeout(() => {
-        setIsSyncing(false);
-        setIsCalendarSynced(true);
-        
-        // 1. Pull changes FROM Google (Simulated)
-        setSchedule(prev => {
-            const existingIds = new Set(prev.map(b => b.id));
-            const newEvents = EXTERNAL_GOOGLE_EVENTS.filter(e => !existingIds.has(e.id));
-            // In a real app, we would also check for updates/deletions from GCal
-            return [...prev, ...newEvents];
+    
+    try {
+      // Prepare local blocks for sync comparison
+      const localBlocksForSync = schedule
+        .filter(b => b.googleEventId) // Only blocks linked to Google
+        .map(b => ({
+          id: b.id,
+          title: b.title,
+          start: b.start,
+          duration: b.duration,
+          googleEventId: b.googleEventId,
+        }));
+
+      // Perform two-way sync
+      const syncResult = await syncCalendarEvents(localBlocksForSync, new Date());
+
+      setSchedule(prev => {
+        let updated = [...prev];
+
+        // Add new events from Google
+        const newBlocks = syncResult.toAdd.map(event => ({
+          id: event.id,
+          title: event.title,
+          tag: 'google',
+          start: event.start,
+          duration: event.duration,
+          color: 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
+          textColor: 'text-blue-950 dark:text-blue-50',
+          isGoogle: true,
+          googleEventId: event.id,
+        }));
+        updated = [...updated, ...newBlocks];
+
+        // Update changed events
+        for (const { localId, event } of syncResult.toUpdate) {
+          updated = updated.map(b => 
+            b.id === localId 
+              ? { ...b, title: event.title, start: event.start, duration: event.duration }
+              : b
+          );
+        }
+
+        // Remove deleted events
+        const toRemoveSet = new Set(syncResult.toRemove);
+        updated = updated.filter(b => !toRemoveSet.has(String(b.id)));
+
+        return updated;
+      });
+
+      // Show sync results
+      const { stats } = syncResult;
+      const total = stats.added + stats.updated + stats.removed;
+      if (total > 0) {
+        setNotification({ 
+          type: 'success', 
+          message: `Synced: ${stats.added} added, ${stats.updated} updated, ${stats.removed} removed` 
         });
+      } else {
+        setNotification({ type: 'success', message: 'Calendar is up to date!' });
+      }
 
-        console.log("Pushing local schedule to Google Calendar...", schedule);
+      setIsCalendarSynced(true);
 
-    }, 1500);
+    } catch (error) {
+      console.error('Sync failed:', error);
+      setNotification({ type: 'error', message: 'Failed to sync with Google Calendar' });
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleTaskDragStart = (e, task, sourceList) => {
@@ -542,8 +651,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               const eventId = await createGoogleCalendarEvent(
                   task.title,
                   hour,
-                  1, // 1 hour duration
-                  new Date()
+                  newBlock.duration, // Use actual block duration
+                  new Date(),
+                  task.tag || 'work' // Pass tag for color coding
               );
               console.log('Created Google Calendar event:', eventId);
               // Update the block with the Google event ID
@@ -552,14 +662,40 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       ? { ...b, googleEventId: eventId }
                       : b
               ));
+              setNotification({ type: 'success', message: `Added "${task.title}" to Google Calendar` });
           } catch (error) {
               console.error('Failed to create Google Calendar event:', error);
+              setNotification({ type: 'error', message: 'Failed to add to Google Calendar' });
           }
       }
   };
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden">
+      {/* Toast Notification */}
+      {notification && (
+        <div 
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-in slide-in-from-top-2 duration-300 ${
+            notification.type === 'success' 
+              ? 'bg-emerald-500 text-white' 
+              : notification.type === 'error'
+              ? 'bg-red-500 text-white'
+              : 'bg-blue-500 text-white'
+          }`}
+        >
+          {notification.type === 'success' && <CalendarCheck size={18} />}
+          {notification.type === 'error' && <X size={18} />}
+          {notification.type === 'info' && <Calendar size={18} />}
+          <span className="text-sm font-medium">{notification.message}</span>
+          <button 
+            onClick={() => setNotification(null)}
+            className="ml-2 opacity-70 hover:opacity-100 transition-opacity"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* App Header */}
       <header className="relative h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 z-20 shrink-0">
         <div className="flex items-center gap-4">
