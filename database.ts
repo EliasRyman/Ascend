@@ -244,6 +244,15 @@ export async function updateScheduleBlock(blockId: string, updates: Partial<Sche
 }
 
 export async function deleteScheduleBlock(blockId: string): Promise<boolean> {
+  // Check if blockId looks like a UUID (contains dashes and is ~36 chars)
+  // Local/demo blocks have simple numeric IDs which shouldn't be sent to database
+  const isUuid = blockId.includes('-') && blockId.length >= 32;
+  
+  if (!isUuid) {
+    console.log('Block ID is not a UUID, skipping database delete:', blockId);
+    return true; // Return true since there's nothing to delete in DB
+  }
+  
   const { error } = await supabase
     .from('schedule_blocks')
     .delete()
