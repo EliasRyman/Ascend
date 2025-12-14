@@ -1404,7 +1404,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         };
         
         setSchedule(prev => [...prev, habitBlock]);
-        setHabits(prev => prev.map(h => h.id === habitId ? { ...h, scheduledStartTime: `${hour.toString().padStart(2, '0')}:00`, scheduledEndTime: `${(hour + 1).toString().padStart(2, '0')}:00` } : h));
+        // Don't update habit's scheduledStartTime - keep it in To-Do list
         setNotification({ type: 'success', message: `Scheduled "${habitName}" at ${formatTime(hour)}` });
         return;
       }
