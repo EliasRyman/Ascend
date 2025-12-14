@@ -1,7 +1,10 @@
 -- Supabase Schema for Ascend Timebox App
 -- Run this in your Supabase SQL Editor: https://supabase.com/dashboard/project/hmnbdkwjgmwchuyhtmqh/sql
 
--- Enable Row Level Security
+-- ============================================
+-- TABLES
+-- ============================================
+
 -- Tasks table
 CREATE TABLE IF NOT EXISTS tasks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -44,12 +47,37 @@ CREATE TABLE IF NOT EXISTS user_settings (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable Row Level Security on all tables
+-- ============================================
+-- ENABLE ROW LEVEL SECURITY
+-- ============================================
+
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE schedule_blocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies for tasks
+-- ============================================
+-- DROP EXISTING POLICIES (if they exist)
+-- ============================================
+
+DROP POLICY IF EXISTS "Users can view their own tasks" ON tasks;
+DROP POLICY IF EXISTS "Users can insert their own tasks" ON tasks;
+DROP POLICY IF EXISTS "Users can update their own tasks" ON tasks;
+DROP POLICY IF EXISTS "Users can delete their own tasks" ON tasks;
+
+DROP POLICY IF EXISTS "Users can view their own schedule blocks" ON schedule_blocks;
+DROP POLICY IF EXISTS "Users can insert their own schedule blocks" ON schedule_blocks;
+DROP POLICY IF EXISTS "Users can update their own schedule blocks" ON schedule_blocks;
+DROP POLICY IF EXISTS "Users can delete their own schedule blocks" ON schedule_blocks;
+
+DROP POLICY IF EXISTS "Users can view their own settings" ON user_settings;
+DROP POLICY IF EXISTS "Users can insert their own settings" ON user_settings;
+DROP POLICY IF EXISTS "Users can update their own settings" ON user_settings;
+
+-- ============================================
+-- CREATE RLS POLICIES
+-- ============================================
+
+-- Tasks policies
 CREATE POLICY "Users can view their own tasks" ON tasks
   FOR SELECT USING (auth.uid() = user_id);
 
@@ -62,7 +90,7 @@ CREATE POLICY "Users can update their own tasks" ON tasks
 CREATE POLICY "Users can delete their own tasks" ON tasks
   FOR DELETE USING (auth.uid() = user_id);
 
--- RLS Policies for schedule_blocks
+-- Schedule blocks policies
 CREATE POLICY "Users can view their own schedule blocks" ON schedule_blocks
   FOR SELECT USING (auth.uid() = user_id);
 
@@ -75,7 +103,7 @@ CREATE POLICY "Users can update their own schedule blocks" ON schedule_blocks
 CREATE POLICY "Users can delete their own schedule blocks" ON schedule_blocks
   FOR DELETE USING (auth.uid() = user_id);
 
--- RLS Policies for user_settings
+-- User settings policies
 CREATE POLICY "Users can view their own settings" ON user_settings
   FOR SELECT USING (auth.uid() = user_id);
 
@@ -85,12 +113,17 @@ CREATE POLICY "Users can insert their own settings" ON user_settings
 CREATE POLICY "Users can update their own settings" ON user_settings
   FOR UPDATE USING (auth.uid() = user_id);
 
+-- ============================================
+-- FUNCTIONS & TRIGGERS
+-- ============================================
+
 -- Function to auto-create user settings on signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO public.user_settings (user_id)
-  VALUES (NEW.id);
+  VALUES (NEW.id)
+  ON CONFLICT (user_id) DO NOTHING;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -111,15 +144,17 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Add update triggers
+DROP TRIGGER IF EXISTS tasks_updated_at ON tasks;
 CREATE TRIGGER tasks_updated_at
   BEFORE UPDATE ON tasks
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS schedule_blocks_updated_at ON schedule_blocks;
 CREATE TRIGGER schedule_blocks_updated_at
   BEFORE UPDATE ON schedule_blocks
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS user_settings_updated_at ON user_settings;
 CREATE TRIGGER user_settings_updated_at
   BEFORE UPDATE ON user_settings
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
