@@ -412,9 +412,8 @@ const WeightLineChart = ({ entries, height = 200 }: WeightLineChartProps) => {
     );
   }
 
-  const padding = { top: 20, right: 20, bottom: 40, left: 50 };
-  const width = 100; // percentage
-  const chartWidth = 400;
+  const padding = { top: 10, right: 10, bottom: 30, left: 40 };
+  const chartWidth = 600; // Wider viewBox for better proportions
   const chartHeight = height;
   const innerWidth = chartWidth - padding.left - padding.right;
   const innerHeight = chartHeight - padding.top - padding.bottom;
@@ -461,7 +460,7 @@ const WeightLineChart = ({ entries, height = 200 }: WeightLineChartProps) => {
   ];
 
   return (
-    <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full" style={{ height }}>
+    <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" className="w-full" style={{ height }}>
       <defs>
         <linearGradient id="weightGradient" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor="#6F00FF" stopOpacity="0.3" />
