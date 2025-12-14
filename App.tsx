@@ -2485,79 +2485,60 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
               {/* Weight Tracking Section */}
               <div>
-                 <div className="flex items-center gap-2 mb-3 text-slate-800 dark:text-slate-100">
-                    <div className="text-[#6F00FF]">
-                        <Activity size={20} />
-                    </div>
-                    <h2 className="font-bold text-lg">Weight Tracker</h2>
+                 <div className="flex items-center justify-between mb-3">
+                    <h2 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2">
+                      <Activity size={20} className="text-[#6F00FF]" />
+                      Weight Tracker
+                    </h2>
+                    {weightEntries.length > 0 && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-slate-500">
+                          <strong className="text-slate-800 dark:text-white">{weightEntries[weightEntries.length - 1]?.weight} kg</strong>
+                        </span>
+                        {weightEntries.length > 1 && (
+                          <span className={`font-medium ${
+                            weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight 
+                              ? 'text-emerald-500' 
+                              : 'text-red-500'
+                          }`}>
+                            {weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight ? '↓' : '↑'}
+                            {Math.abs(weightEntries[weightEntries.length - 1].weight - weightEntries[0].weight).toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                  </div>
                  
                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm p-4">
-                    {/* Weight Input */}
-                    <div className="space-y-2 mb-4">
-                      <div className="flex gap-2">
-                        <input
-                          type="date"
-                          value={weightDate}
-                          onChange={(e) => setWeightDate(e.target.value)}
-                          max={new Date().toISOString().split('T')[0]}
-                          className="px-2 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
-                        />
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={newWeight}
-                          onChange={(e) => setNewWeight(e.target.value)}
-                          placeholder="kg"
-                          className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
-                          onKeyDown={(e) => e.key === 'Enter' && handleAddWeight()}
-                        />
-                        <button
-                          onClick={handleAddWeight}
-                          className="px-3 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors"
-                        >
-                          Log
-                        </button>
-                      </div>
-                    </div>
+                    {/* Line Chart */}
+                    <WeightLineChart entries={weightEntries} height={160} />
                     
-                    {/* Weight Chart */}
-                    {weightEntries.length > 0 ? (
-                      <div className="space-y-2">
-                        {/* Mini chart visualization */}
-                        <div className="h-24 flex items-end gap-1">
-                          {weightEntries.slice(-14).map((entry, idx) => {
-                            const weights = weightEntries.slice(-14).map(e => e.weight);
-                            const min = Math.min(...weights);
-                            const max = Math.max(...weights);
-                            const range = max - min || 1;
-                            const height = ((entry.weight - min) / range) * 80 + 20;
-                            return (
-                              <div 
-                                key={idx}
-                                className="flex-1 bg-gradient-to-t from-[#6F00FF] to-violet-400 rounded-t-sm transition-all hover:opacity-80"
-                                style={{ height: `${height}%` }}
-                                title={`${entry.date}: ${entry.weight} kg`}
-                              />
-                            );
-                          })}
-                        </div>
-                        
-                        {/* Stats */}
-                        <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
-                          <span>Latest: <strong className="text-slate-700 dark:text-slate-300">{weightEntries[weightEntries.length - 1]?.weight} kg</strong></span>
-                          {weightEntries.length > 1 && (
-                            <span>
-                              Change: <strong className={`${weightEntries[weightEntries.length - 1].weight < weightEntries[weightEntries.length - 2].weight ? 'text-emerald-600' : 'text-red-500'}`}>
-                                {(weightEntries[weightEntries.length - 1].weight - weightEntries[weightEntries.length - 2].weight).toFixed(1)} kg
-                              </strong>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-center text-sm text-slate-400 py-4">No weight entries yet. Start tracking!</p>
-                    )}
+                    {/* Today's Weight Input */}
+                    <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={newWeight}
+                        onChange={(e) => setNewWeight(e.target.value)}
+                        placeholder="Today's weight (kg)"
+                        className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setWeightDate(new Date().toISOString().split('T')[0]);
+                            handleAddWeight();
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          setWeightDate(new Date().toISOString().split('T')[0]);
+                          handleAddWeight();
+                        }}
+                        className="px-4 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors"
+                      >
+                        Log
+                      </button>
+                    </div>
                  </div>
               </div>
 
