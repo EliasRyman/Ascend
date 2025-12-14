@@ -39,6 +39,8 @@ interface CalendarEvent {
   isGoogle: boolean;
   isFromAscendCalendar?: boolean;
   colorId?: string;
+  calendarName?: string; // Name of the source calendar
+  calendarColor?: string; // Hex color from Google Calendar
 }
 
 let tokenClient: google.accounts.oauth2.TokenClient | null = null;
@@ -509,25 +511,50 @@ export async function fetchGoogleCalendarEvents(
       }
     }
 
-    // Fetch from primary calendar
+    // Fetch from ALL user calendars (primary + subscribed calendars like IHM, Helgdagar, etc.)
     if (includePrimaryCalendar) {
       try {
-        const primaryResponse = await gapi.client.calendar.events.list({
-          calendarId: 'primary',
-          timeMin: timeMin.toISOString(),
-          timeMax: timeMax.toISOString(),
-          singleEvents: true,
-          orderBy: 'startTime',
+        // First, get list of all calendars
+        const calendarListResponse = await gapi.client.calendar.calendarList.list({
+          minAccessRole: 'reader', // Get all calendars user can at least read
         });
+        
+        const calendars = calendarListResponse.result.items || [];
+        console.log(`Found ${calendars.length} calendars:`, calendars.map(c => c.summary));
+        
+        // Fetch events from each calendar (skip Ascend calendar since we already fetched it)
+        for (const calendar of calendars) {
+          // Skip the Ascend calendar (we already fetched it above)
+          if (calendar.summary === 'Ascend' || calendar.id === ascendCalendarId) {
+            continue;
+          }
+          
+          try {
+            const response = await gapi.client.calendar.events.list({
+              calendarId: calendar.id!,
+              timeMin: timeMin.toISOString(),
+              timeMax: timeMax.toISOString(),
+              singleEvents: true,
+              orderBy: 'startTime',
+            });
 
-        const primaryEvents: GoogleCalendarEvent[] = primaryResponse.result.items || [];
-        console.log(`Fetched ${primaryEvents.length} events from primary calendar`);
-        allEvents.push(...primaryEvents
-          .filter(event => event.start?.dateTime)
-          .map(event => mapGoogleEventToCalendarEvent(event, false))
-        );
+            const events: GoogleCalendarEvent[] = response.result.items || [];
+            console.log(`Fetched ${events.length} events from "${calendar.summary}"`);
+            
+            allEvents.push(...events
+              .filter(event => event.start?.dateTime) // Only timed events, not all-day
+              .map(event => ({
+                ...mapGoogleEventToCalendarEvent(event, false),
+                calendarName: calendar.summary, // Add calendar name for display
+                calendarColor: calendar.backgroundColor, // Add calendar color
+              }))
+            );
+          } catch (error) {
+            console.error(`Error fetching events from "${calendar.summary}":`, error);
+          }
+        }
       } catch (error) {
-        console.error('Error fetching primary calendar events:', error);
+        console.error('Error fetching calendar list:', error);
       }
     }
     

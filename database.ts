@@ -13,13 +13,17 @@ export interface Task {
 export interface ScheduleBlock {
   id: string;
   title: string;
-  tag: string;
+  tag: string | null;
   start: number;
   duration: number;
   color: string;
   textColor: string;
   isGoogle?: boolean;
   googleEventId?: string;
+  completed?: boolean;
+  taskId?: string | number;
+  calendarColor?: string; // Hex color from Google Calendar
+  calendarName?: string; // Name of the source calendar
 }
 
 export interface UserSettings {

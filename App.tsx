@@ -470,18 +470,26 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
         
         // Merge database blocks with Google events
-        const googleBlocks: ScheduleBlock[] = googleEvents.map(event => ({
-          id: event.id,
-          title: event.title,
-          tag: null,
-          start: event.start,
-          duration: event.duration,
-          color: 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
-          textColor: 'text-blue-950 dark:text-blue-50',
-          isGoogle: true,
-          googleEventId: event.id,
-          completed: false
-        }));
+        const googleBlocks: ScheduleBlock[] = googleEvents.map(event => {
+          // Use calendar color from Google or fallback to blue
+          const calColor = (event as any).calendarColor;
+          const calName = (event as any).calendarName;
+          
+          return {
+            id: event.id,
+            title: event.title,
+            tag: calName || null, // Use calendar name as tag
+            start: event.start,
+            duration: event.duration,
+            color: calColor ? '' : 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
+            textColor: 'text-white',
+            isGoogle: true,
+            googleEventId: event.id,
+            completed: false,
+            calendarColor: calColor, // Store the hex color
+            calendarName: calName,
+          };
+        });
         
         // Combine: DB blocks + Google events (avoiding duplicates by googleEventId)
         const dbBlockIds = new Set(blocksData.map(b => b.googleEventId).filter(Boolean));
@@ -1396,12 +1404,23 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 const topOffset = block.start * 96; 
                 const height = block.duration * 96;
                 const endTime = block.start + block.duration;
+                
+                // Use Google Calendar color if available, otherwise use block.color
+                const hasCalendarColor = block.calendarColor && block.isGoogle;
+                const blockStyle = hasCalendarColor 
+                  ? { 
+                      top: `${topOffset}px`, 
+                      height: `${height}px`,
+                      backgroundColor: block.calendarColor,
+                      borderColor: block.calendarColor,
+                    }
+                  : { top: `${topOffset}px`, height: `${height}px` };
 
                 return (
                   <div 
                     key={block.id}
-                    style={{ top: `${topOffset}px`, height: `${height}px` }}
-                    className={`absolute left-16 right-4 rounded-lg p-3 border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 text-slate-500 dark:text-slate-400' : `${block.color} ${block.textColor}`} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
+                    style={blockStyle}
+                    className={`absolute left-16 right-4 rounded-lg p-3 border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 text-slate-500 dark:text-slate-400' : hasCalendarColor ? 'text-white' : `${block.color} ${block.textColor}`} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
                     onMouseDown={(e) => {
                       // Don't start drag if clicking on buttons or resize handle
                       if ((e.target as HTMLElement).closest('button') || 
@@ -1440,7 +1459,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       <h3 className={`font-bold text-sm pointer-events-none ${block.completed ? 'line-through' : ''}`}>{block.title}</h3>
                     </div>
                     <div className="mt-auto flex items-center gap-2 pointer-events-none">
-                        {block.tag && <span className="text-[10px] uppercase font-bold opacity-60 bg-black/5 dark:bg-white/10 px-1.5 rounded">{block.tag}</span>}
+                        {block.calendarName && <span className="text-[10px] font-bold opacity-80 bg-white/20 px-1.5 rounded">{block.calendarName}</span>}
+                        {block.tag && !block.calendarName && <span className="text-[10px] uppercase font-bold opacity-60 bg-black/5 dark:bg-white/10 px-1.5 rounded">{block.tag}</span>}
                     </div>
 
                     {/* Resize Handle */}
