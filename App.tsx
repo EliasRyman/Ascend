@@ -230,15 +230,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         
         // Check for saved Google user (persisted connection)
         const savedUser = loadSavedGoogleUser();
-        if (savedUser) {
-          if (isSignedIn()) {
-            console.log('Restored Google Calendar connection');
-            setGoogleAccount(savedUser);
-          } else {
-            // Token expired or invalid, clear saved user
-            console.log('Saved Google user found but token is invalid, clearing...');
-            revokeAccessToken(); // This clears localStorage
-          }
+        if (savedUser && isSignedIn()) {
+          console.log('Restored Google Calendar connection - will verify on first sync');
+          setGoogleAccount(savedUser);
+        } else if (savedUser) {
+          // Token expired or invalid, clear saved user
+          console.log('Saved Google user found but token is invalid, clearing...');
+          revokeAccessToken(); // This clears localStorage
         }
         
         initGoogleIdentity(async (token) => {
@@ -620,9 +618,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
       setIsCalendarSynced(true);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sync failed:', error);
-      setNotification({ type: 'error', message: 'Failed to sync with Google Calendar' });
+      if (error?.message === 'TOKEN_INVALID' || error?.message?.includes('token')) {
+        setNotification({ type: 'error', message: 'Google session expired. Please reconnect in Settings.' });
+        setGoogleAccount(null);
+      } else {
+        setNotification({ type: 'error', message: 'Failed to sync with Google Calendar' });
+      }
     } finally {
       setIsSyncing(false);
     }

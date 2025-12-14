@@ -345,8 +345,16 @@ async function findOrCreateAscendCalendar(): Promise<string> {
     ascendCalendarId = newCalendarId;
     saveCalendarId(newCalendarId);
     return newCalendarId;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error finding/creating Ascend calendar:', error);
+    // Check if it's an auth error (401/403)
+    if (error?.status === 401 || error?.status === 403 || 
+        error?.result?.error?.code === 401 || error?.result?.error?.code === 403) {
+      console.error('Token rejected by Google, clearing saved data...');
+      clearSavedData();
+      accessToken = null;
+      throw new Error('TOKEN_INVALID');
+    }
     throw error;
   }
 }
@@ -472,8 +480,17 @@ export async function fetchGoogleCalendarEvents(
           .filter(event => event.start?.dateTime)
           .map(event => mapGoogleEventToCalendarEvent(event, true))
         );
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching Ascend calendar events:', error);
+        // Check for auth errors
+        if (error?.status === 401 || error?.status === 403 || 
+            error?.result?.error?.code === 401 || error?.result?.error?.code === 403 ||
+            error?.message === 'TOKEN_INVALID') {
+          console.error('Token invalid, clearing saved data...');
+          clearSavedData();
+          accessToken = null;
+          throw new Error('TOKEN_INVALID');
+        }
       }
     }
 
