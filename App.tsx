@@ -343,6 +343,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [resizingBlockId, setResizingBlockId] = useState<number | string | null>(null);
   const [resizeStartY, setResizeStartY] = useState<number | null>(null);
   const [resizeStartDuration, setResizeStartDuration] = useState<number | null>(null);
+  
+  // Drag/Move Block State
+  const [draggingBlockId, setDraggingBlockId] = useState<number | string | null>(null);
+  const [dragStartY, setDragStartY] = useState<number | null>(null);
+  const [dragStartTime, setDragStartTime] = useState<number | null>(null);
 
   // Sync State
   const [isSyncing, setIsSyncing] = useState(false);
@@ -428,6 +433,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
+      // Handle resize
       if (resizingBlockId !== null && resizeStartY !== null && resizeStartDuration !== null) {
         const deltaY = e.clientY - resizeStartY;
         const deltaHours = deltaY / 96; // 96px per hour
@@ -443,14 +449,34 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           block.id === resizingBlockId ? { ...block, duration: newDuration } : block
         ));
       }
+      
+      // Handle drag/move
+      if (draggingBlockId !== null && dragStartY !== null && dragStartTime !== null) {
+        const deltaY = e.clientY - dragStartY;
+        const deltaHours = deltaY / 96; // 96px per hour
+        let newStart = dragStartTime + deltaHours;
+        
+        // Snap to 15 mins (0.25 hours)
+        newStart = Math.round(newStart * 4) / 4;
+        
+        // Keep within day bounds (0-24)
+        const block = schedule.find(b => b.id === draggingBlockId);
+        if (block) {
+          if (newStart < 0) newStart = 0;
+          if (newStart + block.duration > 24) newStart = 24 - block.duration;
+        }
+
+        setSchedule(prev => prev.map(block => 
+          block.id === draggingBlockId ? { ...block, start: newStart } : block
+        ));
+      }
     };
 
     const handleMouseUp = async () => {
+      // Handle resize end
       if (resizingBlockId !== null) {
-        // Get the resized block
         const resizedBlock = schedule.find(b => b.id === resizingBlockId);
         
-        // Sync duration to Google Calendar if connected
         if (resizedBlock?.googleEventId && googleAccount && isSignedIn()) {
           try {
             await updateGoogleCalendarEvent(
@@ -470,9 +496,36 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         setResizeStartY(null);
         setResizeStartDuration(null);
       }
+      
+      // Handle drag/move end
+      if (draggingBlockId !== null) {
+        const movedBlock = schedule.find(b => b.id === draggingBlockId);
+        
+        // Sync new time to Google Calendar if connected
+        if (movedBlock?.googleEventId && googleAccount && isSignedIn()) {
+          try {
+            await updateGoogleCalendarEvent(
+              movedBlock.googleEventId,
+              movedBlock.title,
+              movedBlock.start,
+              movedBlock.duration,
+              new Date()
+            );
+            console.log('Updated Google Calendar event time');
+            setNotification({ type: 'success', message: 'Event time updated in Google Calendar' });
+          } catch (error) {
+            console.error('Failed to update Google Calendar event:', error);
+            setNotification({ type: 'error', message: 'Failed to update Google Calendar' });
+          }
+        }
+
+        setDraggingBlockId(null);
+        setDragStartY(null);
+        setDragStartTime(null);
+      }
     };
 
-    if (resizingBlockId !== null) {
+    if (resizingBlockId !== null || draggingBlockId !== null) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     }
@@ -481,7 +534,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [resizingBlockId, resizeStartY, resizeStartDuration, schedule, googleAccount]);
+  }, [resizingBlockId, resizeStartY, resizeStartDuration, draggingBlockId, dragStartY, dragStartTime, schedule, googleAccount]);
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newTaskInput.trim()) {
@@ -1147,7 +1200,18 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   <div 
                     key={block.id}
                     style={{ top: `${topOffset}px`, height: `${height}px` }}
-                    className={`absolute left-16 right-4 rounded-lg p-3 border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group ${block.color} ${block.textColor} ${resizingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
+                    className={`absolute left-16 right-4 rounded-lg p-3 border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group ${block.color} ${block.textColor} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
+                    onMouseDown={(e) => {
+                      // Don't start drag if clicking on buttons or resize handle
+                      if ((e.target as HTMLElement).closest('button') || 
+                          (e.target as HTMLElement).closest('.cursor-ns-resize')) {
+                        return;
+                      }
+                      e.preventDefault();
+                      setDraggingBlockId(block.id);
+                      setDragStartY(e.clientY);
+                      setDragStartTime(block.start);
+                    }}
                   >
                     <div className="flex items-start justify-between pointer-events-none">
                         <span className="text-xs font-medium opacity-80 flex items-center gap-1">
