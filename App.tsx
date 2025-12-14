@@ -125,41 +125,31 @@ interface Task {
 interface Habit {
   id: string;
   name: string;
-  emoji: string;
-  category: 'health' | 'productivity' | 'mindfulness' | 'learning' | 'fitness' | 'other';
+  tag: string | null; // Tag name, matches userTags
+  tagColor: string | null; // Tag color from Google Calendar colors
   frequency: 'daily' | 'weekly';
   scheduledDays: number[]; // 0-6 for Sunday-Saturday, empty = daily
-  scheduledTime: string | null; // "HH:MM" format, null = no specific time
-  color: string;
+  scheduledStartTime: string | null; // "HH:MM" format
+  scheduledEndTime: string | null; // "HH:MM" format
   currentStreak: number;
   longestStreak: number;
   completedDates: string[]; // ISO date strings "YYYY-MM-DD"
   createdAt: string;
 }
 
-interface HabitCompletion {
-  habitId: string;
-  date: string; // ISO date "YYYY-MM-DD"
-  completedAt: string; // ISO timestamp
-}
-
-// Habit category configurations
-const HABIT_CATEGORIES = {
-  health: { label: 'Health', emoji: '💊', color: 'bg-emerald-500' },
-  productivity: { label: 'Productivity', emoji: '⚡', color: 'bg-amber-500' },
-  mindfulness: { label: 'Mindfulness', emoji: '🧘', color: 'bg-purple-500' },
-  learning: { label: 'Learning', emoji: '📚', color: 'bg-blue-500' },
-  fitness: { label: 'Fitness', emoji: '💪', color: 'bg-rose-500' },
-  other: { label: 'Other', emoji: '✨', color: 'bg-slate-500' },
-};
-
-const HABIT_EMOJIS = ['💪', '📚', '🧘', '💊', '🏃', '💧', '🥗', '😴', '✍️', '🎯', '🧠', '🌅', '🎵', '💻', '🌿', '❤️'];
-
-const HABIT_COLORS = [
-  'bg-rose-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500',
-  'bg-lime-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500',
-  'bg-sky-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500',
-  'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-slate-500'
+// Google Calendar color palette (same as tags)
+const GOOGLE_CALENDAR_COLORS = [
+  { id: '1', name: 'Lavender', hex: '#7986cb', bg: 'bg-[#7986cb]' },
+  { id: '2', name: 'Sage', hex: '#33b679', bg: 'bg-[#33b679]' },
+  { id: '3', name: 'Grape', hex: '#8e24aa', bg: 'bg-[#8e24aa]' },
+  { id: '4', name: 'Flamingo', hex: '#e67c73', bg: 'bg-[#e67c73]' },
+  { id: '5', name: 'Banana', hex: '#f6bf26', bg: 'bg-[#f6bf26]' },
+  { id: '6', name: 'Tangerine', hex: '#f4511e', bg: 'bg-[#f4511e]' },
+  { id: '7', name: 'Peacock', hex: '#039be5', bg: 'bg-[#039be5]' },
+  { id: '8', name: 'Graphite', hex: '#616161', bg: 'bg-[#616161]' },
+  { id: '9', name: 'Blueberry', hex: '#3f51b5', bg: 'bg-[#3f51b5]' },
+  { id: '10', name: 'Basil', hex: '#0b8043', bg: 'bg-[#0b8043]' },
+  { id: '11', name: 'Tomato', hex: '#d50000', bg: 'bg-[#d50000]' },
 ];
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -742,24 +732,30 @@ const TagModal = ({ isOpen, onClose, onSave, existingTags }: TagModalProps) => {
 // --- Habit Form Component ---
 interface HabitFormProps {
   initialHabit?: Habit | null;
+  userTags: { name: string; color: string }[];
   onSave: (data: Omit<Habit, 'id' | 'currentStreak' | 'longestStreak' | 'completedDates' | 'createdAt'>) => void;
   onCancel: () => void;
+  onCreateTag: () => void;
 }
 
-const HabitForm = ({ initialHabit, onSave, onCancel }: HabitFormProps) => {
+const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: HabitFormProps) => {
   const [name, setName] = useState(initialHabit?.name || '');
-  const [emoji, setEmoji] = useState(initialHabit?.emoji || '💪');
-  const [category, setCategory] = useState<Habit['category']>(initialHabit?.category || 'health');
+  const [tag, setTag] = useState<string | null>(initialHabit?.tag || null);
+  const [tagColor, setTagColor] = useState<string | null>(initialHabit?.tagColor || null);
   const [frequency, setFrequency] = useState<'daily' | 'weekly'>(initialHabit?.frequency || 'daily');
   const [scheduledDays, setScheduledDays] = useState<number[]>(initialHabit?.scheduledDays || []);
-  const [scheduledTime, setScheduledTime] = useState(initialHabit?.scheduledTime || '');
-  const [color, setColor] = useState(initialHabit?.color || 'bg-emerald-500');
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [startTime, setStartTime] = useState(initialHabit?.scheduledStartTime || '');
+  const [endTime, setEndTime] = useState(initialHabit?.scheduledEndTime || '');
 
   const toggleDay = (day: number) => {
     setScheduledDays(prev => 
       prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort()
     );
+  };
+
+  const selectTag = (tagName: string, color: string) => {
+    setTag(tagName);
+    setTagColor(color);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -768,79 +764,71 @@ const HabitForm = ({ initialHabit, onSave, onCancel }: HabitFormProps) => {
 
     onSave({
       name: name.trim(),
-      emoji,
-      category,
+      tag,
+      tagColor,
       frequency,
       scheduledDays: frequency === 'daily' ? [] : scheduledDays,
-      scheduledTime: scheduledTime || null,
-      color,
+      scheduledStartTime: startTime || null,
+      scheduledEndTime: endTime || null,
     });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Name & Emoji */}
+      {/* Habit Name */}
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Habit Name
         </label>
-        <div className="flex gap-2">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              className={`w-12 h-12 rounded-xl ${color} text-2xl flex items-center justify-center hover:opacity-90 transition-all`}
-            >
-              {emoji}
-            </button>
-            {showEmojiPicker && (
-              <div className="absolute top-full mt-2 left-0 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-3 z-10 grid grid-cols-8 gap-1">
-                {HABIT_EMOJIS.map(e => (
-                  <button
-                    key={e}
-                    type="button"
-                    onClick={() => { setEmoji(e); setShowEmojiPicker(false); }}
-                    className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-lg flex items-center justify-center"
-                  >
-                    {e}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g., Morning workout"
-            className="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] focus:border-transparent"
-            autoFocus
-          />
-        </div>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g., Morning workout"
+          className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] focus:border-transparent"
+          autoFocus
+        />
       </div>
 
-      {/* Category */}
+      {/* Tag Selection */}
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Category
+          Tag <span className="text-slate-400 font-normal">(optional)</span>
         </label>
-        <div className="grid grid-cols-3 gap-2">
-          {Object.entries(HABIT_CATEGORIES).map(([key, { label, emoji: catEmoji }]) => (
+        <div className="flex flex-wrap gap-2">
+          {userTags.map(t => (
             <button
-              key={key}
+              key={t.name}
               type="button"
-              onClick={() => setCategory(key as Habit['category'])}
-              className={`px-3 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-all ${
-                category === key
-                  ? 'bg-[#6F00FF] text-white'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              onClick={() => selectTag(t.name, t.color)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                tag === t.name
+                  ? 'ring-2 ring-[#6F00FF] ring-offset-2 dark:ring-offset-slate-900'
+                  : 'hover:opacity-80'
               }`}
+              style={{ backgroundColor: t.color, color: 'white' }}
             >
-              <span>{catEmoji}</span>
-              {label}
+              {t.name}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={onCreateTag}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
+          >
+            <Plus size={14} />
+            New Tag
+          </button>
         </div>
+        {tag && (
+          <button
+            type="button"
+            onClick={() => { setTag(null); setTagColor(null); }}
+            className="mt-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+          >
+            ✕ Remove tag
+          </button>
+        )}
       </div>
 
       {/* Frequency */}
@@ -901,53 +889,47 @@ const HabitForm = ({ initialHabit, onSave, onCancel }: HabitFormProps) => {
         </div>
       )}
 
-      {/* Scheduled Time */}
+      {/* Scheduled Time (Start - End) */}
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Scheduled Time <span className="text-slate-400 font-normal">(optional - syncs to Timebox)</span>
+          Scheduled Time <span className="text-slate-400 font-normal">(syncs to Timebox)</span>
         </label>
-        <div className="flex gap-2">
-          <input
-            type="time"
-            value={scheduledTime}
-            onChange={(e) => setScheduledTime(e.target.value)}
-            className="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] focus:border-transparent"
-          />
-          {scheduledTime && (
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Start</label>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] focus:border-transparent"
+            />
+          </div>
+          <span className="text-slate-400 mt-5">–</span>
+          <div className="flex-1">
+            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">End</label>
+            <input
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] focus:border-transparent"
+            />
+          </div>
+          {(startTime || endTime) && (
             <button
               type="button"
-              onClick={() => setScheduledTime('')}
-              className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              onClick={() => { setStartTime(''); setEndTime(''); }}
+              className="mt-5 p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
               <X size={18} />
             </button>
           )}
         </div>
-        {scheduledTime && (
-          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+        {startTime && endTime && (
+          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-1">
             <Clock size={12} />
             This habit will appear in your Timebox timeline
           </p>
         )}
-      </div>
-
-      {/* Color */}
-      <div>
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Color
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {HABIT_COLORS.map(c => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setColor(c)}
-              className={`w-8 h-8 rounded-lg ${c} transition-all ${
-                color === c ? 'ring-2 ring-offset-2 ring-[#6F00FF] dark:ring-offset-slate-900' : 'hover:scale-110'
-              }`}
-            />
-          ))}
-        </div>
       </div>
 
       {/* Actions */}
@@ -1410,23 +1392,36 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       // Get habits scheduled for this date with specific times
       const dateString = date.toISOString().split('T')[0];
       const habitBlocks: ScheduleBlock[] = habits
-        .filter(h => h.scheduledTime && isHabitScheduledForDay(h, date))
+        .filter(h => h.scheduledStartTime && isHabitScheduledForDay(h, date))
         .map(habit => {
-          const [hours, minutes] = habit.scheduledTime!.split(':').map(Number);
-          const startTime = hours + minutes / 60;
+          const [startHours, startMinutes] = habit.scheduledStartTime!.split(':').map(Number);
+          const startTime = startHours + startMinutes / 60;
+          
+          // Calculate duration from start and end time
+          let duration = 0.5; // Default 30 min
+          if (habit.scheduledEndTime) {
+            const [endHours, endMinutes] = habit.scheduledEndTime.split(':').map(Number);
+            const endTime = endHours + endMinutes / 60;
+            duration = Math.max(0.25, endTime - startTime); // Minimum 15 min
+          }
+          
           const isCompleted = habit.completedDates.includes(dateString);
+          
+          // Use tag color or default purple
+          const bgColor = habit.tagColor ? `bg-[${habit.tagColor}]` : 'bg-[#6F00FF]';
           
           return {
             id: `habit-${habit.id}-${dateString}`,
-            title: `${habit.emoji} ${habit.name}`,
-            tag: HABIT_CATEGORIES[habit.category].label,
+            title: habit.name,
+            tag: habit.tag,
             start: startTime,
-            duration: 0.5, // Default 30 min for habits
-            color: habit.color,
+            duration,
+            color: bgColor,
             textColor: 'text-white',
             isGoogle: false,
             completed: isCompleted,
-            habitId: habit.id, // Link to habit
+            habitId: habit.id,
+            calendarColor: habit.tagColor, // Use tag color as calendar color for consistent styling
           };
         });
       
@@ -2679,10 +2674,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                               className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shrink-0 ${
                                 isCompleted
                                   ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                                  : `${habit.color} text-white opacity-60 hover:opacity-100`
+                                  : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600'
                               }`}
+                              style={!isCompleted && habit.tagColor ? { backgroundColor: habit.tagColor } : undefined}
                             >
-                              {isCompleted ? <Check size={24} strokeWidth={3} /> : <span className="text-2xl">{habit.emoji}</span>}
+                              {isCompleted ? <Check size={24} strokeWidth={3} className="text-white" /> : <Target size={20} className="text-white" />}
                             </button>
                             
                             {/* Habit Info */}
@@ -2691,18 +2687,22 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                 <h3 className={`font-semibold text-slate-800 dark:text-slate-100 ${isCompleted ? 'line-through opacity-60' : ''}`}>
                                   {habit.name}
                                 </h3>
-                                {habit.scheduledTime && (
+                                {habit.scheduledStartTime && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center gap-1">
                                     <Clock size={10} />
-                                    {habit.scheduledTime}
+                                    {habit.scheduledStartTime}{habit.scheduledEndTime ? ` - ${habit.scheduledEndTime}` : ''}
                                   </span>
                                 )}
                               </div>
                               <div className="flex items-center gap-3 mt-1">
-                                <span className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                                  <span className={`inline-block w-2 h-2 rounded-full ${habit.color}`}></span>
-                                  {HABIT_CATEGORIES[habit.category].label}
-                                </span>
+                                {habit.tag && (
+                                  <span 
+                                    className="text-xs px-2 py-0.5 rounded-full text-white font-medium"
+                                    style={{ backgroundColor: habit.tagColor || '#6F00FF' }}
+                                  >
+                                    {habit.tag}
+                                  </span>
+                                )}
                                 {habit.currentStreak > 0 && (
                                   <span className="text-xs font-medium text-orange-500 flex items-center gap-1">
                                     <Flame size={12} />
@@ -2773,8 +2773,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 opacity-70"
                         >
                           <div className="flex items-center gap-4">
-                            <div className={`w-12 h-12 rounded-xl ${habit.color} flex items-center justify-center text-2xl`}>
-                              {habit.emoji}
+                            <div 
+                              className="w-12 h-12 rounded-xl flex items-center justify-center bg-slate-300 dark:bg-slate-600"
+                              style={habit.tagColor ? { backgroundColor: habit.tagColor } : undefined}
+                            >
+                              <Target size={20} className="text-white" />
                             </div>
                             
                             <div className="flex-1 min-w-0">
@@ -2783,6 +2786,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                 <span className="text-xs text-slate-400 dark:text-slate-500">
                                   {habit.frequency === 'daily' ? 'Daily' : habit.scheduledDays.map(d => WEEKDAYS[d]).join(', ')}
                                 </span>
+                                {habit.tag && (
+                                  <span 
+                                    className="text-xs px-2 py-0.5 rounded-full text-white font-medium"
+                                    style={{ backgroundColor: habit.tagColor || '#6F00FF' }}
+                                  >
+                                    {habit.tag}
+                                  </span>
+                                )}
                                 {habit.currentStreak > 0 && (
                                   <span className="text-xs font-medium text-orange-500 flex items-center gap-1">
                                     <Flame size={12} />
@@ -2872,6 +2883,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   
                   <HabitForm
                     initialHabit={editingHabit}
+                    userTags={userTags}
                     onSave={(data) => {
                       if (editingHabit) {
                         updateHabit(editingHabit.id, data);
@@ -2880,6 +2892,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       }
                     }}
                     onCancel={() => { setIsAddHabitOpen(false); setEditingHabit(null); }}
+                    onCreateTag={() => {
+                      setTagModalTaskId(null); // No task, just creating for habits
+                      setIsTagModalOpen(true);
+                    }}
                   />
                 </div>
               </div>
