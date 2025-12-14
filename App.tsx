@@ -262,7 +262,7 @@ const TaskItem = ({
       )}
       
       {/* Options Menu */}
-      <div className="relative" ref={menuRef}>
+      <div className="relative z-40" ref={menuRef}>
         <button 
           onClick={(e) => {
             e.stopPropagation();
@@ -274,7 +274,7 @@ const TaskItem = ({
         </button>
         
         {isMenuOpen && (
-          <div className="absolute right-0 top-8 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 py-1 text-sm">
+          <div className="absolute right-0 top-8 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl z-[100] py-1 text-sm">
             {/* Mark as Complete */}
             <button
               onClick={() => {
@@ -330,7 +330,7 @@ const TaskItem = ({
               </button>
               
               {isTagSubmenuOpen && userTags.length > 0 && (
-                <div className="absolute left-full top-0 ml-1 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 py-1">
+                <div className="absolute left-full top-0 ml-1 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl z-[110] py-1">
                   {userTags.map((tag, idx) => (
                     <button
                       key={idx}
@@ -352,7 +352,7 @@ const TaskItem = ({
               )}
               
               {isTagSubmenuOpen && userTags.length === 0 && (
-                <div className="absolute left-full top-0 ml-1 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 py-2 px-3 text-xs text-slate-400">
+                <div className="absolute left-full top-0 ml-1 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl z-[110] py-2 px-3 text-xs text-slate-400">
                   No tags yet. Create one first!
                 </div>
               )}
