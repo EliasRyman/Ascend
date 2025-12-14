@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { 
   Check, 
   Menu, 
@@ -1326,6 +1327,7 @@ const App = () => {
           onBack={() => setView('landing')}
         />
       )}
+      <SpeedInsights />
     </ThemeContext.Provider>
   );
 };
