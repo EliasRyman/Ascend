@@ -335,6 +335,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [draggedItem, setDraggedItem] = useState(null);
   const [dragOverList, setDragOverList] = useState(null);
   const [dragOverHour, setDragOverHour] = useState(null);
+  
+  // Timeline scroll ref
+  const timelineRef = React.useRef<HTMLDivElement>(null);
 
   // Resize State
   const [resizingBlockId, setResizingBlockId] = useState<number | string | null>(null);
@@ -373,8 +376,31 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     saveSettings();
   }, [settings, user, isDataLoaded]);
 
-  // Time labels from 7 AM to 3 PM for the demo view
-  const timeLabels = [7, 8, 9, 10, 11, 12, 13, 14, 15];
+  // Time labels for full 24-hour day (00:00 - 23:00)
+  const timeLabels = Array.from({ length: 24 }, (_, i) => i);
+  
+  // Current time state - updates every minute
+  const [currentTime, setCurrentTime] = useState(new Date());
+  
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+    
+    return () => clearInterval(timer);
+  }, []);
+  
+  // Calculate current time as decimal (e.g., 13:30 = 13.5)
+  const currentTimeDecimal = currentTime.getHours() + currentTime.getMinutes() / 60;
+  
+  // Scroll to current time on mount
+  useEffect(() => {
+    if (timelineRef.current) {
+      // Scroll to current time minus 2 hours to show some context above
+      const scrollPosition = Math.max(0, (currentTimeDecimal - 2) * 96);
+      timelineRef.current.scrollTop = scrollPosition;
+    }
+  }, [isDataLoaded]); // Only run once when data is loaded
 
   // --- Handlers ---
 
@@ -1059,18 +1085,23 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
         {/* Middle Column: Calendar/Timeline */}
         <div className="md:col-span-6 bg-white dark:bg-slate-900 flex flex-col relative overflow-hidden">
-          <div className="flex-1 overflow-y-auto relative custom-scrollbar">
+          <div ref={timelineRef} className="flex-1 overflow-y-auto relative custom-scrollbar scroll-smooth">
             
-            {/* Calendar Grid */}
-            <div className="relative min-h-[800px] py-6">
+            {/* Calendar Grid - 24 hours * 96px = 2304px */}
+            <div className="relative py-6" style={{ minHeight: `${24 * 96 + 48}px` }}>
               
-              {/* Current Time Indicator (Static for demo) */}
-              <div className="absolute left-0 right-0 top-[38%] z-20 flex items-center pointer-events-none">
+              {/* Current Time Indicator (Dynamic) */}
+              <div 
+                className="absolute left-0 right-0 z-20 flex items-center pointer-events-none transition-all duration-1000"
+                style={{ top: `${currentTimeDecimal * 96 + 24}px` }}
+              >
                 <div className="w-14 text-right pr-2">
-                  <span className="text-[10px] font-bold text-emerald-500 bg-white dark:bg-slate-900 px-1">1:00 PM</span>
+                  <span className="text-[10px] font-bold text-emerald-500 bg-white dark:bg-slate-900 px-1">
+                    {formatTime(currentTimeDecimal)}
+                  </span>
                 </div>
-                <div className="h-px bg-emerald-500 flex-1 relative">
-                  <div className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-emerald-500"></div>
+                <div className="h-0.5 bg-emerald-500 flex-1 relative shadow-sm">
+                  <div className="absolute -left-1.5 -top-1.5 w-3 h-3 rounded-full bg-emerald-500 shadow-md"></div>
                 </div>
               </div>
 
@@ -1105,8 +1136,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
               {/* Render Time Blocks */}
               {schedule.map((block) => {
-                // Calculate position based on 7 AM start, each hour is 96px (h-24)
-                const topOffset = (block.start - 7) * 96; 
+                // Calculate position based on midnight (0:00), each hour is 96px (h-24)
+                const topOffset = block.start * 96; 
                 const height = block.duration * 96;
                 const endTime = block.start + block.duration;
 
