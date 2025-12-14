@@ -258,6 +258,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     initGoogle();
   }, []);
 
+  // Auto-sync when Google account is connected
+  useEffect(() => {
+    if (googleAccount && isSignedIn() && user && isDataLoaded) {
+      console.log('Auto-syncing Google Calendar...');
+      handleSync();
+    }
+  }, [googleAccount, user, isDataLoaded]);
+
   const handleConnectGoogle = () => {
     setIsGoogleConnecting(true);
     requestAccessToken();
@@ -542,27 +550,46 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           googleEventId: b.googleEventId,
         }));
 
+      // Fetch events from BOTH Ascend calendar AND primary Google Calendar
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+      
+      // Get all Google Calendar events (both primary and Ascend)
+      const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
+      
       // Perform two-way sync
       const syncResult = await syncCalendarEvents(localBlocksForSync, new Date());
 
       setSchedule(prev => {
         let updated = [...prev];
+        
+        // Get existing Google event IDs to avoid duplicates
+        const existingGoogleIds = new Set(
+          prev.filter(b => b.googleEventId).map(b => b.googleEventId)
+        );
 
-        // Add new events from Google
-        const newBlocks = syncResult.toAdd.map(event => ({
-          id: event.id,
-          title: event.title,
-          tag: 'google',
-          start: event.start,
-          duration: event.duration,
-          color: 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
-          textColor: 'text-blue-950 dark:text-blue-50',
-          isGoogle: true,
-          googleEventId: event.id,
-        }));
-        updated = [...updated, ...newBlocks];
+        // Add ALL Google Calendar events (from both primary and Ascend calendars)
+        const allNewBlocks = googleEvents
+          .filter(event => !existingGoogleIds.has(event.id))
+          .map(event => ({
+            id: event.id,
+            title: event.title,
+            tag: 'google',
+            start: event.start,
+            duration: event.duration,
+            color: event.isFromAscendCalendar 
+              ? 'bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500'
+              : 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
+            textColor: event.isFromAscendCalendar
+              ? 'text-indigo-950 dark:text-indigo-50'
+              : 'text-blue-950 dark:text-blue-50',
+            isGoogle: true,
+            googleEventId: event.id,
+          }));
+        updated = [...updated, ...allNewBlocks];
 
-        // Update changed events
+        // Update changed events from syncResult
         for (const { localId, event } of syncResult.toUpdate) {
           updated = updated.map(b => 
             b.id === localId 
