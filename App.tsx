@@ -47,7 +47,9 @@ import {
   revokeAccessToken,
   getGoogleUserInfo,
   createGoogleCalendarEvent,
-  isSignedIn
+  isSignedIn,
+  saveGoogleUser,
+  loadSavedGoogleUser
 } from './googleCalendar';
 import {
   signIn,
@@ -219,11 +221,20 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     const initGoogle = async () => {
       try {
         await initGoogleApi();
+        
+        // Check for saved Google user (persisted connection)
+        const savedUser = loadSavedGoogleUser();
+        if (savedUser && isSignedIn()) {
+          console.log('Restored Google Calendar connection');
+          setGoogleAccount(savedUser);
+        }
+        
         initGoogleIdentity(async (token) => {
           // Token received, get user info
           const userInfo = await getGoogleUserInfo();
           if (userInfo) {
             setGoogleAccount(userInfo);
+            saveGoogleUser(userInfo);
           }
           setIsGoogleConnecting(false);
         });

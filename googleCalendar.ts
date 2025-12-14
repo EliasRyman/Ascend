@@ -29,8 +29,85 @@ let gisInited = false;
 let accessToken: string | null = null;
 let ascendCalendarId: string | null = null;
 
+// LocalStorage keys
+const STORAGE_KEY_TOKEN = 'ascend_google_token';
+const STORAGE_KEY_CALENDAR_ID = 'ascend_calendar_id';
+const STORAGE_KEY_USER = 'ascend_google_user';
+
+// Load saved token from localStorage
+function loadSavedToken(): void {
+  try {
+    const savedToken = localStorage.getItem(STORAGE_KEY_TOKEN);
+    const savedCalendarId = localStorage.getItem(STORAGE_KEY_CALENDAR_ID);
+    if (savedToken) {
+      accessToken = savedToken;
+      console.log('Loaded saved Google token');
+    }
+    if (savedCalendarId) {
+      ascendCalendarId = savedCalendarId;
+      console.log('Loaded saved Ascend calendar ID');
+    }
+  } catch (error) {
+    console.error('Error loading saved token:', error);
+  }
+}
+
+// Save token to localStorage
+function saveToken(token: string): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_TOKEN, token);
+  } catch (error) {
+    console.error('Error saving token:', error);
+  }
+}
+
+// Save calendar ID to localStorage
+function saveCalendarId(calendarId: string): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_CALENDAR_ID, calendarId);
+  } catch (error) {
+    console.error('Error saving calendar ID:', error);
+  }
+}
+
+// Save user info to localStorage
+export function saveGoogleUser(user: { email: string; name: string; picture: string }): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+  } catch (error) {
+    console.error('Error saving user:', error);
+  }
+}
+
+// Load saved user from localStorage
+export function loadSavedGoogleUser(): { email: string; name: string; picture: string } | null {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_USER);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error('Error loading saved user:', error);
+  }
+  return null;
+}
+
+// Clear all saved data
+function clearSavedData(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY_TOKEN);
+    localStorage.removeItem(STORAGE_KEY_CALENDAR_ID);
+    localStorage.removeItem(STORAGE_KEY_USER);
+  } catch (error) {
+    console.error('Error clearing saved data:', error);
+  }
+}
+
 // Initialize the Google API client
 export async function initGoogleApi(): Promise<void> {
+  // Load any saved token first
+  loadSavedToken();
+  
   return new Promise((resolve, reject) => {
     if (typeof gapi === 'undefined') {
       reject(new Error('Google API not loaded'));
@@ -68,6 +145,7 @@ export function initGoogleIdentity(onTokenReceived: (token: string) => void): vo
         return;
       }
       accessToken = response.access_token;
+      saveToken(response.access_token);
       
       // Find or create Ascend calendar
       try {
@@ -108,6 +186,7 @@ async function findOrCreateAscendCalendar(): Promise<string> {
     if (existingCalendar) {
       console.log('Found existing Ascend calendar:', existingCalendar.id);
       ascendCalendarId = existingCalendar.id;
+      saveCalendarId(existingCalendar.id);
       return existingCalendar.id;
     }
 
@@ -138,6 +217,7 @@ async function findOrCreateAscendCalendar(): Promise<string> {
     }
 
     ascendCalendarId = newCalendarId;
+    saveCalendarId(newCalendarId);
     return newCalendarId;
   } catch (error) {
     console.error('Error finding/creating Ascend calendar:', error);
@@ -184,7 +264,11 @@ export function revokeAccessToken(): void {
       console.log('Access token revoked');
       accessToken = null;
       ascendCalendarId = null;
+      clearSavedData();
     });
+  } else {
+    // Clear saved data even if no token in memory
+    clearSavedData();
   }
 }
 
