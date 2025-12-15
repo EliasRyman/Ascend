@@ -732,8 +732,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       <header className="relative h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 z-20 shrink-0">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="flex items-center gap-2 group cursor-pointer">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-md shadow-violet-600/20 overflow-hidden">
-              <img src="/logo.svg" alt="Ascend" className="w-full h-full object-cover" />
+            <div className="w-8 h-8 bg-[#6F00FF] rounded-lg flex items-center justify-center text-white shadow-md shadow-violet-600/20">
+              <Target size={18} strokeWidth={3} />
             </div>
             <span className="font-bold text-lg tracking-tight">Ascend<span className="text-[#6F00FF]">.</span></span>
           </button>
@@ -1209,8 +1209,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 const LandingPage = ({ onGetStarted }: { onGetStarted: () => void }) => {
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
-      <div className="w-24 h-24 rounded-2xl flex items-center justify-center shadow-2xl shadow-violet-600/30 mb-8 transform rotate-3 hover:rotate-6 transition-transform overflow-hidden">
-        <img src="/logo.svg" alt="Ascend" className="w-full h-full object-cover" />
+      <div className="w-20 h-20 bg-gradient-to-tr from-violet-600 to-fuchsia-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-violet-600/30 mb-8 transform rotate-3 hover:rotate-6 transition-transform">
+        <Target size={48} strokeWidth={2.5} />
       </div>
       <h1 className="text-6xl font-extrabold mb-6 tracking-tight text-center">
         Ascend<span className="text-[#6F00FF]">.</span>
@@ -1278,8 +1278,8 @@ const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
     <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-2xl shadow-violet-600/30 mx-auto mb-4 overflow-hidden">
-            <img src="/logo.svg" alt="Ascend" className="w-full h-full object-cover" />
+          <div className="w-16 h-16 bg-gradient-to-tr from-violet-600 to-fuchsia-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-violet-600/30 mx-auto mb-4">
+            <Target size={36} strokeWidth={2.5} />
           </div>
           <h1 className="text-3xl font-bold">
             {isSignUp ? 'Skapa konto' : 'Logga in'}
