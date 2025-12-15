@@ -48,22 +48,26 @@ import {
   Zap,
   Edit3,
   Repeat,
-  Info
+  Info,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import {
   initGoogleApi,
-  initGoogleIdentity,
-  requestAccessToken,
-  revokeAccessToken,
-  getGoogleUserInfo,
   createGoogleCalendarEvent,
   deleteGoogleCalendarEvent,
   updateGoogleCalendarEvent,
   fetchGoogleCalendarEvents,
   syncCalendarEvents,
-  isSignedIn,
   saveGoogleUser,
-  loadSavedGoogleUser
+  clearSavedData as clearGoogleData,
+  handleGoogleOAuthCallback,
+  checkGoogleConnectionStatus,
+  startGoogleOAuth,
+  disconnectGoogle,
+  setSupabaseToken,
+  getValidAccessToken,
+  setAccessToken
 } from './googleCalendar';
 import {
   signIn,
@@ -71,7 +75,8 @@ import {
   signOut,
   signInWithGoogle,
   onAuthStateChange,
-  getCurrentUser
+  getCurrentUser,
+  supabase
 } from './supabase';
 import {
   loadTasks,
@@ -84,7 +89,9 @@ import {
   updateScheduleBlock,
   loadUserSettings,
   saveUserSettings,
-  updateTask
+  updateTask,
+  loadNote,
+  saveNote
 } from './database';
 
 // --- Context ---
@@ -111,6 +118,8 @@ interface ScheduleBlock {
   habitId?: string;
   calendarColor?: string;
   calendarName?: string;
+  calendarId?: string; // Google Calendar ID for external events
+  canEdit?: boolean; // true if user has write access to edit this event
 }
 
 interface Task {
@@ -226,6 +235,7 @@ interface TaskItemProps {
   onAddTag: (taskId: number | string, tagName: string, tagColor: string) => void;
   onRemoveTag: (taskId: number | string) => void;
   onOpenTagModal: (taskId: number | string) => void;
+  onEditTag?: (tag: { name: string; color: string }) => void;
 }
 
 const TaskItem = ({ 
@@ -238,7 +248,8 @@ const TaskItem = ({
   onMoveToList,
   onAddTag,
   onRemoveTag,
-  onOpenTagModal
+  onOpenTagModal,
+  onEditTag
 }: TaskItemProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isTagSubmenuOpen, setIsTagSubmenuOpen] = useState(false);
@@ -309,6 +320,11 @@ const TaskItem = ({
             <button onClick={() => { onOpenTagModal(task.id); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200">
               <Plus size={14} /> Create Tag
             </button>
+            {task.tag && task.tagColor && onEditTag && (
+              <button onClick={() => { onEditTag({ name: task.tag!, color: task.tagColor! }); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                <Edit3 size={14} /> Edit Tag
+              </button>
+            )}
             <div className="relative">
               <button onClick={() => setIsTagSubmenuOpen(!isTagSubmenuOpen)} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200 justify-between">
                 <span className="flex items-center gap-2"><Tag size={14} /> Add Tag</span>
@@ -349,11 +365,25 @@ interface TagModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (tagName: string, tagColor: string) => void;
+  editTag?: { name: string; color: string } | null;
+  onDelete?: () => void;
 }
 
-const TagModal = ({ isOpen, onClose, onSave }: TagModalProps) => {
+const TagModal = ({ isOpen, onClose, onSave, editTag, onDelete }: TagModalProps) => {
   const [tagName, setTagName] = useState('');
   const [selectedColor, setSelectedColor] = useState(GOOGLE_COLORS[0].hex);
+  const isEditMode = !!editTag;
+
+  // Update state when editTag changes
+  useEffect(() => {
+    if (editTag) {
+      setTagName(editTag.name);
+      setSelectedColor(editTag.color);
+    } else {
+      setTagName('');
+      setSelectedColor(GOOGLE_COLORS[0].hex);
+    }
+  }, [editTag, isOpen]);
 
   const handleSave = () => {
     if (tagName.trim()) {
@@ -372,7 +402,7 @@ const TagModal = ({ isOpen, onClose, onSave }: TagModalProps) => {
         <div className="p-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Tag size={20} className="text-[#6F00FF]" /> Create Tag
+              <Tag size={20} className="text-[#6F00FF]" /> {isEditMode ? 'Edit Tag' : 'Create Tag'}
             </h3>
             <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
               <X size={20} />
@@ -399,9 +429,14 @@ const TagModal = ({ isOpen, onClose, onSave }: TagModalProps) => {
             </div>
           )}
         </div>
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">Cancel</button>
-          <button onClick={handleSave} disabled={!tagName.trim()} className="px-4 py-2 text-sm font-medium bg-[#6F00FF] text-white rounded-lg hover:bg-[#5800cc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Create Tag</button>
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+          {isEditMode && onDelete && (
+            <button onClick={() => { onDelete(); onClose(); }} className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">Delete Tag</button>
+          )}
+          <div className={`flex gap-2 ${!isEditMode ? 'ml-auto' : ''}`}>
+            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">Cancel</button>
+            <button onClick={handleSave} disabled={!tagName.trim()} className="px-4 py-2 text-sm font-medium bg-[#6F00FF] text-white rounded-lg hover:bg-[#5800cc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">{isEditMode ? 'Save' : 'Create Tag'}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -573,6 +608,299 @@ const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: {
   );
 };
 
+// --- Settings Modal Component ---
+interface SettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  settings: { timeFormat: string; timezone: string };
+  setSettings: (settings: { timeFormat: string; timezone: string }) => void;
+  googleAccount: { email: string; name: string; picture: string } | null;
+  isGoogleConnecting: boolean;
+  googleApiReady: boolean;
+  handleConnectGoogle: () => void;
+  handleDisconnectGoogle: () => void;
+  isDark: boolean;
+  toggleTheme: () => void;
+  user: any;
+  onLogout: () => void;
+  initialTab?: 'account' | 'billing' | 'customisations' | 'integrations';
+}
+
+const SettingsModal = ({
+  isOpen,
+  onClose,
+  settings,
+  setSettings,
+  googleAccount,
+  isGoogleConnecting,
+  googleApiReady,
+  handleConnectGoogle,
+  handleDisconnectGoogle,
+  isDark,
+  toggleTheme,
+  user,
+  onLogout,
+  initialTab = 'account'
+}: SettingsModalProps) => {
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'account' | 'billing' | 'customisations' | 'integrations'>(initialTab);
+  const [emailUnsubscribed, setEmailUnsubscribed] = useState(false);
+
+  // Reset to initialTab when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setActiveSettingsTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
+
+  if (!isOpen) return null;
+
+  const tabs = [
+    { id: 'account', label: 'Account' },
+    { id: 'billing', label: 'Billing' },
+    { id: 'customisations', label: 'Customisations' },
+    { id: 'integrations', label: 'Integrations' },
+  ] as const;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+        {/* Header */}
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Settings</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage your account, billing, customisations, and integrations here.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Theme Toggle */}
+              <button 
+                onClick={toggleTheme}
+                className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-full"
+              >
+                <div className={`p-1.5 rounded-full transition-all ${!isDark ? 'bg-white shadow-sm' : ''}`}>
+                  <Sun size={14} className={`${!isDark ? 'text-amber-500' : 'text-slate-400'}`} />
+                </div>
+                <div className={`p-1.5 rounded-full transition-all ${isDark ? 'bg-slate-700 shadow-sm' : ''}`}>
+                  <Moon size={14} className={`${isDark ? 'text-slate-200' : 'text-slate-400'}`} />
+                </div>
+              </button>
+              <button 
+                onClick={onClose} 
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex min-h-[400px]">
+          {/* Sidebar Tabs */}
+          <div className="w-48 border-r border-slate-200 dark:border-slate-800 p-2">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSettingsTab(tab.id)}
+                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  activeSettingsTab === tab.id
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border-l-2 border-emerald-500'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          <div className="flex-1 p-6 overflow-y-auto">
+            {/* Account Tab */}
+            {activeSettingsTab === 'account' && (
+              <div className="space-y-6">
+                {/* Sign Out */}
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Sign Out</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Sign out of your account on all devices.</p>
+                  <button
+                    onClick={onLogout}
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <LogOut size={16} />
+                    Sign Out
+                  </button>
+                </div>
+
+                {/* Unsubscribe from emails */}
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Unsubscribe from emails</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">You will not receive any emails from Ascend.</p>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <button
+                      onClick={() => setEmailUnsubscribed(!emailUnsubscribed)}
+                      className={`relative w-11 h-6 rounded-full transition-colors ${emailUnsubscribed ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${emailUnsubscribed ? 'left-6' : 'left-1'}`} />
+                    </button>
+                    <span className="text-sm text-slate-600 dark:text-slate-400">
+                      Unsubscribe from emails: {emailUnsubscribed ? 'Yes' : 'No'}
+                    </span>
+                  </label>
+                </div>
+
+                {/* Delete Account */}
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Delete Account</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Deleting your account will remove all of your data from our servers.</p>
+                  <button className="text-sm text-red-500 hover:text-red-600 font-medium hover:underline">
+                    Click here to delete your account
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Billing Tab */}
+            {activeSettingsTab === 'billing' && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <button className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">
+                    Upgrade to Lifetime
+                  </button>
+                  <button className="px-5 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    Orders Portal
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  You are currently on the Free plan. Upgrade to unlock all features.
+                </p>
+              </div>
+            )}
+
+            {/* Customisations Tab */}
+            {activeSettingsTab === 'customisations' && (
+              <div className="space-y-6">
+                {/* Time Format */}
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Time Format</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Choose how times are displayed in your calendar.</p>
+                  <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
+                    <button 
+                      onClick={() => setSettings({...settings, timeFormat: '12h'})}
+                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '12h' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                    >
+                      12-hour (9:00 AM)
+                    </button>
+                    <button 
+                      onClick={() => setSettings({...settings, timeFormat: '24h'})}
+                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '24h' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                    >
+                      24-hour (09:00)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Timezone */}
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Timezone</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Your calendar events will be displayed in this timezone.</p>
+                  <div className="relative w-full max-w-xs">
+                    <select 
+                      value={settings.timezone}
+                      onChange={(e) => setSettings({...settings, timezone: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm appearance-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                    >
+                      <option value="Local">Local Time</option>
+                      <option value="UTC">UTC (Coordinated Universal Time)</option>
+                      <option value="EST">EST (Eastern Standard Time)</option>
+                      <option value="PST">PST (Pacific Standard Time)</option>
+                      <option value="CET">CET (Central European Time)</option>
+                    </select>
+                    <Globe size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Integrations Tab */}
+            {activeSettingsTab === 'integrations' && (
+              <div className="space-y-6">
+                {/* Google Calendar */}
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Google Calendar</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Sync your schedule with Google Calendar for two-way sync.</p>
+                  
+                  {/* Status indicator */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Status:</span>
+                    {googleAccount ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                        Synced
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        <div className="w-2 h-2 rounded-full bg-slate-400"></div>
+                        Not Connected
+                      </span>
+                    )}
+                  </div>
+
+                  {googleAccount ? (
+                    <div className="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                      <div className="flex items-center gap-3">
+                        <img 
+                          src={googleAccount.picture} 
+                          alt={googleAccount.name}
+                          className="w-10 h-10 rounded-full"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">{googleAccount.name}</p>
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400">{googleAccount.email}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleDisconnectGoogle}
+                        className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-sm font-medium"
+                      >
+                        <Unlink size={16} />
+                        Disconnect
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleConnectGoogle}
+                      disabled={isGoogleConnecting || !googleApiReady}
+                      className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                    >
+                      {isGoogleConnecting ? (
+                        <>
+                          <Loader2 size={20} className="animate-spin text-slate-500" />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Connecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg width="20" height="20" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                          </svg>
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Connect Google Calendar</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const { isDark, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'timebox' | 'habittracker'>('timebox');
@@ -580,6 +908,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   
   // State for Settings
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'account' | 'billing' | 'customisations' | 'integrations'>('account');
   const [settings, setSettings] = useState({
     timeFormat: '12h',
     timezone: 'Local'
@@ -598,18 +927,18 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   });
   const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const [tagModalTaskId, setTagModalTaskId] = useState<string | number | null>(null);
+  const [tagModalHabitId, setTagModalHabitId] = useState<string | null>(null);
+  const [editingTag, setEditingTag] = useState<{ name: string; color: string } | null>(null);
 
-  // State for Notes
-  const [notesContent, setNotesContent] = useState(() => {
-    const saved = localStorage.getItem('ascend_notes');
-    return saved || '';
-  });
+  // State for Notes (date-specific)
+  const [notesContent, setNotesContent] = useState('');
   const [notesSaved, setNotesSaved] = useState(false);
+  const [notesLoading, setNotesLoading] = useState(false);
 
-  // State for Promo Section
-  const [isPromoOpen, setIsPromoOpen] = useState(() => {
-    const saved = localStorage.getItem('ascend_promo_open');
-    return saved !== null ? JSON.parse(saved) : true;
+  // State for Promo Section - only shows once, then permanently hidden
+  const [showPromo, setShowPromo] = useState(() => {
+    const dismissed = localStorage.getItem('ascend_promo_dismissed');
+    return dismissed !== 'true'; // Show only if not dismissed
   });
 
   // State for Weight Tracking
@@ -659,38 +988,68 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       try {
         await initGoogleApi();
         
-        // Check for saved Google user (persisted connection)
-        const savedUser = loadSavedGoogleUser();
-        if (savedUser && isSignedIn()) {
-          console.log('Restored Google Calendar connection');
-          setGoogleAccount(savedUser);
+        // Check for OAuth callback params in URL (from backend redirect)
+        const callbackResult = handleGoogleOAuthCallback();
+        if (callbackResult?.connected) {
+          console.log('OAuth callback successful');
+          setGoogleAccount({ email: callbackResult.email || '', name: '', picture: '' });
+          saveGoogleUser({ email: callbackResult.email || '' });
+          setNotification({ type: 'success', message: 'Google Calendar connected!' });
+          setIsGoogleConnecting(false);
         }
         
-        initGoogleIdentity(async (token) => {
-          // Token received, get user info
-          const userInfo = await getGoogleUserInfo();
-          if (userInfo) {
-            setGoogleAccount(userInfo);
-            saveGoogleUser(userInfo);
-          }
-          setIsGoogleConnecting(false);
-        });
         setGoogleApiReady(true);
       } catch (error) {
         console.error('Failed to initialize Google APIs:', error);
+        setGoogleApiReady(true); // Still mark as ready so user can try to connect
       }
     };
     initGoogle();
   }, []);
 
+  // Check Google connection status when user logs in
+  useEffect(() => {
+    const checkGoogleConnection = async () => {
+      if (!user) return;
+      
+      // Get Supabase session token for backend auth
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        setSupabaseToken(session.access_token);
+        
+        // Check if Google is connected via backend
+        const status = await checkGoogleConnectionStatus();
+        if (status.connected) {
+          console.log('Google Calendar connected via backend');
+          setGoogleAccount({ email: status.email || '', name: '', picture: '' });
+          saveGoogleUser({ email: status.email || '' });
+          
+          // Get access token for Google API calls
+          const token = await getValidAccessToken();
+          if (token) {
+            setAccessToken(token);
+          }
+        }
+      }
+    };
+    checkGoogleConnection();
+  }, [user]);
+
   const handleConnectGoogle = () => {
+    if (!user) {
+      setNotification({ type: 'error', message: 'Please log in first' });
+      return;
+    }
     setIsGoogleConnecting(true);
-    requestAccessToken();
+    startGoogleOAuth(user.id);
   };
 
-  const handleDisconnectGoogle = () => {
-    revokeAccessToken();
+  const handleDisconnectGoogle = async () => {
+    await disconnectGoogle();
     setGoogleAccount(null);
+    setIsCalendarSynced(false);
+    clearGoogleData();
+    setNotification({ type: 'info', message: 'Google Calendar disconnected' });
   };
 
   // State for Lists and Schedule
@@ -699,6 +1058,32 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [schedule, setSchedule] = useState<ScheduleBlock[]>(TIME_BLOCKS);
   const [newTaskInput, setNewTaskInput] = useState("");
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  
+  // Timeline zoom state
+  const [isZoomedOut, setIsZoomedOut] = useState(false);
+  const HOUR_HEIGHT_NORMAL = 96; // 96px per hour (normal view)
+  const HOUR_HEIGHT_ZOOMED = 40; // 40px per hour (zoomed out view)
+  const hourHeight = isZoomedOut ? HOUR_HEIGHT_ZOOMED : HOUR_HEIGHT_NORMAL;
+
+  // Handle zoom toggle with auto-scroll to center current time
+  const handleZoomToggle = () => {
+    const newZoomState = !isZoomedOut;
+    setIsZoomedOut(newZoomState);
+    
+    // Auto-scroll to center current time indicator in viewport
+    setTimeout(() => {
+      if (timelineRef.current) {
+        const newHourHeight = newZoomState ? HOUR_HEIGHT_ZOOMED : HOUR_HEIGHT_NORMAL;
+        const currentTimePosition = currentTimeDecimal * newHourHeight;
+        const containerHeight = timelineRef.current.clientHeight;
+        const scrollTarget = currentTimePosition - (containerHeight / 2);
+        timelineRef.current.scrollTo({ 
+          top: Math.max(0, scrollTarget), 
+          behavior: 'smooth' 
+        });
+      }
+    }, 50); // Small delay to let state update and re-render
+  };
 
   // Load data from database on mount
   useEffect(() => {
@@ -706,36 +1091,37 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       if (!user) return;
       
       try {
-        const [activeData, laterData, blocksData, userSettings] = await Promise.all([
+        const [activeData, laterData, blocksData, userSettings, noteContent] = await Promise.all([
           loadTasks('active'),
           loadTasks('later'),
-          loadScheduleBlocks(),
-          loadUserSettings()
+          loadScheduleBlocks(selectedDate),
+          loadUserSettings(),
+          loadNote(selectedDate)
         ]);
 
-        if (activeData.length > 0 || laterData.length > 0) {
-          setActiveTasks(activeData.length > 0 ? activeData.map(t => ({
+        // Always use database data if user is logged in (even if empty)
+        setActiveTasks(activeData.map(t => ({
             id: t.id,
             title: t.title,
             tag: t.tag,
             tagColor: t.tagColor,
             time: t.time,
             completed: t.completed
-          })) : INITIAL_TASKS);
+        })));
           
-          setLaterTasks(laterData.length > 0 ? laterData.map(t => ({
+        setLaterTasks(laterData.map(t => ({
             id: t.id,
             title: t.title,
             tag: t.tag,
             tagColor: t.tagColor,
             time: t.time,
             completed: t.completed
-          })) : LATER_TASKS);
-        }
+        })));
 
-        if (blocksData.length > 0) {
           setSchedule(blocksData);
-        }
+          
+        // Load notes for the selected date
+        setNotesContent(noteContent);
 
         // Load user settings
         if (userSettings) {
@@ -745,7 +1131,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           });
         }
 
+        // Move incomplete "later" tasks from previous days
+        await moveIncompleteLaterTasksToToday();
+
         setIsDataLoaded(true);
+        
+        // Auto-sync with Google Calendar if connected
+        if (googleAccount) {
+          await loadGoogleEventsForDate(selectedDate);
+        }
       } catch (error) {
         console.error('Error loading data:', error);
         setIsDataLoaded(true);
@@ -754,6 +1148,66 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
     loadData();
   }, [user]);
+
+  // Function to move incomplete "later" tasks to today (they persist across days)
+  const moveIncompleteLaterTasksToToday = async () => {
+    // Later tasks are already loaded - they persist by design
+    // We just need to ensure incomplete ones remain visible
+    console.log('Later tasks loaded - incomplete tasks persist across days');
+  };
+
+  // Function to load Google Calendar events for a specific date
+  const loadGoogleEventsForDate = async (date: Date) => {
+    if (!googleAccount) return;
+    
+    // Ensure we have a valid access token from backend
+    const token = await getValidAccessToken();
+    if (!token) {
+      console.log('No valid Google token available');
+      return;
+    }
+    setAccessToken(token);
+    
+    try {
+      const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+      const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+      const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
+      
+      const googleBlocks: ScheduleBlock[] = googleEvents.map(event => ({
+        id: event.id,
+        title: event.title,
+        tag: (event as any).calendarName || 'google',
+        start: event.start,
+        duration: event.duration,
+        color: (event as any).calendarColor ? '' : 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
+        textColor: 'text-white',
+        isGoogle: true,
+        googleEventId: event.id,
+        completed: false,
+        calendarColor: (event as any).calendarColor,
+        calendarName: (event as any).calendarName,
+        calendarId: (event as any).calendarId,
+        canEdit: (event as any).canEdit ?? false, // true if user has write access
+      }));
+      
+      // Replace all Google events with fresh data from API (avoiding duplicates)
+      setSchedule(prev => {
+        // Keep only non-Google blocks (local blocks), replace all Google blocks with fresh data
+        const localBlocks = prev.filter(b => !b.isGoogle);
+        return [...localBlocks, ...googleBlocks];
+      });
+    } catch (error: any) {
+      console.error('Failed to load Google Calendar events:', error);
+      // Handle session expired - clear Google account and notify user
+      if (error?.message === 'SESSION_EXPIRED') {
+        setGoogleAccount(null);
+        setNotification({ 
+          type: 'info', 
+          message: 'Google Calendar session expired. Please reconnect in Settings.' 
+        });
+      }
+    }
+  };
   
   // Drag State
   const [draggedItem, setDraggedItem] = useState(null);
@@ -773,6 +1227,57 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   // Sync State
   const [isSyncing, setIsSyncing] = useState(false);
   const [isCalendarSynced, setIsCalendarSynced] = useState(false);
+
+  // Auto-sync Google Calendar when account is connected (after OAuth redirect)
+  useEffect(() => {
+    const autoSync = async () => {
+      if (googleAccount && isDataLoaded && !isCalendarSynced) {
+        console.log('Auto-syncing Google Calendar...');
+        try {
+          await loadGoogleEventsForDate(selectedDate);
+          setIsCalendarSynced(true);
+          console.log('Auto-sync complete');
+        } catch (error) {
+          console.error('Auto-sync failed:', error);
+        }
+      }
+    };
+    autoSync();
+  }, [googleAccount, isDataLoaded]);
+
+  // Load schedule blocks and notes when selectedDate changes
+  useEffect(() => {
+    const loadDateData = async () => {
+      if (!user || !isDataLoaded) return;
+      
+      try {
+        setNotesLoading(true);
+        
+        // Load schedule blocks and notes for the new date
+        const [blocksData, noteContent] = await Promise.all([
+          loadScheduleBlocks(selectedDate),
+          loadNote(selectedDate)
+        ]);
+        
+        // Update schedule (keep only non-Google events from database, Google events will be loaded separately)
+        setSchedule(blocksData);
+        
+        // Update notes
+        setNotesContent(noteContent);
+        
+        // Reload Google Calendar events for the new date
+        if (googleAccount) {
+          await loadGoogleEventsForDate(selectedDate);
+        }
+      } catch (error) {
+        console.error('Error loading data for date:', error);
+      } finally {
+        setNotesLoading(false);
+      }
+    };
+    
+    loadDateData();
+  }, [selectedDate, user, isDataLoaded]);
 
   // Notification State
   const [notification, setNotification] = useState<{
@@ -823,6 +1328,16 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     if (isCalendarOpen) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isCalendarOpen]);
+
+  // State for habit tag menu
+  const [habitTagMenuOpen, setHabitTagMenuOpen] = useState<string | null>(null);
+
+  // Close habit tag menu on click outside
+  useEffect(() => {
+    const handleClickOutside = () => setHabitTagMenuOpen(null);
+    if (habitTagMenuOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [habitTagMenuOpen]);
 
   // Calendar helper functions
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
@@ -901,12 +1416,57 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
   // Tag handlers
   const handleCreateTag = (tagName: string, tagColor: string) => {
-    const newTag = { name: tagName, color: tagColor };
-    const updatedTags = [...userTags, newTag];
+    if (editingTag) {
+      // Editing existing tag - update all tasks/habits that use this tag
+      const oldTagName = editingTag.name;
+      const updatedTags = userTags.map(t => t.name === oldTagName ? { name: tagName, color: tagColor } : t);
+      setUserTags(updatedTags);
+      localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
+      
+      // Update all tasks with the old tag
+      setActiveTasks(prev => prev.map(t => t.tag === oldTagName ? { ...t, tag: tagName, tagColor: tagColor } : t));
+      setLaterTasks(prev => prev.map(t => t.tag === oldTagName ? { ...t, tag: tagName, tagColor: tagColor } : t));
+      
+      // Update all habits with the old tag
+      setHabits(prev => prev.map(h => h.tag === oldTagName ? { ...h, tag: tagName, tagColor: tagColor } : h));
+      
+      setEditingTag(null);
+    } else {
+      // Creating new tag
+      const newTag = { name: tagName, color: tagColor };
+      const updatedTags = [...userTags, newTag];
+      setUserTags(updatedTags);
+      localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
+      
+      // Apply to task if one is selected
+      if (tagModalTaskId) handleAddTagToTask(tagModalTaskId, tagName, tagColor);
+      // Apply to habit if one is selected
+      if (tagModalHabitId) handleAddTagToHabit(tagModalHabitId, tagName, tagColor);
+    }
+    setTagModalTaskId(null);
+    setTagModalHabitId(null);
+  };
+
+  const handleDeleteTag = () => {
+    if (!editingTag) return;
+    const tagToDelete = editingTag.name;
+    const updatedTags = userTags.filter(t => t.name !== tagToDelete);
     setUserTags(updatedTags);
     localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
-    if (tagModalTaskId) handleAddTagToTask(tagModalTaskId, tagName, tagColor);
-    setTagModalTaskId(null);
+    
+    // Remove tag from all tasks
+    setActiveTasks(prev => prev.map(t => t.tag === tagToDelete ? { ...t, tag: null, tagColor: null } : t));
+    setLaterTasks(prev => prev.map(t => t.tag === tagToDelete ? { ...t, tag: null, tagColor: null } : t));
+    
+    // Remove tag from all habits
+    setHabits(prev => prev.map(h => h.tag === tagToDelete ? { ...h, tag: undefined, tagColor: undefined } : h));
+    
+    setEditingTag(null);
+  };
+
+  const handleOpenEditTagModal = (tag: { name: string; color: string }) => {
+    setEditingTag(tag);
+    setIsTagModalOpen(true);
   };
 
   const handleAddTagToTask = async (taskId: number | string, tagName: string, tagColor: string) => {
@@ -922,6 +1482,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   };
 
   const handleOpenTagModal = (taskId: number | string) => { setTagModalTaskId(taskId); setIsTagModalOpen(true); };
+
+  // Habit tag handlers
+  const handleAddTagToHabit = (habitId: string, tagName: string, tagColor: string) => {
+    setHabits(prev => prev.map(h => h.id === habitId ? { ...h, tag: tagName, tagColor: tagColor } : h));
+  };
+
+  const handleRemoveTagFromHabit = (habitId: string) => {
+    setHabits(prev => prev.map(h => h.id === habitId ? { ...h, tag: undefined, tagColor: undefined } : h));
+  };
 
   const handleMoveTaskToList = async (taskId: number | string, targetList: 'active' | 'later') => {
     const taskInActive = activeTasks.find(t => String(t.id) === String(taskId));
@@ -965,18 +1534,31 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     await updateScheduleBlock(String(blockId), { completed: newCompleted });
   };
 
-  // Notes and weight handlers
+  // Notes handlers (date-specific)
+  const notesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   const handleNotesChange = (content: string) => {
     setNotesContent(content);
-    localStorage.setItem('ascend_notes', content);
-    setNotesSaved(true);
-    setTimeout(() => setNotesSaved(false), 2000);
+    
+    // Debounce save to avoid too many API calls
+    if (notesSaveTimeoutRef.current) {
+      clearTimeout(notesSaveTimeoutRef.current);
+    }
+    
+    notesSaveTimeoutRef.current = setTimeout(async () => {
+      if (user) {
+        const success = await saveNote(selectedDate, content);
+        if (success) {
+          setNotesSaved(true);
+          setTimeout(() => setNotesSaved(false), 2000);
+        }
+      }
+    }, 500);
   };
 
-  const handlePromoToggle = () => {
-    const newState = !isPromoOpen;
-    setIsPromoOpen(newState);
-    localStorage.setItem('ascend_promo_open', JSON.stringify(newState));
+  const handleDismissPromo = () => {
+    setShowPromo(false);
+    localStorage.setItem('ascend_promo_dismissed', 'true');
   };
 
   const handleAddWeight = () => {
@@ -1038,14 +1620,17 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           };
         });
 
-      if (googleAccount && isSignedIn()) {
+      // Fetch Google Calendar events
+      let googleBlocks: ScheduleBlock[] = [];
+      if (googleAccount) {
         const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
         const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+        try {
         const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
-        const googleBlocks: ScheduleBlock[] = googleEvents.map(event => ({
+          googleBlocks = googleEvents.map(event => ({
           id: event.id,
           title: event.title,
-          tag: (event as any).calendarName || null,
+            tag: (event as any).calendarName || 'google',
           start: event.start,
           duration: event.duration,
           color: (event as any).calendarColor ? '' : 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
@@ -1056,12 +1641,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           calendarColor: (event as any).calendarColor,
           calendarName: (event as any).calendarName,
         }));
-        const dbBlockIds = new Set(blocksData.map(b => b.googleEventId).filter(Boolean));
-        const uniqueGoogleBlocks = googleBlocks.filter(g => !dbBlockIds.has(g.googleEventId));
-        setSchedule([...blocksData, ...uniqueGoogleBlocks, ...habitBlocks]);
-      } else {
-        setSchedule([...blocksData, ...habitBlocks]);
+        } catch (error) {
+          console.error('Failed to fetch Google Calendar events:', error);
+        }
       }
+      
+      // Combine all blocks, avoiding duplicates
+      const dbBlockGoogleIds = new Set(blocksData.map(b => b.googleEventId).filter(Boolean));
+      const uniqueGoogleBlocks = googleBlocks.filter(g => !dbBlockGoogleIds.has(g.googleEventId));
+        setSchedule([...blocksData, ...uniqueGoogleBlocks, ...habitBlocks]);
     } catch (error) {
       console.error('Failed to load schedule for date:', error);
       setNotification({ type: 'error', message: 'Failed to load schedule' });
@@ -1095,12 +1683,20 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       return `${displayHours}:${displayMinutes} ${period}`;
   };
 
+  // Use refs to access current values without triggering re-renders
+  const scheduleRef = useRef(schedule);
+  scheduleRef.current = schedule;
+  const hourHeightRef = useRef(hourHeight);
+  hourHeightRef.current = hourHeight;
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
+      const currentHourHeight = hourHeightRef.current;
+      
       // Handle resize
       if (resizingBlockId !== null && resizeStartY !== null && resizeStartDuration !== null) {
         const deltaY = e.clientY - resizeStartY;
-        const deltaHours = deltaY / 96;
+        const deltaHours = deltaY / currentHourHeight;
         let newDuration = resizeStartDuration + deltaHours;
         newDuration = Math.round(newDuration * 4) / 4;
         if (newDuration < 0.25) newDuration = 0.25;
@@ -1110,10 +1706,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       // Handle drag/move
       if (draggingBlockId !== null && dragStartY !== null && dragStartTime !== null) {
         const deltaY = e.clientY - dragStartY;
-        const deltaHours = deltaY / 96;
+        const deltaHours = deltaY / currentHourHeight;
         let newStart = dragStartTime + deltaHours;
         newStart = Math.round(newStart * 4) / 4;
-        const block = schedule.find(b => b.id === draggingBlockId);
+        // Use ref to get current schedule without causing re-renders
+        const currentSchedule = scheduleRef.current;
+        const block = currentSchedule.find(b => b.id === draggingBlockId);
         if (block) {
           if (newStart < 0) newStart = 0;
           if (newStart + block.duration > 24) newStart = 24 - block.duration;
@@ -1123,15 +1721,52 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     };
 
     const handleMouseUp = async () => {
+      // Use ref to get current schedule
+      const currentSchedule = scheduleRef.current;
+      
+      // Helper to check if we can edit a Google Calendar event
+      // Check if user has write access to edit this calendar event
+      const canEditGoogleEvent = (block: ScheduleBlock) => {
+        // Local blocks (not from Google) can always be edited
+        if (!block.isGoogle) return true;
+        // Google blocks use the canEdit flag from the API
+        return block.canEdit === true;
+      };
+      
       // Handle resize end
       if (resizingBlockId !== null) {
-        const resizedBlock = schedule.find(b => b.id === resizingBlockId);
-        if (resizedBlock?.googleEventId && googleAccount && isSignedIn()) {
-          try {
-            await updateGoogleCalendarEvent(resizedBlock.googleEventId, resizedBlock.title, resizedBlock.start, resizedBlock.duration, selectedDate);
-            console.log('Updated Google Calendar event duration');
-          } catch (error) {
-            console.error('Failed to update Google Calendar event:', error);
+        const resizedBlock = currentSchedule.find(b => b.id === resizingBlockId);
+        if (resizedBlock) {
+          // Only save to database if it's NOT a Google Calendar event
+          // (Google events are synced from Google, not stored locally)
+          if (!resizedBlock.isGoogle) {
+            await updateScheduleBlock(String(resizedBlock.id), { 
+              duration: resizedBlock.duration 
+            });
+          }
+          
+          // Update Google Calendar if it's an Ascend calendar event (we have write access)
+          if (resizedBlock.googleEventId && googleAccount) {
+            if (canEditGoogleEvent(resizedBlock)) {
+              try {
+                await updateGoogleCalendarEvent(
+                  resizedBlock.googleEventId, 
+                  resizedBlock.title, 
+                  resizedBlock.start, 
+                  resizedBlock.duration, 
+                  selectedDate,
+                  resizedBlock.calendarId
+                );
+                console.log('Updated Google Calendar event duration');
+                setNotification({ type: 'success', message: 'Event updated' });
+              } catch (error) {
+                console.error('Failed to update Google Calendar event:', error);
+                setNotification({ type: 'error', message: 'Failed to update event' });
+              }
+            } else {
+              // External calendar - can't edit, show message
+              setNotification({ type: 'info', message: `External calendar events (${resizedBlock.calendarName}) are read-only` });
+            }
           }
         }
         setResizingBlockId(null);
@@ -1141,15 +1776,37 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       
       // Handle drag/move end
       if (draggingBlockId !== null) {
-        const movedBlock = schedule.find(b => b.id === draggingBlockId);
-        if (movedBlock?.googleEventId && googleAccount && isSignedIn()) {
-          try {
-            await updateGoogleCalendarEvent(movedBlock.googleEventId, movedBlock.title, movedBlock.start, movedBlock.duration, selectedDate);
-            console.log('Updated Google Calendar event time');
-            setNotification({ type: 'success', message: 'Event time updated' });
-          } catch (error) {
-            console.error('Failed to update Google Calendar event:', error);
-            setNotification({ type: 'error', message: 'Failed to update event' });
+        const movedBlock = currentSchedule.find(b => b.id === draggingBlockId);
+        if (movedBlock) {
+          // Only save to database if it's NOT a Google Calendar event
+          if (!movedBlock.isGoogle) {
+            await updateScheduleBlock(String(movedBlock.id), { 
+              start: movedBlock.start 
+            });
+          }
+          
+          // Update Google Calendar if it's an Ascend calendar event (we have write access)
+          if (movedBlock.googleEventId && googleAccount) {
+            if (canEditGoogleEvent(movedBlock)) {
+              try {
+                await updateGoogleCalendarEvent(
+                  movedBlock.googleEventId, 
+                  movedBlock.title, 
+                  movedBlock.start, 
+                  movedBlock.duration, 
+                  selectedDate,
+                  movedBlock.calendarId
+                );
+                console.log('Updated Google Calendar event time');
+                setNotification({ type: 'success', message: 'Event time updated' });
+              } catch (error) {
+                console.error('Failed to update Google Calendar event:', error);
+                setNotification({ type: 'error', message: 'Failed to update event' });
+              }
+            } else {
+              // External calendar - can't edit, show message
+              setNotification({ type: 'info', message: `External calendar events (${movedBlock.calendarName}) are read-only` });
+            }
           }
         }
         setDraggingBlockId(null);
@@ -1166,7 +1823,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [resizingBlockId, resizeStartY, resizeStartDuration, draggingBlockId, dragStartY, dragStartTime, schedule, googleAccount, selectedDate]);
+  // Removed 'schedule' from deps - using scheduleRef instead to prevent listener churn during drag
+  }, [resizingBlockId, resizeStartY, resizeStartDuration, draggingBlockId, dragStartY, dragStartTime, googleAccount, selectedDate]);
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newTaskInput.trim()) {
@@ -1203,7 +1861,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     // Find and delete linked schedule block
     const linkedBlock = schedule.find(b => b.taskId && String(b.taskId) === String(taskId));
     if (linkedBlock) {
-      if (linkedBlock.googleEventId && googleAccount && isSignedIn()) {
+      if (linkedBlock.googleEventId && googleAccount) {
         try {
           await deleteGoogleCalendarEvent(linkedBlock.googleEventId);
         } catch (error) {
@@ -1226,12 +1884,23 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const handleDeleteBlock = async (blockId: number | string) => {
     const block = schedule.find(b => String(b.id) === String(blockId));
     
-    // Delete from Google Calendar
-    if (block?.googleEventId && googleAccount && isSignedIn()) {
+    // Check if this is an external calendar event (read-only)
+    const isReadOnlyEvent = block?.isGoogle && block?.canEdit !== true;
+    
+    if (isReadOnlyEvent) {
+      // Read-only calendar events can't be deleted - just hide from view
+      setNotification({ type: 'info', message: `Calendar events from "${block?.calendarName}" can only be hidden (read-only access)` });
+      setSchedule(prev => prev.filter(b => String(b.id) !== String(blockId)));
+      return;
+    }
+    
+    // Delete from Google Calendar (only if we have write access)
+    if (block?.googleEventId && googleAccount && block?.canEdit) {
       try {
         await deleteGoogleCalendarEvent(block.googleEventId);
       } catch (error) {
         console.error('Failed to delete from Google Calendar:', error);
+        setNotification({ type: 'error', message: 'Failed to delete from Google Calendar' });
       }
     }
 
@@ -1239,6 +1908,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     if (block?.taskId) {
       setActiveTasks(prev => prev.map(t => String(t.id) === String(block.taskId) ? { ...t, time: null } : t));
       setLaterTasks(prev => prev.map(t => String(t.id) === String(block.taskId) ? { ...t, time: null } : t));
+      // Update in database
+      await updateTask(String(block.taskId), { time: null });
     }
 
     // Delete from database
@@ -1321,9 +1992,19 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
       setIsCalendarSynced(true);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sync failed:', error);
+      const errorMessage = error?.message || '';
+      
+      // Check if user needs to reconnect
+      if (errorMessage.includes('reconnect') || errorMessage.includes('expired') || errorMessage.includes('401')) {
+        clearGoogleData();
+        setGoogleAccount(null);
+        setIsCalendarSynced(false);
+        setNotification({ type: 'error', message: 'Please reconnect Google Calendar in Settings to enable sync.' });
+      } else {
       setNotification({ type: 'error', message: 'Failed to sync with Google Calendar' });
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -1341,7 +2022,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleListDrop = (e, targetListId) => {
+  const handleListDrop = async (e, targetListId) => {
     e.preventDefault();
     setDragOverList(null);
     if (!draggedItem) return;
@@ -1362,6 +2043,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     } else {
         setLaterTasks(prev => [...prev, newTask]);
     }
+    
+    // Save to database
+    await moveTask(String(task.id), targetListId);
+    
     setDraggedItem(null);
   };
 
@@ -1380,7 +2065,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         const habitName = e.dataTransfer.getData('habitName');
         const habitTag = e.dataTransfer.getData('habitTag') || null;
         const habitTagColor = e.dataTransfer.getData('habitTagColor') || null;
-        const dateString = selectedDate.toISOString().split('T')[0];
         
         // Check if already on timeline
         const existingBlock = schedule.find(b => b.habitId === habitId);
@@ -1389,23 +2073,64 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           return;
         }
         
-        const habitBlock: ScheduleBlock = {
-          id: `habit-${habitId}-${dateString}-${hour}`,
+        const blockData = {
           title: habitName,
           tag: habitTag,
           start: hour,
           duration: 1,
           color: habitTagColor ? `bg-[${habitTagColor}]` : 'bg-[#6F00FF]',
           textColor: 'text-white',
-          isGoogle: false,
+          isGoogle: googleAccount !== null,
           completed: false,
           habitId: habitId,
+        };
+        
+        // Save to database
+        const savedBlock = await createScheduleBlock(blockData, selectedDate);
+        
+        const habitBlock: ScheduleBlock = savedBlock ? {
+          ...savedBlock,
+          habitId: habitId,
+          calendarColor: habitTagColor,
+        } : {
+          id: Date.now(),
+          ...blockData,
           calendarColor: habitTagColor,
         };
         
-        setSchedule(prev => [...prev, habitBlock]);
-        // Don't update habit's scheduledStartTime - keep it in To-Do list
-        setNotification({ type: 'success', message: `Scheduled "${habitName}" at ${formatTime(hour)}` });
+        // Sync to Google Calendar if connected - do this BEFORE adding to state
+        let googleEventId: string | undefined;
+        console.log('Checking Google sync for habit:', { googleAccount: !!googleAccount });
+        
+        if (googleAccount) {
+          try {
+            console.log('Creating Google Calendar event for habit:', habitName, 'at hour:', hour);
+            googleEventId = await createGoogleCalendarEvent(habitName, hour, 1, selectedDate, habitTag || undefined);
+            console.log('Google Calendar event created with ID:', googleEventId);
+            
+            // Update database with Google event ID
+            if (savedBlock && googleEventId) {
+              await updateScheduleBlock(String(savedBlock.id), { googleEventId: googleEventId });
+            }
+          } catch (error: any) {
+            console.error('Failed to create Google Calendar event for habit:', error);
+            setNotification({ type: 'error', message: `Failed to sync "${habitName}" to Google Calendar` });
+          }
+        }
+        
+        // Add to schedule with Google event ID if available
+        const finalBlock: ScheduleBlock = {
+          ...habitBlock,
+          googleEventId: googleEventId,
+        };
+        
+        setSchedule(prev => [...prev, finalBlock]);
+        
+        if (googleEventId) {
+          setNotification({ type: 'success', message: `Scheduled "${habitName}" and synced to Google Calendar` });
+        } else if (!googleAccount) {
+          setNotification({ type: 'success', message: `Scheduled "${habitName}" at ${formatTime(hour)}` });
+        }
         return;
       }
       
@@ -1445,13 +2170,18 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
       setSchedule(prev => [...prev, newBlock]);
       
-      if (draggedItem.sourceList === 'active') {
+      // Update task time in both UI and database
           const timeString = formatTime(hour);
+      if (draggedItem.sourceList === 'active') {
           setActiveTasks(prev => prev.map(t => t.id === task.id ? { ...t, time: timeString } : t));
+      } else {
+          setLaterTasks(prev => prev.map(t => t.id === task.id ? { ...t, time: timeString } : t));
       }
+      await updateTask(String(task.id), { time: timeString });
+      
       setDraggedItem(null);
 
-      if (googleAccount && isSignedIn()) {
+      if (googleAccount) {
           try {
               const eventId = await createGoogleCalendarEvent(task.title, hour, newBlock.duration, selectedDate, task.tag || undefined);
               setSchedule(prev => prev.map(b => b.id === newBlock.id ? { ...b, googleEventId: eventId } : b));
@@ -1531,159 +2261,47 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         </div>
 
         <div className="flex items-center gap-3">
-           <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors" title="Settings">
-             <Settings size={18} />
-           </button>
-
            <button onClick={toggleTheme} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
              {isDark ? <Sun size={18} /> : <Moon size={18} />}
            </button>
            
-           {/* Sync Button */}
-           <button 
-             onClick={handleSync}
-             disabled={isSyncing}
-             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-               isCalendarSynced 
-                 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
-                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-             }`}
-           >
-             {isSyncing ? (
-               <Loader2 size={14} className="animate-spin" />
-             ) : isCalendarSynced ? (
-                <CalendarCheck size={14} />
-             ) : (
-                <RefreshCw size={14} />
-             )}
-             {isSyncing ? 'Syncing...' : isCalendarSynced ? 'Synced' : 'Sync'}
+           <button onClick={() => {
+             setSettingsInitialTab('account');
+             setIsSettingsOpen(true);
+           }} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors" title="Settings">
+             <Settings size={18} />
            </button>
-
-           <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1"></div>
-
-           {/* User Profile / Login */}
-           {user ? (
-             <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-tr from-violet-500 to-fuchsia-500 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-white dark:border-slate-800 cursor-pointer" title={user.name}>
-                  {user.avatar}
-                </div>
-                <button onClick={onLogout} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors" title="Log out">
-                    <LogOut size={16} />
-                </button>
-             </div>
-           ) : (
-             <button onClick={onLogin} className="text-sm font-semibold text-[#6F00FF] hover:bg-violet-50 dark:hover:bg-slate-800 px-3 py-1.5 rounded-full transition-colors">
-               Sign in
-             </button>
-           )}
         </div>
       </header>
 
       {/* Settings Modal */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in-up">
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800">
-                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                    <h2 className="font-bold text-lg">Settings</h2>
-                    <button onClick={() => setIsSettingsOpen(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500"><X size={20}/></button>
-                </div>
-                <div className="p-6 space-y-6">
-                    {/* Time Format */}
-                    <div>
-                        <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Time Format</label>
-                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-                            <button 
-                                onClick={() => setSettings({...settings, timeFormat: '12h'})}
-                                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '12h' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                            >12-hour (9:00 AM)</button>
-                            <button 
-                                onClick={() => setSettings({...settings, timeFormat: '24h'})}
-                                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '24h' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                            >24-hour (09:00)</button>
-                        </div>
-                    </div>
-
-                    {/* Timezone */}
-                    <div>
-                        <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Timezone</label>
-                        <div className="relative">
-                            <select 
-                                value={settings.timezone}
-                                onChange={(e) => setSettings({...settings, timezone: e.target.value})}
-                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm appearance-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
-                            >
-                                <option value="Local">Local Time</option>
-                                <option value="UTC">UTC (Coordinated Universal Time)</option>
-                                <option value="EST">EST (Eastern Standard Time)</option>
-                                <option value="PST">PST (Pacific Standard Time)</option>
-                                <option value="CET">CET (Central European Time)</option>
-                            </select>
-                            <Globe size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                        </div>
-                        <p className="text-xs text-slate-500 mt-2">Your calendar events will be displayed in this timezone.</p>
-                    </div>
-
-                    {/* Google Calendar Connection */}
-                    <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                        <label className="block text-sm font-medium mb-3 text-slate-700 dark:text-slate-300">Google Calendar</label>
-                        {googleAccount ? (
-                            <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                                <div className="flex items-center gap-3">
-                                    <img 
-                                        src={googleAccount.picture} 
-                                        alt={googleAccount.name}
-                                        className="w-8 h-8 rounded-full"
-                                    />
-                                    <div>
-                                        <p className="text-sm font-medium text-green-800 dark:text-green-200">{googleAccount.name}</p>
-                                        <p className="text-xs text-green-600 dark:text-green-400">{googleAccount.email}</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={handleDisconnectGoogle}
-                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                    title="Disconnect"
-                                >
-                                    <Unlink size={18} />
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={handleConnectGoogle}
-                                disabled={isGoogleConnecting || !googleApiReady}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-                            >
-                                {isGoogleConnecting ? (
-                                    <>
-                                        <Loader2 size={18} className="animate-spin" />
-                                        <span>Connecting...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Calendar size={18} className="text-blue-500" />
-                                        <span>Connect Google Calendar</span>
-                                    </>
-                                )}
-                            </button>
-                        )}
-                        <p className="text-xs text-slate-500 mt-2">Sync your schedule with Google Calendar.</p>
-                    </div>
-                </div>
-                <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
-                    <button 
-                        onClick={() => setIsSettingsOpen(false)}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
-                    >
-                        Done
-                    </button>
-                </div>
-            </div>
-        </div>
+        <SettingsModal 
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          settings={settings}
+          setSettings={setSettings}
+          googleAccount={googleAccount}
+          isGoogleConnecting={isGoogleConnecting}
+          googleApiReady={googleApiReady}
+          handleConnectGoogle={handleConnectGoogle}
+          handleDisconnectGoogle={handleDisconnectGoogle}
+          isDark={isDark}
+          toggleTheme={toggleTheme}
+          user={user}
+          onLogout={onLogout}
+          initialTab={settingsInitialTab}
+        />
       )}
 
       {/* Tag Modal */}
-      <TagModal isOpen={isTagModalOpen} onClose={() => { setIsTagModalOpen(false); setTagModalTaskId(null); }} onSave={handleCreateTag} />
+      <TagModal 
+        isOpen={isTagModalOpen} 
+        onClose={() => { setIsTagModalOpen(false); setTagModalTaskId(null); setTagModalHabitId(null); setEditingTag(null); }} 
+        onSave={handleCreateTag} 
+        editTag={editingTag}
+        onDelete={handleDeleteTag}
+      />
 
       {/* Main Content Area */}
       {activeTab === 'dashboard' && (
@@ -1932,15 +2550,84 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               {getUnscheduledTodaysHabits().map(habit => {
                 const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
                 return (
-                  <div key={`habit-${habit.id}`} draggable onDragStart={(e) => { e.dataTransfer.setData('habitId', habit.id); e.dataTransfer.setData('habitName', habit.name); e.dataTransfer.setData('habitTag', habit.tag || ''); e.dataTransfer.setData('habitTagColor', habit.tagColor || ''); }} className={`flex items-center gap-3 p-2.5 bg-white dark:bg-slate-800 rounded-lg border transition-all cursor-grab active:cursor-grabbing hover:shadow-sm ${isCompleted ? 'border-emerald-200 dark:border-emerald-800 opacity-60' : 'border-slate-200 dark:border-slate-700 hover:border-[#6F00FF]/30'}`}>
-                    <button onClick={() => toggleHabitCompletion(habit.id)} className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${isCompleted ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}>
-                      {isCompleted && <Check size={12} className="text-white" strokeWidth={3} />}
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <span className={`text-sm font-medium text-slate-700 dark:text-slate-200 ${isCompleted ? 'line-through' : ''}`}>{habit.name}</span>
-                      {habit.tag && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded text-white font-medium" style={{ backgroundColor: habit.tagColor || '#6F00FF' }}>{habit.tag}</span>}
+                  <div key={`habit-${habit.id}`} className={`relative flex items-center gap-3 p-2.5 bg-white dark:bg-slate-800 rounded-lg border transition-all hover:shadow-sm ${isCompleted ? 'border-emerald-200 dark:border-emerald-800 opacity-60' : 'border-slate-200 dark:border-slate-700 hover:border-[#6F00FF]/30'}`}>
+                    <div 
+                      draggable 
+                      onDragStart={(e) => { e.dataTransfer.setData('habitId', habit.id); e.dataTransfer.setData('habitName', habit.name); e.dataTransfer.setData('habitTag', habit.tag || ''); e.dataTransfer.setData('habitTagColor', habit.tagColor || ''); }} 
+                      className="flex items-center gap-3 flex-1 cursor-grab active:cursor-grabbing"
+                    >
+                      <button onClick={(e) => { e.stopPropagation(); toggleHabitCompletion(habit.id); }} className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${isCompleted ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}>
+                        {isCompleted && <Check size={12} className="text-white" strokeWidth={3} />}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <span className={`text-sm font-medium text-slate-700 dark:text-slate-200 ${isCompleted ? 'line-through' : ''}`}>{habit.name}</span>
+                        {habit.tag && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded text-white font-medium" style={{ backgroundColor: habit.tagColor || '#6F00FF' }}>{habit.tag}</span>}
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-slate-400"><Flame size={12} className="text-orange-400" /><span className="font-medium">{habit.currentStreak}</span></div>
                     </div>
-                    <div className="flex items-center gap-1 text-xs text-slate-400"><Flame size={12} className="text-orange-400" /><span className="font-medium">{habit.currentStreak}</span></div>
+                    
+                    {/* Menu button */}
+                    <button 
+                      onClick={() => setHabitTagMenuOpen(habitTagMenuOpen === habit.id ? null : habit.id)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
+                    >
+                      <MoreVertical size={16} className="text-slate-400" />
+                    </button>
+                    
+                    {/* Tag menu dropdown */}
+                    {habitTagMenuOpen === habit.id && (
+                      <div 
+                        className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 min-w-[160px]"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        {/* Create Tag */}
+                        <button 
+                          onClick={() => { setTagModalHabitId(habit.id); setIsTagModalOpen(true); setHabitTagMenuOpen(null); }} 
+                          className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
+                        >
+                          <Plus size={14} /> Create Tag
+                        </button>
+                        
+                        {/* Edit Tag (only if habit has a tag) */}
+                        {habit.tag && habit.tagColor && (
+                          <button 
+                            onClick={() => { handleOpenEditTagModal({ name: habit.tag!, color: habit.tagColor! }); setHabitTagMenuOpen(null); }} 
+                            className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
+                          >
+                            <Edit3 size={14} /> Edit Tag
+                          </button>
+                        )}
+                        
+                        <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                        <div className="px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">Add Tag</div>
+                        {userTags.length > 0 ? (
+                          userTags.map((tag, idx) => (
+                            <button 
+                              key={idx} 
+                              onClick={() => { handleAddTagToHabit(habit.id, tag.name, tag.color); setHabitTagMenuOpen(null); }} 
+                              className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                            >
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                              <span className="text-slate-600 dark:text-slate-300 text-sm">{tag.name}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-slate-400">No tags yet</div>
+                        )}
+                        {habit.tag && (
+                          <>
+                            <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                            <button 
+                              onClick={() => { handleRemoveTagFromHabit(habit.id); setHabitTagMenuOpen(null); }} 
+                              className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-red-500"
+                            >
+                              <X size={14} /> Remove Tag
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1958,6 +2645,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                     onAddTag={handleAddTagToTask}
                     onRemoveTag={handleRemoveTagFromTask}
                     onOpenTagModal={handleOpenTagModal}
+                    onEditTag={handleOpenEditTagModal}
                 />
               ))}
             </div>
@@ -1994,6 +2682,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             onAddTag={handleAddTagToTask}
                             onRemoveTag={handleRemoveTagFromTask}
                             onOpenTagModal={handleOpenTagModal}
+                            onEditTag={handleOpenEditTagModal}
                         />
                     </div>
                   ))}
@@ -2008,11 +2697,47 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         <div className="md:col-span-6 bg-white dark:bg-slate-900 flex flex-col relative overflow-hidden">
           {/* Date Selector Header */}
           <div className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center shrink-0 relative">
-            <div ref={calendarRef} className="relative">
-              <div onClick={() => setIsCalendarOpen(!isCalendarOpen)} className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors">
+            <div ref={calendarRef} className="relative flex items-center">
+              <div className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-sm font-medium text-slate-700 dark:text-slate-200">
+                <div 
+                  onClick={() => setIsCalendarOpen(!isCalendarOpen)} 
+                  className="flex items-center gap-2 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
+                >
                 <div className={`w-2 h-2 rounded-full ${isToday(selectedDate) ? 'bg-emerald-500' : 'bg-slate-400'}`}></div>
                 {selectedDate.toLocaleDateString('sv-SE', { month: 'long', day: 'numeric' })}
-                <User size={14} className="ml-1 text-slate-400" />
+                </div>
+                {/* Calendar Integration Button */}
+                <button 
+                  onClick={() => {
+                    setSettingsInitialTab('integrations');
+                    setIsSettingsOpen(true);
+                  }}
+                  className={`p-1 rounded-full transition-all ${
+                    googleAccount 
+                      ? 'text-emerald-500 hover:text-emerald-600' 
+                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}
+                  title={googleAccount ? 'Calendar synced' : 'Connect Google Calendar'}
+                >
+                  {googleAccount ? (
+                    <CalendarCheck size={14} />
+                  ) : (
+                    <Calendar size={14} />
+                  )}
+                </button>
+                
+                {/* Zoom Toggle Button - also centers current time */}
+                <button 
+                  onClick={handleZoomToggle}
+                  className={`p-1 rounded-full transition-all ${
+                    isZoomedOut 
+                      ? 'text-[#6F00FF] hover:text-[#5800cc]' 
+                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}
+                  title={isZoomedOut ? 'Zoom in & center on now' : 'Zoom out & center on now'}
+                >
+                  {isZoomedOut ? <ZoomIn size={14} /> : <ZoomOut size={14} />}
+                </button>
               </div>
               
               {/* Calendar Popup */}
@@ -2047,41 +2772,49 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           <div ref={timelineRef} className="flex-1 overflow-y-auto relative custom-scrollbar scroll-smooth">
             
             {/* Calendar Grid - 24 hours */}
-            <div className="relative py-6" style={{ minHeight: `${24 * 96 + 48}px` }}>
+            <div className="relative" style={{ minHeight: `${24 * hourHeight}px` }}>
               
-              {/* Current Time Indicator (Dynamic) */}
-              <div className="absolute left-0 right-0 z-20 flex items-center pointer-events-none transition-all duration-1000" style={{ top: `${currentTimeDecimal * 96 + 24}px` }}>
-                <div className="w-14 text-right pr-2">
-                  <span className="text-[10px] font-bold text-emerald-500 bg-white dark:bg-slate-900 px-1">{formatTime(currentTimeDecimal)}</span>
+              {/* Current Time Indicator (Dynamic) - precisely aligned */}
+              <div 
+                className="absolute left-0 right-0 z-20 flex items-center pointer-events-none transition-all duration-300" 
+                style={{ top: `${currentTimeDecimal * hourHeight}px` }}
+              >
+                {/* Time label - h-0 ensures exact vertical centering with the line */}
+                <div className="w-14 text-right pr-2 flex items-center justify-end h-0">
+                  <span className="text-[10px] font-bold text-emerald-500 bg-white dark:bg-slate-900 px-1 rounded leading-none">
+                    {formatTime(currentTimeDecimal)}
+                  </span>
                 </div>
+                {/* Green line with dot - dot uses transform for perfect centering */}
                 <div className="h-0.5 bg-emerald-500 flex-1 relative shadow-sm">
-                  <div className="absolute -left-1.5 -top-1.5 w-3 h-3 rounded-full bg-emerald-500 shadow-md"></div>
+                  <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-emerald-500 shadow-md"></div>
                 </div>
               </div>
 
               {timeLabels.map((hour) => (
                 <div 
                     key={hour} 
-                    className={`flex h-24 group relative transition-colors ${dragOverHour === hour ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : ''}`}
+                    className={`flex group relative transition-colors ${dragOverHour === hour ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : ''}`}
+                    style={{ height: `${hourHeight}px` }}
                     onDragEnter={() => setDragOverHour(hour)}
                     onDragOver={handleHourDragOver}
                     onDrop={(e) => handleHourDrop(e, hour)}
                     onDragLeave={() => setDragOverHour(null)}
                 >
-                  {/* Time Label */}
-                  <div className="w-14 shrink-0 text-right pr-3 text-xs text-slate-400 dark:text-slate-500 font-medium -mt-2">
-                    {formatTime(hour, true)}
+                  {/* Time Label - perfectly aligned with grid line */}
+                  <div className="w-14 shrink-0 text-right pr-3 text-xs text-slate-400 dark:text-slate-500 font-medium relative">
+                    <span className="absolute right-3 -top-2">{formatTime(hour, true)}</span>
                   </div>
                   
                   {/* Grid Line */}
-                  <div className="flex-1 border-t border-slate-100 dark:border-slate-800 relative">
-                    {/* Half-hour guideline (invisible unless hovered) */}
-                    <div className="absolute top-1/2 left-0 right-0 border-t border-dashed border-slate-50 dark:border-slate-800/50 w-full"></div>
+                  <div className="flex-1 border-t border-slate-200 dark:border-slate-700 relative">
+                    {/* Half-hour guideline */}
+                    <div className="absolute left-0 right-0 border-t border-dashed border-slate-100 dark:border-slate-800/50 w-full" style={{ top: `${hourHeight / 2}px` }}></div>
                     
                     {/* Ghost Block Preview when dragging over */}
                     {dragOverHour === hour && (
-                        <div className="absolute top-0 left-16 right-4 bottom-2 border-2 border-dashed border-[#6F00FF] bg-[#6F00FF]/10 rounded-lg z-0 pointer-events-none flex items-center justify-center text-[#6F00FF] font-medium text-sm">
-                            Drop to schedule on Calendar
+                        <div className="absolute top-0 left-2 right-4 border-2 border-dashed border-[#6F00FF] bg-[#6F00FF]/10 rounded-lg z-0 pointer-events-none flex items-center justify-center text-[#6F00FF] font-medium text-sm" style={{ height: `${hourHeight - 4}px` }}>
+                            {!isZoomedOut && 'Drop to schedule'}
                         </div>
                     )}
                   </div>
@@ -2090,22 +2823,43 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
               {/* Render Time Blocks */}
               {schedule.map((block) => {
-                // Calculate position based on midnight (0:00)
-                const topOffset = block.start * 96; 
-                const height = block.duration * 96;
+                // Calculate position based on midnight (0:00) using hourHeight for zoom support
+                const topOffset = block.start * hourHeight; 
+                const height = block.duration * hourHeight;
                 const endTime = block.start + block.duration;
                 
-                // Use calendar color if available
-                const hasCalendarColor = block.calendarColor && block.isGoogle;
-                const blockStyle = hasCalendarColor 
-                  ? { top: `${topOffset}px`, height: `${height}px`, backgroundColor: block.calendarColor, borderColor: block.calendarColor }
-                  : { top: `${topOffset}px`, height: `${height}px` };
+                // Determine block color:
+                // 1. If completed, use gray
+                // 2. If has tag color from task/habit, use that
+                // 3. If Google event with calendar color, use that
+                // 4. Default to Google Calendar blue (#4285f4)
+                const DEFAULT_BLUE = '#4285f4';
+                
+                // Find the associated task or habit tag color
+                const linkedTask = block.taskId ? [...activeTasks, ...laterTasks].find(t => String(t.id) === String(block.taskId)) : null;
+                const linkedHabit = block.habitId ? habits.find(h => h.id === block.habitId) : null;
+                const tagColor = linkedTask?.tagColor || linkedHabit?.tagColor || null;
+                
+                // Determine the final background color
+                let bgColor = DEFAULT_BLUE;
+                if (tagColor) {
+                  bgColor = tagColor;
+                } else if (block.calendarColor && block.isGoogle) {
+                  bgColor = block.calendarColor;
+                }
+                
+                const blockStyle = { 
+                  top: `${topOffset}px`, 
+                  height: `${height}px`, 
+                  backgroundColor: block.completed ? undefined : bgColor,
+                  borderColor: block.completed ? undefined : bgColor 
+                };
 
                 return (
                   <div 
                     key={block.id}
                     style={blockStyle}
-                    className={`absolute left-16 right-4 rounded-lg p-3 border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 text-slate-500' : hasCalendarColor ? 'text-white' : `${block.color} ${block.textColor}`} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
+                    className={`absolute left-16 right-4 rounded-lg p-3 border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group text-white ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 !text-slate-500' : ''} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
                     onMouseDown={(e) => {
                       if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.cursor-ns-resize')) return;
                       e.preventDefault();
@@ -2121,7 +2875,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                         </span>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
                             <MoreHorizontal size={14} className="cursor-pointer" />
-                            <button onClick={() => handleDeleteBlock(block.id)} className="hover:text-red-600"><X size={14}/></button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              className="hover:text-red-600"
+                            >
+                              <X size={14}/>
+                            </button>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
@@ -2174,15 +2934,19 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       </div>
                       <h2 className="font-bold text-lg">Notes</h2>
                     </div>
-                    {notesSaved && <span className="text-xs text-emerald-500 flex items-center gap-1"><Check size={12} /> Saved</span>}
+                    <div className="flex items-center gap-2">
+                      {notesLoading && <Loader2 size={12} className="animate-spin text-slate-400" />}
+                      {notesSaved && <span className="text-xs text-emerald-500 flex items-center gap-1"><Check size={12} /> Saved</span>}
+                    </div>
                  </div>
                  
                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden">
                     <textarea
                       value={notesContent}
                       onChange={(e) => handleNotesChange(e.target.value)}
-                      placeholder="Write your notes for today..."
+                      placeholder={`Write your notes for ${selectedDate.toLocaleDateString('sv-SE', { month: 'long', day: 'numeric' })}...`}
                       className="w-full min-h-[180px] p-3 text-sm text-slate-700 dark:text-slate-300 bg-transparent resize-none focus:outline-none placeholder:text-slate-400"
+                      disabled={notesLoading}
                     />
                  </div>
               </div>
@@ -2213,34 +2977,38 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                  </div>
               </div>
 
-              {/* Promo Section (Collapsible) */}
-              <div className="bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/10 dark:to-indigo-900/10 rounded-xl border border-violet-100 dark:border-violet-900/20 overflow-hidden">
-                  <button onClick={handlePromoToggle} className="w-full p-4 flex items-center justify-between text-left">
-                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                        <span className="text-xl">👩‍🚀</span> What else does Ascend offer?
-                    </h4>
-                    <div className={`transform transition-transform ${isPromoOpen ? 'rotate-180' : ''}`}><ChevronDown size={20} className="text-slate-400" /></div>
+              {/* Promo Section - Only shows once for new users */}
+              {showPromo && (
+              <div className="bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/10 dark:to-indigo-900/10 rounded-xl border border-violet-100 dark:border-violet-900/20 overflow-hidden relative p-4">
+                  {/* Dismiss button */}
+                  <button 
+                    onClick={handleDismissPromo}
+                    className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-violet-200/50 dark:hover:bg-violet-800/30 transition-colors z-10"
+                    title="Dismiss"
+                  >
+                    <X size={16} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" />
                   </button>
                   
-                  {isPromoOpen && (
-                    <div className="px-4 pb-4">
-                      <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
-                          <li className="flex items-center gap-2">
-                              <div className={`w-4 h-4 border rounded flex items-center justify-center ${isCalendarSynced ? 'bg-green-500 border-green-500' : 'bg-white dark:bg-slate-800'}`}>
-                                  {isCalendarSynced && <Check size={10} className="text-white"/>}
-                              </div> 
-                              Google Calendar Sync
-                          </li>
-                          <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Planners for every day of the year</li>
-                          <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Everything saved to the cloud instantly</li>
-                          <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Accountability and deep work tracking!</li>
-                      </ul>
-                      {!user && (
-                          <button onClick={onLogin} className="inline-block mt-4 text-[#6F00FF] font-bold hover:underline">Sign in to start timeboxing!</button>
-                      )}
-                    </div>
+                  <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-3 pr-6">
+                      <span className="text-xl">👩‍🚀</span> What else does Ascend offer?
+                  </h4>
+                  
+                  <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                      <li className="flex items-center gap-2">
+                          <div className={`w-4 h-4 border rounded flex items-center justify-center ${isCalendarSynced ? 'bg-green-500 border-green-500' : 'bg-white dark:bg-slate-800'}`}>
+                              {isCalendarSynced && <Check size={10} className="text-white"/>}
+                          </div> 
+                          Google Calendar Sync
+                      </li>
+                      <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Planners for every day of the year</li>
+                      <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Everything saved to the cloud instantly</li>
+                      <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Accountability and deep work tracking!</li>
+                  </ul>
+                  {!user && (
+                      <button onClick={onLogin} className="inline-block mt-4 text-[#6F00FF] font-bold hover:underline">Sign in to start timeboxing!</button>
                   )}
               </div>
+              )}
 
            </div>
         </div>
