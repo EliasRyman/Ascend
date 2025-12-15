@@ -2244,7 +2244,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       <header className="relative h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 z-20 shrink-0">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="flex items-center gap-2 group cursor-pointer">
-            <img src="/favicon.svg" alt="Ascend" className="w-8 h-8 rounded-lg shadow-md shadow-violet-600/20" />
+            <div className="w-8 h-8 bg-[#6d3dc1] rounded-lg flex items-center justify-center shadow-md shadow-violet-600/20 overflow-hidden">
+              <svg width="24" height="24" viewBox="0 0 720 340" fill="white">
+                <path d="M 65.148438 215.859375 L 81.007812 225.375 L 150.804688 136.546875 L 184.117188 176.992188 L 311.011719 0.136719 L 385.5625 84.199219 L 415.699219 66.785156 L 517.222656 177.023438 L 571.117188 155.582031 L 713.113281 288.820312 L 567.582031 187.308594 L 511.699219 214.703125 C 511.699219 214.703125 510.898438 308.683594 510.898438 312.648438 C 510.898438 316.613281 414.082031 179.410156 414.082031 179.410156 L 414.082031 278.542969 L 315.398438 49.339844 L 124.363281 332.972656 L 166.761719 225.765625 L 133.746094 252.339844 L 146.972656 192.921875 L 85.773438 259.898438 L 64.351562 245.617188 L 0.910156 288.839844 Z"/>
+              </svg>
+            </div>
             <span className="font-bold text-lg tracking-tight">Ascend<span className="text-[#6F00FF]">.</span></span>
           </button>
         </div>
