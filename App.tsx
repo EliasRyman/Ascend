@@ -718,6 +718,21 @@ const SettingsModal = ({
             {/* Account Tab */}
             {activeSettingsTab === 'account' && (
               <div className="space-y-6">
+                {/* User Email */}
+                {user && (
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-semibold text-lg">
+                        {user.email?.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-900 dark:text-white">Logged in as</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">{user.email}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Sign Out */}
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Sign Out</h3>
