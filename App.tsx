@@ -2560,7 +2560,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                         {isCompleted && <Check size={12} className="text-white" strokeWidth={3} />}
                       </button>
                       <div className="flex-1 min-w-0">
-                        <span className={`text-sm font-medium text-slate-700 dark:text-slate-200 ${isCompleted ? 'line-through' : ''}`}>{habit.name}</span>
+                        <span className={`text-sm font-medium text-slate-700 dark:text-slate-200 ${isCompleted ? 'line-through opacity-60' : ''}`}>{habit.name}</span>
                         {habit.tag && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded text-white font-medium" style={{ backgroundColor: habit.tagColor || '#6F00FF' }}>{habit.tag}</span>}
                       </div>
                       <div className="flex items-center gap-1 text-xs text-slate-400"><Flame size={12} className="text-orange-400" /><span className="font-medium">{habit.currentStreak}</span></div>
