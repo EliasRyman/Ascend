@@ -2493,7 +2493,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               {/* Empty State */}
               {habits.length === 0 && (
                 <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-12 text-center">
-                  <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center shadow-xl shadow-purple-500/20"><Target size={40} className="text-white" /></div>
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center shadow-xl shadow-purple-500/20"><Flame size={40} className="text-white" /></div>
                   <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Start Building Better Habits</h3>
                   <p className="text-slate-500 max-w-md mx-auto mb-6">Create your first habit and start tracking your progress!</p>
                   <button onClick={() => setIsAddHabitOpen(true)} className="inline-flex items-center gap-2 px-6 py-3 bg-[#6F00FF] text-white rounded-xl font-semibold hover:bg-[#5800cc] shadow-lg shadow-purple-500/25"><Plus size={18} /> Create First Habit</button>
