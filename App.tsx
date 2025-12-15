@@ -165,7 +165,7 @@ const EXTERNAL_GOOGLE_EVENTS: ScheduleBlock[] = [
 
 // --- Timebox App Components ---
 
-const TaskItem = ({ task, onDragStart, onDelete }: { task: Task; onDragStart: (e: React.DragEvent, task: Task) => void; onDelete: (id: number | string) => void }) => (
+const TaskItem = ({ task, onDragStart, onDelete }) => (
   <div 
     draggable="true"
     onDragStart={(e) => onDragStart(e, task)}
