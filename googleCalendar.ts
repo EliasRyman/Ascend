@@ -4,10 +4,9 @@
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
 const ASCEND_CALENDAR_NAME = 'Ascend';
 
-// Use Railway backend in production, localhost in development
-const isProduction = window.location.hostname !== 'localhost';
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-  (isProduction ? 'https://ascend-production-ce09.up.railway.app' : 'http://localhost:4000');
+// Backend URL - Production Railway server
+// For local development, set VITE_BACKEND_URL=http://localhost:4000 in .env
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://ascend-production-ce09.up.railway.app';
 
 // Google Calendar color IDs mapping
 const TAG_COLOR_MAP: Record<string, string> = {
