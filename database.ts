@@ -20,7 +20,6 @@ export interface ScheduleBlock {
   textColor: string;
   isGoogle?: boolean;
   googleEventId?: string;
-  completed?: boolean;
 }
 
 export interface UserSettings {
@@ -230,7 +229,6 @@ export async function updateScheduleBlock(blockId: string, updates: Partial<Sche
   if (updates.duration !== undefined) updateData.duration = updates.duration;
   if (updates.color !== undefined) updateData.color = updates.color;
   if (updates.textColor !== undefined) updateData.text_color = updates.textColor;
-  if (updates.completed !== undefined) updateData.completed = updates.completed;
 
   const { error } = await supabase
     .from('schedule_blocks')
@@ -323,74 +321,5 @@ export async function saveUserSettings(settings: Partial<UserSettings>): Promise
   }
 
   return true;
-}
-
-// ============ NOTES ============
-
-export async function loadNote(date: Date): Promise<string> {
-  const dateStr = date.toISOString().split('T')[0];
-
-  try {
-    const { data, error } = await supabase
-      .from('notes')
-      .select('content')
-      .eq('date', dateStr)
-      .single();
-
-    if (error) {
-      // No note found for this date is not an error
-      if (error.code === 'PGRST116') {
-        return '';
-      }
-      // Table doesn't exist (404) - silently return empty
-      if (error.code === '42P01' || error.message?.includes('404')) {
-        console.warn('Notes table not found. Please run the SQL migration.');
-        return '';
-      }
-      console.error('Error loading note:', error);
-      return '';
-    }
-
-    return data?.content || '';
-  } catch (err) {
-    // Handle network errors or table not existing
-    console.warn('Could not load note:', err);
-    return '';
-  }
-}
-
-export async function saveNote(date: Date, content: string): Promise<boolean> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
-
-  const dateStr = date.toISOString().split('T')[0];
-
-  try {
-    const { error } = await supabase
-      .from('notes')
-      .upsert(
-        {
-          user_id: user.id,
-          date: dateStr,
-          content: content,
-        },
-        { onConflict: 'user_id,date' }
-      );
-
-    if (error) {
-      // Table doesn't exist - silently fail
-      if (error.code === '42P01' || error.message?.includes('404')) {
-        console.warn('Notes table not found. Please run the SQL migration.');
-        return false;
-      }
-      console.error('Error saving note:', error);
-      return false;
-    }
-
-    return true;
-  } catch (err) {
-    console.warn('Could not save note:', err);
-    return false;
-  }
 }
 

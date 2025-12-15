@@ -12,7 +12,7 @@ A modern timeboxing and productivity app for deep work. Plan your day with drag-
 - **Timeboxing** — Drag tasks onto a visual timeline to schedule your day
 - **Task Management** — Create, organize, and complete tasks with tags
 - **Dark Mode** — Beautiful light and dark themes
-- **Persistent Google Calendar Sync** — Connect once, stay connected forever
+- **Calendar Sync** — Sync with Google Calendar (demo)
 - **Resizable Blocks** — Adjust time block durations by dragging
 - **Notes Panel** — Keep daily notes alongside your schedule
 
@@ -22,102 +22,23 @@ A modern timeboxing and productivity app for deep work. Plan your day with drag-
 
 - Node.js 18+
 
-### Google Calendar Setup (Required for Calendar Sync)
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project (or select an existing one)
-3. Enable the **Google Calendar API**:
-   - Go to "APIs & Services" → "Library"
-   - Search for "Google Calendar API" and enable it
-4. Create OAuth credentials:
-   - Go to "APIs & Services" → "Credentials"
-   - Click "Create Credentials" → "OAuth client ID"
-   - Select "Web application"
-   - Add **Authorized JavaScript origins**:
-     - `http://localhost:3000` (frontend)
-   - Add **Authorized redirect URIs**:
-     - `http://localhost:4000/auth/google/callback` (backend callback)
-5. Copy your **Client ID** and **Client Secret**
-
 ### Installation
 
 ```bash
-# Install frontend dependencies
+# Install dependencies
 npm install
 
-# Install backend dependencies
-cd backend
-npm install
-cd ..
-```
-
-### Configuration
-
-1. Create `.env` file in root:
-```env
-VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-VITE_BACKEND_URL=http://localhost:4000
-```
-
-2. Create `.env` file in `/backend`:
-```env
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-client-secret
-REDIRECT_URI=http://localhost:4000/auth/google/callback
-
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-supabase-anon-key
-SUPABASE_SERVICE_KEY=your-supabase-service-role-key
-
-FRONTEND_URL=http://localhost:3000
-PORT=4000
-
-ENCRYPTION_KEY=generate-a-secure-32-char-key
-```
-
-### Supabase Setup
-
-Run the SQL in `supabase-schema.sql` in your Supabase SQL Editor to create the required tables.
-
-### Running the App
-
-```bash
-# Terminal 1: Start backend
-cd backend
-npm run dev
-
-# Terminal 2: Start frontend
+# Start development server
 npm run dev
 ```
 
-- Frontend: `http://localhost:3000`
-- Backend: `http://localhost:4000`
+The app will be running at `http://localhost:3000`
 
 ### Build for Production
 
 ```bash
-# Build frontend
 npm run build
-
-# Build backend
-cd backend
-npm run build
-```
-
-## Architecture
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│     Frontend    │────▶│     Backend     │────▶│  Google OAuth   │
-│  React + Vite   │     │  Express.js     │     │  Calendar API   │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-         │                       │
-         │                       │
-         ▼                       ▼
-┌─────────────────────────────────────────┐
-│              Supabase                   │
-│  Auth + Database + Row Level Security   │
-└─────────────────────────────────────────┘
+npm run preview
 ```
 
 ## Tech Stack
@@ -127,9 +48,6 @@ npm run build
 - **Vite** — Build tool and dev server
 - **Tailwind CSS** — Utility-first styling
 - **Lucide React** — Beautiful icons
-- **Express.js** — Backend API
-- **Supabase** — Auth and database
-- **Google APIs** — Calendar integration
 
 ## License
 
