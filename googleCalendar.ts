@@ -78,6 +78,41 @@ export function mapHexToGoogleColorId(hex: string): string {
   return closestColorId;
 }
 
+// Google color names for debugging
+const GOOGLE_COLOR_NAMES: Record<string, string> = {
+  '1': 'Lavender',
+  '2': 'Sage',
+  '3': 'Grape (Vindruva)',
+  '4': 'Flamingo',
+  '5': 'Banana',
+  '6': 'Tangerine',
+  '7': 'Peacock',
+  '8': 'Graphite',
+  '9': 'Blueberry',
+  '10': 'Basil',
+  '11': 'Tomato',
+};
+
+// Main function to get Google colorId from app color
+// Returns "3" (Grape) as default if no color provided
+export function getGoogleColorId(hexColor?: string | null, tagName?: string | null): string {
+  // Priority 1: Hex color provided - map to closest Google color
+  if (hexColor && hexColor.startsWith('#')) {
+    return mapHexToGoogleColorId(hexColor);
+  }
+  
+  // Priority 2: Tag name provided - use tag color mapping
+  if (tagName) {
+    const tagLower = tagName.toLowerCase();
+    if (TAG_COLOR_MAP[tagLower]) {
+      return TAG_COLOR_MAP[tagLower];
+    }
+  }
+  
+  // Priority 3: Default to Grape (Vindruva)
+  return '3';
+}
+
 interface GoogleCalendarEvent {
   id: string;
   summary: string;
@@ -586,16 +621,17 @@ export async function createGoogleCalendarEvent(
   endDate.setTime(startDate.getTime() + durationHours * 60 * 60 * 1000);
 
   // Determine colorId: prefer hex color mapping, fallback to tag mapping, then Grape as default
-  let colorId = '3'; // Default Grape (Vindruva)
-  if (hexColor) {
-    colorId = mapHexToGoogleColorId(hexColor);
-  } else if (tag) {
-    colorId = TAG_COLOR_MAP[tag.toLowerCase()] || '3';
-  }
+  const colorId = getGoogleColorId(hexColor, tag);
+  
+  console.log('🎨 Color mapping:', {
+    input: { hexColor, tag },
+    output: colorId,
+    colorName: GOOGLE_COLOR_NAMES[colorId] || 'Unknown'
+  });
 
   const eventResource = {
     summary: title,
-    colorId: colorId,
+    colorId: colorId, // MUST be inside resource object for gapi
     description: tag ? `Tag: ${tag}` : undefined,
     start: {
       dateTime: startDate.toISOString(),
@@ -606,6 +642,8 @@ export async function createGoogleCalendarEvent(
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
   };
+
+  console.log('📤 Sending to Google Calendar:', JSON.stringify(eventResource, null, 2));
 
   try {
     const response = await gapi.client.calendar.events.insert({
@@ -686,8 +724,18 @@ export async function updateGoogleCalendarEvent(
   const endDate = new Date(startDate);
   endDate.setTime(startDate.getTime() + durationHours * 60 * 60 * 1000);
 
+  // Always include colorId - use Grape as default if no color provided
+  const colorId = getGoogleColorId(hexColor, null);
+  
+  console.log('🎨 Update color mapping:', {
+    input: { hexColor },
+    output: colorId,
+    colorName: GOOGLE_COLOR_NAMES[colorId] || 'Unknown'
+  });
+
   const eventResource: any = {
     summary: title,
+    colorId: colorId, // Always set colorId
     start: {
       dateTime: startDate.toISOString(),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -698,10 +746,7 @@ export async function updateGoogleCalendarEvent(
     },
   };
 
-  // Add color if provided
-  if (hexColor) {
-    eventResource.colorId = mapHexToGoogleColorId(hexColor);
-  }
+  console.log('📤 Updating Google Calendar event:', JSON.stringify(eventResource, null, 2));
 
   try {
     await gapi.client.calendar.events.update({
