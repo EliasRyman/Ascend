@@ -59,6 +59,9 @@ function dbBlockToBlock(dbBlock: DbScheduleBlock): ScheduleBlock {
 // ============ TASKS ============
 
 export async function loadTasks(listType: 'active' | 'later'): Promise<Task[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  console.log('📋 Loading tasks for user:', user?.id, 'listType:', listType);
+  
   const { data, error } = await supabase
     .from('tasks')
     .select('*')
@@ -66,10 +69,11 @@ export async function loadTasks(listType: 'active' | 'later'): Promise<Task[]> {
     .order('position', { ascending: true });
 
   if (error) {
-    console.error('Error loading tasks:', error);
+    console.error('❌ Error loading tasks:', error);
     return [];
   }
 
+  console.log('✅ Loaded tasks:', data?.length || 0, 'items');
   return (data || []).map(dbTaskToTask);
 }
 
@@ -175,6 +179,9 @@ export async function moveTask(taskId: string, newListType: 'active' | 'later'):
 export async function loadScheduleBlocks(date?: Date): Promise<ScheduleBlock[]> {
   const targetDate = date || new Date();
   const dateStr = targetDate.toISOString().split('T')[0];
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  console.log('📅 Loading schedule blocks for user:', user?.id, 'date:', dateStr);
 
   const { data, error } = await supabase
     .from('schedule_blocks')
@@ -183,10 +190,11 @@ export async function loadScheduleBlocks(date?: Date): Promise<ScheduleBlock[]> 
     .order('start_hour', { ascending: true });
 
   if (error) {
-    console.error('Error loading schedule blocks:', error);
+    console.error('❌ Error loading schedule blocks:', error);
     return [];
   }
 
+  console.log('✅ Loaded schedule blocks:', data?.length || 0, 'items');
   return (data || []).map(dbBlockToBlock);
 }
 
