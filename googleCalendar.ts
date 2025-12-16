@@ -62,9 +62,9 @@ function colorDistance(hex1: string, hex2: string): number {
 
 // Map a hex color to the closest Google Calendar colorId
 export function mapHexToGoogleColorId(hex: string): string {
-  if (!hex || !hex.startsWith('#')) return '9'; // Default to Blueberry
+  if (!hex || !hex.startsWith('#')) return '3'; // Default to Grape (Vindruva)
   
-  let closestColorId = '9';
+  let closestColorId = '3';
   let minDistance = Infinity;
   
   for (const color of GOOGLE_COLOR_PALETTE) {
@@ -585,12 +585,12 @@ export async function createGoogleCalendarEvent(
   const endDate = new Date(startDate);
   endDate.setTime(startDate.getTime() + durationHours * 60 * 60 * 1000);
 
-  // Determine colorId: prefer hex color mapping, fallback to tag mapping
-  let colorId = '9'; // Default Blueberry
+  // Determine colorId: prefer hex color mapping, fallback to tag mapping, then Grape as default
+  let colorId = '3'; // Default Grape (Vindruva)
   if (hexColor) {
     colorId = mapHexToGoogleColorId(hexColor);
   } else if (tag) {
-    colorId = TAG_COLOR_MAP[tag.toLowerCase()] || '9';
+    colorId = TAG_COLOR_MAP[tag.toLowerCase()] || '3';
   }
 
   const eventResource = {

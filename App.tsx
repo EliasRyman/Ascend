@@ -1846,7 +1846,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   resizedBlock.start, 
                   resizedBlock.duration, 
                   selectedDate,
-                  resizedBlock.calendarId
+                  resizedBlock.calendarId,
+                  resizedBlock.color || resizedBlock.calendarColor || undefined
                 );
                 console.log('Updated Google Calendar event duration');
                 setNotification({ type: 'success', message: 'Event updated' });
@@ -1886,7 +1887,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   movedBlock.start, 
                   movedBlock.duration, 
                   selectedDate,
-                  movedBlock.calendarId
+                  movedBlock.calendarId,
+                  movedBlock.color || movedBlock.calendarColor || undefined
                 );
                 console.log('Updated Google Calendar event time');
                 setNotification({ type: 'success', message: 'Event time updated' });
@@ -2196,7 +2198,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         if (googleAccount) {
           try {
             console.log('Creating Google Calendar event for habit:', habitName, 'at hour:', hour);
-            googleEventId = await createGoogleCalendarEvent(habitName, hour, 1, selectedDate, habitTag || undefined);
+            googleEventId = await createGoogleCalendarEvent(habitName, hour, 1, selectedDate, habitTag || undefined, habitTagColor || undefined);
             console.log('Google Calendar event created with ID:', googleEventId);
             
             // Update database with Google event ID
@@ -2276,7 +2278,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
       if (googleAccount) {
           try {
-              const eventId = await createGoogleCalendarEvent(task.title, hour, newBlock.duration, selectedDate, task.tag || undefined);
+              const eventId = await createGoogleCalendarEvent(task.title, hour, newBlock.duration, selectedDate, task.tag || undefined, task.tagColor || undefined);
               setSchedule(prev => prev.map(b => b.id === newBlock.id ? { ...b, googleEventId: eventId } : b));
               setNotification({ type: 'success', message: `Added "${task.title}" to Google Calendar` });
           } catch (error: any) {
