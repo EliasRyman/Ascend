@@ -2904,10 +2904,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   >
                     {/* Top right corner: Tag + Close button grouped together */}
                     <div className={`absolute ${isVeryCompact ? 'top-1 right-1' : isCompact ? 'top-1.5 right-1.5' : 'top-2 right-2'} flex flex-row items-center gap-1.5`}>
-                      {/* Category tag */}
-                      {(block.tag || block.calendarName) && (
+                      {/* Category tag - prioritize actual tag over calendar name, skip "Ascend" as it's not a real tag */}
+                      {(block.tag || (block.calendarName && block.calendarName !== 'Ascend')) && (
                         <span className={`uppercase font-bold bg-black/10 dark:bg-white/15 px-1.5 py-0.5 rounded pointer-events-none ${isVeryCompact ? 'text-[8px]' : 'text-[10px]'}`}>
-                          {block.calendarName || block.tag}
+                          {block.tag || block.calendarName}
                         </span>
                       )}
                       {/* Close button - always visible on hover */}
