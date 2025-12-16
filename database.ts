@@ -21,6 +21,8 @@ export interface ScheduleBlock {
   isGoogle?: boolean;
   googleEventId?: string;
   completed?: boolean;
+  taskId?: string;
+  habitId?: string;
 }
 
 export interface UserSettings {
@@ -53,6 +55,9 @@ function dbBlockToBlock(dbBlock: DbScheduleBlock): ScheduleBlock {
     textColor: dbBlock.text_color || 'text-white',
     isGoogle: dbBlock.is_google,
     googleEventId: dbBlock.google_event_id || undefined,
+    taskId: dbBlock.task_id || undefined,
+    habitId: dbBlock.habit_id || undefined,
+    completed: dbBlock.completed || false, // CRITICAL: This was missing!
   };
 }
 
@@ -61,7 +66,7 @@ function dbBlockToBlock(dbBlock: DbScheduleBlock): ScheduleBlock {
 export async function loadTasks(listType: 'active' | 'later'): Promise<Task[]> {
   const { data: { user } } = await supabase.auth.getUser();
   console.log('📋 Loading tasks for user:', user?.id, 'listType:', listType);
-  
+
   const { data, error } = await supabase
     .from('tasks')
     .select('*')
@@ -179,54 +184,76 @@ export async function moveTask(taskId: string, newListType: 'active' | 'later'):
 export async function loadScheduleBlocks(date?: Date): Promise<ScheduleBlock[]> {
   const targetDate = date || new Date();
   const dateStr = targetDate.toISOString().split('T')[0];
-  
+
   const { data: { user } } = await supabase.auth.getUser();
   console.log('📅 Loading schedule blocks for user:', user?.id, 'date:', dateStr);
 
-  const { data, error } = await supabase
+  const { data: rawData, error } = await supabase
     .from('schedule_blocks')
     .select('*')
-    .eq('date', dateStr)
-    .order('start_hour', { ascending: true });
+    .order('start_hour', { ascending: true }); // Removed .eq('date', dateStr) to debug
 
   if (error) {
     console.error('❌ Error loading schedule blocks:', error);
     return [];
   }
 
-  console.log('✅ Loaded schedule blocks:', data?.length || 0, 'items');
-  return (data || []).map(dbBlockToBlock);
+  // Filter in memory to see if we have ANY blocks
+  const allBlocks = (rawData || []).map(dbBlockToBlock);
+  console.log(`📦 LOAD DEBUG: User has ${allBlocks.length} TOTAL blocks in DB.`);
+
+  const matchingBlocks = rawData?.filter(b => b.date === dateStr).map(dbBlockToBlock) || [];
+  console.log(`📦 LOAD DEBUG: Found ${matchingBlocks.length} blocks for date ${dateStr}. TITLES:`, matchingBlocks.map(b => b.title));
+
+  if (allBlocks.length > 0 && matchingBlocks.length === 0) {
+    console.warn('⚠️ POSSIBLE DATE MISMATCH! Blocks exist but none match today.',
+      'Target:', dateStr,
+      'Existing Dates:', rawData?.map(b => b.date).slice(0, 5)
+    );
+  }
+
+  return matchingBlocks;
 }
 
 export async function createScheduleBlock(block: Omit<ScheduleBlock, 'id'>, date?: Date): Promise<ScheduleBlock | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // Revert to ISO string to match existing DB format and ensure consistency
   const targetDate = date || new Date();
   const dateStr = targetDate.toISOString().split('T')[0];
 
+  const insertData = {
+    user_id: user.id,
+    title: block.title,
+    tag: block.tag,
+    start_hour: block.start,
+    duration: block.duration,
+    color: block.color,
+    text_color: block.textColor,
+    is_google: block.isGoogle || false,
+    completed: block.completed || false,
+    google_event_id: block.googleEventId || null,
+    // Robustly convert to string, handling 0, numbers, and strings
+    task_id: (block.taskId !== undefined && block.taskId !== null) ? String(block.taskId) : null,
+    habit_id: (block.habitId !== undefined && block.habitId !== null) ? String(block.habitId) : null,
+    date: dateStr,
+  };
+
+  console.log('📝 Creating Schedule Block (Payload):', insertData);
+
   const { data, error } = await supabase
     .from('schedule_blocks')
-    .insert({
-      user_id: user.id,
-      title: block.title,
-      tag: block.tag,
-      start_hour: block.start,
-      duration: block.duration,
-      color: block.color,
-      text_color: block.textColor,
-      is_google: block.isGoogle || false,
-      google_event_id: block.googleEventId || null,
-      date: dateStr,
-    })
+    .insert(insertData)
     .select()
     .single();
 
   if (error) {
-    console.error('Error creating schedule block:', error);
+    console.error('❌ Error creating schedule block:', error);
     return null;
   }
 
+  console.log('✅ Created schedule block successfully:', data);
   return dbBlockToBlock(data);
 }
 
@@ -239,6 +266,10 @@ export async function updateScheduleBlock(blockId: string, updates: Partial<Sche
   if (updates.color !== undefined) updateData.color = updates.color;
   if (updates.textColor !== undefined) updateData.text_color = updates.textColor;
   if (updates.completed !== undefined) updateData.completed = updates.completed;
+  if (updates.isGoogle !== undefined) updateData.is_google = updates.isGoogle;
+  if (updates.googleEventId !== undefined) updateData.google_event_id = updates.googleEventId;
+  if (updates.taskId !== undefined) updateData.task_id = updates.taskId;
+  if (updates.habitId !== undefined) updateData.habit_id = updates.habitId;
 
   const { error } = await supabase
     .from('schedule_blocks')
@@ -299,7 +330,7 @@ export async function loadUserSettings(): Promise<UserSettings | null> {
         googleConnected: newData.google_connected,
       };
     }
-    
+
     console.error('Error loading user settings:', error);
     return null;
   }
@@ -337,7 +368,7 @@ export async function saveUserSettings(settings: Partial<UserSettings>): Promise
 
 export async function loadNote(date: Date): Promise<string> {
   const dateStr = date.toISOString().split('T')[0];
-  
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return '';
 

@@ -35,6 +35,8 @@ export interface DbScheduleBlock {
   google_event_id: string | null;
   date: string;
   created_at: string;
+  task_id: string | null;
+  habit_id: string | null;
 }
 
 export interface DbUserSettings {

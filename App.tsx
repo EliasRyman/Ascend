@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { 
-  Check, 
-  Menu, 
-  X, 
-  Star, 
-  ArrowRight, 
-  ExternalLink, 
-  Calendar, 
-  ListTodo, 
-  BarChart3, 
-  Clock, 
+import {
+  Check,
+  Menu,
+  X,
+  Star,
+  ArrowRight,
+  ExternalLink,
+  Calendar,
+  ListTodo,
+  BarChart3,
+  Clock,
   RefreshCw,
   Layout,
   Target,
-  MoveRight, 
+  MoveRight,
   Play,
   Sun,
   Moon,
@@ -98,7 +98,7 @@ import {
 
 const ThemeContext = React.createContext({
   isDark: false,
-  toggleTheme: () => {}
+  toggleTheme: () => { }
 });
 
 const useTheme = () => useContext(ThemeContext);
@@ -178,19 +178,19 @@ const LATER_TASKS: Task[] = [
 ];
 
 const TIME_BLOCKS: ScheduleBlock[] = [
-  { 
-    id: 1, 
-    title: "Move this timebox!", 
-    tag: "task", 
+  {
+    id: 1,
+    title: "Move this timebox!",
+    tag: "task",
     start: 9, // 9:00 AM
     duration: 2, // 2 hours
     color: "bg-amber-400/90 dark:bg-amber-600/90 border-amber-500",
     textColor: "text-amber-950 dark:text-amber-50"
   },
-  { 
-    id: 2, 
-    title: "Love the demo!", 
-    tag: "demo", 
+  {
+    id: 2,
+    title: "Love the demo!",
+    tag: "demo",
     start: 12, // 12:00 PM
     duration: 1, // 1 hour
     color: "bg-emerald-300/90 dark:bg-emerald-600/90 border-emerald-400",
@@ -200,22 +200,22 @@ const TIME_BLOCKS: ScheduleBlock[] = [
 
 // Simulated external events from Google Calendar
 const EXTERNAL_GOOGLE_EVENTS: ScheduleBlock[] = [
-  { 
-    id: 'g1', 
-    title: "Team Standup", 
-    tag: "meeting", 
-    start: 10, 
-    duration: 0.5, 
+  {
+    id: 'g1',
+    title: "Team Standup",
+    tag: "meeting",
+    start: 10,
+    duration: 0.5,
     color: "bg-blue-100 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800",
     textColor: "text-blue-700 dark:text-blue-300",
     isGoogle: true
   },
-  { 
-    id: 'g2', 
-    title: "Product Review", 
-    tag: "meeting", 
-    start: 14, 
-    duration: 1, 
+  {
+    id: 'g2',
+    title: "Product Review",
+    tag: "meeting",
+    start: 14,
+    duration: 1,
     color: "bg-blue-100 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800",
     textColor: "text-blue-700 dark:text-blue-300",
     isGoogle: true
@@ -238,12 +238,12 @@ interface TaskItemProps {
   onEditTag?: (tag: { name: string; color: string }) => void;
 }
 
-const TaskItem = ({ 
-  task, 
+const TaskItem = ({
+  task,
   listType,
   userTags,
-  onDragStart, 
-  onDelete, 
+  onDragStart,
+  onDelete,
   onToggleComplete,
   onMoveToList,
   onAddTag,
@@ -269,12 +269,12 @@ const TaskItem = ({
   }, [isMenuOpen]);
 
   return (
-    <div 
+    <div
       draggable="true"
       onDragStart={(e) => onDragStart(e, task)}
       className={`group flex items-center gap-3 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-[#6F00FF]/50 cursor-grab active:cursor-grabbing transition-all shadow-sm ${task.completed ? 'opacity-60' : ''}`}
     >
-      <div 
+      <div
         onClick={() => onToggleComplete(task.id)}
         className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${task.completed ? 'bg-[#6F00FF] border-[#6F00FF]' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}
       >
@@ -284,7 +284,7 @@ const TaskItem = ({
         {task.title}
       </span>
       {task.tag && (
-        <span 
+        <span
           className="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide text-white"
           style={{ backgroundColor: task.tagColor || '#6F00FF' }}
         >
@@ -292,20 +292,20 @@ const TaskItem = ({
         </span>
       )}
       {task.time && (
-        <span className="text-[10px] text-slate-400 font-mono border border-slate-100 dark:border-slate-800 px-1 rounded">
+        <span className="text-[10px] opacity-70 text-slate-600 dark:text-slate-400">
           {task.time}
         </span>
       )}
-      
+
       {/* Options Menu */}
       <div className="relative z-40" ref={menuRef}>
-        <button 
+        <button
           onClick={(e) => { e.stopPropagation(); setIsMenuOpen(!isMenuOpen); }}
           className="text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-300 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
         >
           <MoreVertical size={16} />
         </button>
-        
+
         {isMenuOpen && (
           <div className="absolute right-0 top-8 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl z-[100] py-1 text-sm">
             <button onClick={() => { onToggleComplete(task.id); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200">
@@ -644,13 +644,13 @@ const SettingsModal = ({
 }: SettingsModalProps) => {
   const [activeSettingsTab, setActiveSettingsTab] = useState<'account' | 'billing' | 'customisations' | 'integrations'>(initialTab);
   const [emailUnsubscribed, setEmailUnsubscribed] = useState(false);
-  
+
   // Local state for temporary changes (not saved until "Save" is clicked)
   const [localSettings, setLocalSettings] = useState(settings);
-  
+
   // Check if there are unsaved changes
-  const hasUnsavedChanges = localSettings.timeFormat !== settings.timeFormat || 
-                           localSettings.timezone !== settings.timezone;
+  const hasUnsavedChanges = localSettings.timeFormat !== settings.timeFormat ||
+    localSettings.timezone !== settings.timezone;
 
   // Reset to initialTab and sync local settings when modal opens
   useEffect(() => {
@@ -689,11 +689,11 @@ const SettingsModal = ({
   ] as const;
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
-      <div 
+      <div
         className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 dark:border-slate-800"
         onClick={(e) => e.stopPropagation()}
       >
@@ -706,7 +706,7 @@ const SettingsModal = ({
             </div>
             <div className="flex items-center gap-2">
               {/* Theme Toggle */}
-              <button 
+              <button
                 onClick={toggleTheme}
                 className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-full"
               >
@@ -717,8 +717,8 @@ const SettingsModal = ({
                   <Moon size={14} className={`${isDark ? 'text-slate-200' : 'text-slate-400'}`} />
                 </div>
               </button>
-              <button 
-                onClick={handleClose} 
+              <button
+                onClick={handleClose}
                 className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"
               >
                 <X size={20} />
@@ -735,11 +735,10 @@ const SettingsModal = ({
               <button
                 key={tab.id}
                 onClick={() => setActiveSettingsTab(tab.id)}
-                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  activeSettingsTab === tab.id
-                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border-l-2 border-emerald-500'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                }`}
+                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSettingsTab === tab.id
+                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border-l-2 border-emerald-500'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                  }`}
               >
                 {tab.label}
               </button>
@@ -832,14 +831,14 @@ const SettingsModal = ({
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Time Format</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Choose how times are displayed in your calendar.</p>
                   <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
-                    <button 
-                      onClick={() => setLocalSettings({...localSettings, timeFormat: '12h'})}
+                    <button
+                      onClick={() => setLocalSettings({ ...localSettings, timeFormat: '12h' })}
                       className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${localSettings.timeFormat === '12h' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                     >
                       12-hour (9:00 AM)
                     </button>
-                    <button 
-                      onClick={() => setLocalSettings({...localSettings, timeFormat: '24h'})}
+                    <button
+                      onClick={() => setLocalSettings({ ...localSettings, timeFormat: '24h' })}
                       className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${localSettings.timeFormat === '24h' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                     >
                       24-hour (09:00)
@@ -852,9 +851,9 @@ const SettingsModal = ({
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Timezone</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Your calendar events will be displayed in this timezone.</p>
                   <div className="relative w-full max-w-xs">
-                    <select 
+                    <select
                       value={localSettings.timezone}
-                      onChange={(e) => setLocalSettings({...localSettings, timezone: e.target.value})}
+                      onChange={(e) => setLocalSettings({ ...localSettings, timezone: e.target.value })}
                       className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm appearance-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
                     >
                       <option value="Local">Local Time</option>
@@ -877,7 +876,7 @@ const SettingsModal = ({
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Google Calendar</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Sync your schedule with Google Calendar for two-way sync.</p>
-                  
+
                   {/* Status indicator */}
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Status:</span>
@@ -897,8 +896,8 @@ const SettingsModal = ({
                   {googleAccount ? (
                     <div className="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
                       <div className="flex items-center gap-3">
-                        <img 
-                          src={googleAccount.picture} 
+                        <img
+                          src={googleAccount.picture}
                           alt={googleAccount.name}
                           className="w-10 h-10 rounded-full"
                         />
@@ -929,10 +928,10 @@ const SettingsModal = ({
                       ) : (
                         <>
                           <svg width="20" height="20" viewBox="0 0 24 24">
-                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                           </svg>
                           <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Connect Google Calendar</span>
                         </>
@@ -966,11 +965,10 @@ const SettingsModal = ({
               <button
                 onClick={handleSave}
                 disabled={!hasUnsavedChanges}
-                className={`px-5 py-2 text-sm font-semibold rounded-lg transition-all ${
-                  hasUnsavedChanges 
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm' 
-                    : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                }`}
+                className={`px-5 py-2 text-sm font-semibold rounded-lg transition-all ${hasUnsavedChanges
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                  }`}
               >
                 Save
               </button>
@@ -986,7 +984,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const { isDark, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'timebox' | 'habittracker'>('timebox');
   const [isLaterOpen, setIsLaterOpen] = useState(true);
-  
+
   // State for Settings
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'account' | 'billing' | 'customisations' | 'integrations'>('account');
@@ -1046,7 +1044,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   // Timeline refs and state
   const timelineRef = useRef<HTMLDivElement>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
-  
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
@@ -1068,7 +1066,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     const initGoogle = async () => {
       try {
         await initGoogleApi();
-        
+
         // Check for OAuth callback params in URL (from backend redirect)
         const callbackResult = handleGoogleOAuthCallback();
         if (callbackResult?.connected) {
@@ -1078,7 +1076,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           setNotification({ type: 'success', message: 'Google Calendar connected!' });
           setIsGoogleConnecting(false);
         }
-        
+
         setGoogleApiReady(true);
       } catch (error) {
         console.error('Failed to initialize Google APIs:', error);
@@ -1092,19 +1090,19 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   useEffect(() => {
     const checkGoogleConnection = async () => {
       if (!user) return;
-      
+
       // Get Supabase session token for backend auth
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
         setSupabaseToken(session.access_token);
-        
+
         // Check if Google is connected via backend
         const status = await checkGoogleConnectionStatus();
         if (status.connected) {
           console.log('Google Calendar connected via backend');
           setGoogleAccount({ email: status.email || '', name: '', picture: '' });
           saveGoogleUser({ email: status.email || '' });
-          
+
           // Get access token for Google API calls
           const token = await getValidAccessToken();
           if (token) {
@@ -1139,7 +1137,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [schedule, setSchedule] = useState<ScheduleBlock[]>(TIME_BLOCKS);
   const [newTaskInput, setNewTaskInput] = useState("");
   const [isDataLoaded, setIsDataLoaded] = useState(false);
-  
+
   // Timeline zoom state
   const [isZoomedOut, setIsZoomedOut] = useState(false);
   const HOUR_HEIGHT_NORMAL = 96; // 96px per hour (normal view)
@@ -1150,7 +1148,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const handleZoomToggle = () => {
     const newZoomState = !isZoomedOut;
     setIsZoomedOut(newZoomState);
-    
+
     // Auto-scroll to center current time indicator in viewport
     setTimeout(() => {
       if (timelineRef.current) {
@@ -1158,9 +1156,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         const currentTimePosition = currentTimeDecimal * newHourHeight;
         const containerHeight = timelineRef.current.clientHeight;
         const scrollTarget = currentTimePosition - (containerHeight / 2);
-        timelineRef.current.scrollTo({ 
-          top: Math.max(0, scrollTarget), 
-          behavior: 'smooth' 
+        timelineRef.current.scrollTo({
+          top: Math.max(0, scrollTarget),
+          behavior: 'smooth'
         });
       }
     }, 50); // Small delay to let state update and re-render
@@ -1170,7 +1168,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   useEffect(() => {
     const loadData = async () => {
       if (!user) return;
-      
+
       try {
         const [activeData, laterData, blocksData, userSettings, noteContent] = await Promise.all([
           loadTasks('active'),
@@ -1182,25 +1180,25 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
         // Always use database data if user is logged in (even if empty)
         setActiveTasks(activeData.map(t => ({
-            id: t.id,
-            title: t.title,
-            tag: t.tag,
-            tagColor: t.tagColor,
-            time: t.time,
-            completed: t.completed
-        })));
-          
-        setLaterTasks(laterData.map(t => ({
-            id: t.id,
-            title: t.title,
-            tag: t.tag,
-            tagColor: t.tagColor,
-            time: t.time,
-            completed: t.completed
+          id: t.id,
+          title: t.title,
+          tag: t.tag,
+          tagColor: t.tagColor,
+          time: t.time,
+          completed: t.completed
         })));
 
-          setSchedule(blocksData);
-          
+        setLaterTasks(laterData.map(t => ({
+          id: t.id,
+          title: t.title,
+          tag: t.tag,
+          tagColor: t.tagColor,
+          time: t.time,
+          completed: t.completed
+        })));
+
+        setSchedule(blocksData);
+
         // Load notes for the selected date
         setNotesContent(noteContent);
 
@@ -1216,7 +1214,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         await moveIncompleteLaterTasksToToday();
 
         setIsDataLoaded(true);
-        
+
         // Auto-sync with Google Calendar if connected
         if (googleAccount) {
           await loadGoogleEventsForDate(selectedDate);
@@ -1240,7 +1238,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   // Function to load Google Calendar events for a specific date
   const loadGoogleEventsForDate = async (date: Date) => {
     if (!googleAccount) return;
-    
+
     // Ensure we have a valid access token from backend
     const token = await getValidAccessToken();
     if (!token) {
@@ -1248,12 +1246,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       return;
     }
     setAccessToken(token);
-    
+
     try {
       const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
       const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
       const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
-      
+
       const googleBlocks: ScheduleBlock[] = googleEvents.map(event => ({
         id: event.id,
         title: event.title,
@@ -1270,26 +1268,103 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         calendarId: (event as any).calendarId,
         canEdit: (event as any).canEdit ?? false, // true if user has write access
       }));
-      
-      // Replace all Google events with fresh data from API (avoiding duplicates)
+
+      // Deduplicate and update: Merge Google events with local blocks
       setSchedule(prev => {
-        // Keep only non-Google blocks (local blocks), replace all Google blocks with fresh data
-        const localBlocks = prev.filter(b => !b.isGoogle);
-        return [...localBlocks, ...googleBlocks];
+        // Get all Google event IDs that we're about to add/update
+        const incomingGoogleEventIds = new Set(googleBlocks.map(b => b.googleEventId).filter(Boolean));
+
+        // Create a map of old blocks by googleEventId to preserve their properties
+        const oldBlocksByGoogleId = new Map(
+          prev.filter(b => b.googleEventId).map(b => [b.googleEventId, b])
+        );
+
+        // Keep blocks that are:
+        // 1) Not from Google AND don't have a googleEventId that matches incoming events
+        // 2) User-created (have taskId/habitId) AND don't have a googleEventId that matches incoming events
+        // This ensures we never lose user blocks, but we remove old versions of Google events
+        const localBlocks = prev.filter(b => {
+          // If this block has a googleEventId that's in the incoming events, remove it
+          if (b.googleEventId && incomingGoogleEventIds.has(b.googleEventId)) {
+            console.log('🗑️ Removing old version of:', b.title, 'at', b.start);
+            return false;
+          }
+          // Keep non-Google blocks or user-created blocks
+          return !b.isGoogle || b.taskId || b.habitId;
+        });
+
+        // Find old Google events that will be replaced
+        const eventsToReplace = prev.filter(b =>
+          b.isGoogle &&
+          b.googleEventId &&
+          incomingGoogleEventIds.has(b.googleEventId)
+        );
+
+        // Log what's being updated
+        eventsToReplace.forEach(old => {
+          const newEvent = googleBlocks.find(g => g.googleEventId === old.googleEventId);
+          if (newEvent && old.start !== newEvent.start) {
+            console.log(`🔄 Moving "${old.title}" from ${old.start}:00 to ${newEvent.start}:00`);
+          }
+        });
+
+        // Remove old Google events that will be replaced by incoming ones
+        const existingGoogleBlocks = prev.filter(b =>
+          b.isGoogle &&
+          b.googleEventId &&
+          !incomingGoogleEventIds.has(b.googleEventId)
+        );
+
+        // Create sets for signature matching (to avoid duplicates without Google IDs)
+        const localBlockSignatures = new Set(localBlocks.map(b => `${b.start}-${b.title}`));
+
+        // Process Google blocks: merge with old properties if they exist
+        const processedGoogleBlocks = googleBlocks.map(g => {
+          const oldBlock = oldBlocksByGoogleId.get(g.googleEventId);
+          if (oldBlock) {
+            // Merge: keep taskId, habitId, and other important properties from old block
+            console.log('✨ Preserving properties for:', g.title, '- taskId:', oldBlock.taskId, 'habitId:', oldBlock.habitId);
+            return {
+              ...g,
+              taskId: oldBlock.taskId,
+              habitId: oldBlock.habitId,
+              completed: oldBlock.completed,
+              // Keep original tag if it was user-set, otherwise use Google calendar name
+              tag: oldBlock.taskId || oldBlock.habitId ? oldBlock.tag : g.tag,
+            };
+          }
+          return g;
+        });
+
+        // Filter out Google events that match local blocks by signature
+        const uniqueGoogleBlocks = processedGoogleBlocks.filter(g => {
+          const signature = `${g.start}-${g.title}`;
+          if (localBlockSignatures.has(signature)) {
+            console.log('🚫 Skipping Google event (Signature match):', g.title, 'at', g.start);
+            return false;
+          }
+          return true;
+        });
+
+        console.log('✅ Adding/Updating', uniqueGoogleBlocks.length, 'Google events');
+        console.log('📦 Keeping', localBlocks.length, 'local blocks');
+        console.log('📦 Keeping', existingGoogleBlocks.length, 'unchanged Google events');
+
+        return [...localBlocks, ...existingGoogleBlocks, ...uniqueGoogleBlocks];
       });
     } catch (error: any) {
       console.error('Failed to load Google Calendar events:', error);
       // Handle session expired - clear Google account and notify user
       if (error?.message === 'SESSION_EXPIRED') {
         setGoogleAccount(null);
-        setNotification({ 
-          type: 'info', 
-          message: 'Google Calendar session expired. Please reconnect in Settings.' 
+        setNotification({
+          type: 'info',
+          message: 'Google Calendar session expired. Please reconnect in Settings.'
         });
       }
     }
   };
-  
+
   // Drag State
   const [draggedItem, setDraggedItem] = useState(null);
   const [dragOverList, setDragOverList] = useState(null);
@@ -1310,6 +1385,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [isCalendarSynced, setIsCalendarSynced] = useState(false);
 
   // Auto-sync Google Calendar when account is connected (after OAuth redirect)
+  // DISABLED: Auto-sync creates duplicates - user must manually sync instead
+  /*
   useEffect(() => {
     const autoSync = async () => {
       if (googleAccount && isDataLoaded && !isCalendarSynced) {
@@ -1325,27 +1402,43 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     };
     autoSync();
   }, [googleAccount, isDataLoaded]);
+  */
+
+  // Poll Google Calendar events every 10 seconds to detect external changes
+  useEffect(() => {
+    if (!googleAccount || !isDataLoaded) return;
+
+    const pollInterval = setInterval(async () => {
+      console.log('🔄 Polling Google Calendar for updates...');
+      const token = await getValidAccessToken();
+      if (token) {
+        await loadGoogleEventsForDate(selectedDate);
+      }
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [googleAccount, isDataLoaded, selectedDate]);
 
   // Load schedule blocks and notes when selectedDate changes
   useEffect(() => {
     const loadDateData = async () => {
       if (!user || !isDataLoaded) return;
-      
+
       try {
         setNotesLoading(true);
-        
+
         // Load schedule blocks and notes for the new date
         const [blocksData, noteContent] = await Promise.all([
           loadScheduleBlocks(selectedDate),
           loadNote(selectedDate)
         ]);
-        
+
         // Update schedule (keep only non-Google events from database, Google events will be loaded separately)
         setSchedule(blocksData);
-        
+
         // Update notes
         setNotesContent(noteContent);
-        
+
         // Reload Google Calendar events for the new date
         if (googleAccount) {
           await loadGoogleEventsForDate(selectedDate);
@@ -1356,7 +1449,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         setNotesLoading(false);
       }
     };
-    
+
     loadDateData();
   }, [selectedDate, user, isDataLoaded]);
 
@@ -1366,10 +1459,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     message: string;
   } | null>(null);
 
-  // Auto-hide notification after 4 seconds
+  // Auto-hide notification after 1 second
   useEffect(() => {
     if (notification) {
-      const timer = setTimeout(() => setNotification(null), 4000);
+      const timer = setTimeout(() => setNotification(null), 1000);
       return () => clearTimeout(timer);
     }
   }, [notification]);
@@ -1377,14 +1470,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   // Save settings when they change
   useEffect(() => {
     if (!user || !isDataLoaded) return;
-    
+
     const saveSettings = async () => {
       await saveUserSettings({
         timeFormat: settings.timeFormat as '12h' | '24h',
         timezone: settings.timezone
       });
     };
-    
+
     saveSettings();
   }, [settings, user, isDataLoaded]);
 
@@ -1435,7 +1528,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     let streak = 0;
     let currentDate = new Date();
     const todayString = currentDate.toISOString().split('T')[0];
-    
+
     while (true) {
       const dateString = currentDate.toISOString().split('T')[0];
       if (isHabitScheduledForDay(habit, currentDate)) {
@@ -1451,12 +1544,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const toggleHabitCompletion = (habitId: string, date?: Date) => {
     const targetDate = date || new Date();
     const dateString = targetDate.toISOString().split('T')[0];
-    
+
     // Find current habit to determine new completion state
     const currentHabit = habits.find(h => h.id === habitId);
     const isCurrentlyCompleted = currentHabit?.completedDates.includes(dateString) || false;
     const newCompleted = !isCurrentlyCompleted;
-    
+
     setHabits(prev => prev.map(habit => {
       if (habit.id !== habitId) return habit;
       const isCompleted = habit.completedDates.includes(dateString);
@@ -1465,11 +1558,21 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       const newStreak = calculateStreak(updatedHabit);
       return { ...updatedHabit, currentStreak: newStreak, longestStreak: Math.max(updatedHabit.longestStreak, newStreak) };
     }));
-    
+
+
     // Also update any schedule blocks that reference this habit
-    setSchedule(prev => prev.map(block => 
+    setSchedule(prev => prev.map(block =>
       block.habitId === habitId ? { ...block, completed: newCompleted } : block
     ));
+
+    // Persist habit completion to schedule_blocks database
+    const associatedBlocks = schedule.filter(b => b.habitId === habitId);
+    console.log('🔄 Updating', associatedBlocks.length, 'habit schedule blocks with completed:', newCompleted);
+    for (const block of associatedBlocks) {
+      updateScheduleBlock(String(block.id), { completed: newCompleted }).catch(err =>
+        console.error('Failed to sync habit block completion:', err)
+      );
+    }
   };
 
   const addHabit = (newHabit: Omit<Habit, 'id' | 'currentStreak' | 'longestStreak' | 'completedDates' | 'createdAt'>) => {
@@ -1513,14 +1616,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       const updatedTags = userTags.map(t => t.name === oldTagName ? { name: tagName, color: tagColor } : t);
       setUserTags(updatedTags);
       localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
-      
+
       // Update all tasks with the old tag
       setActiveTasks(prev => prev.map(t => t.tag === oldTagName ? { ...t, tag: tagName, tagColor: tagColor } : t));
       setLaterTasks(prev => prev.map(t => t.tag === oldTagName ? { ...t, tag: tagName, tagColor: tagColor } : t));
-      
+
       // Update all habits with the old tag
       setHabits(prev => prev.map(h => h.tag === oldTagName ? { ...h, tag: tagName, tagColor: tagColor } : h));
-      
+
       setEditingTag(null);
     } else {
       // Creating new tag
@@ -1528,7 +1631,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       const updatedTags = [...userTags, newTag];
       setUserTags(updatedTags);
       localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
-      
+
       // Apply to task if one is selected
       if (tagModalTaskId) handleAddTagToTask(tagModalTaskId, tagName, tagColor);
       // Apply to habit if one is selected
@@ -1544,14 +1647,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     const updatedTags = userTags.filter(t => t.name !== tagToDelete);
     setUserTags(updatedTags);
     localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
-    
+
     // Remove tag from all tasks
     setActiveTasks(prev => prev.map(t => t.tag === tagToDelete ? { ...t, tag: null, tagColor: null } : t));
     setLaterTasks(prev => prev.map(t => t.tag === tagToDelete ? { ...t, tag: null, tagColor: null } : t));
-    
+
     // Remove tag from all habits
     setHabits(prev => prev.map(h => h.tag === tagToDelete ? { ...h, tag: undefined, tagColor: undefined } : h));
-    
+
     setEditingTag(null);
   };
 
@@ -1588,7 +1691,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     const taskInLater = laterTasks.find(t => String(t.id) === String(taskId));
     const task = taskInActive || taskInLater;
     if (!task) return;
-    
+
     if (taskInActive && targetList === 'later') {
       setActiveTasks(prev => prev.filter(t => String(t.id) !== String(taskId)));
       setLaterTasks(prev => [...prev, { ...task, time: null }]);
@@ -1602,7 +1705,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const handleToggleComplete = async (taskId: number | string, listType: 'active' | 'later') => {
     const currentTask = listType === 'active' ? activeTasks.find(t => String(t.id) === String(taskId)) : laterTasks.find(t => String(t.id) === String(taskId));
     const newCompleted = currentTask ? !currentTask.completed : true;
-    
+
     if (listType === 'active') {
       setActiveTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, completed: newCompleted } : t));
     } else {
@@ -1610,6 +1713,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     }
     setSchedule(prev => prev.map(block => String(block.taskId) === String(taskId) ? { ...block, completed: newCompleted } : block));
     await updateTask(String(taskId), { completed: newCompleted });
+
+    // Also update associated schedule blocks in DB
+    const associatedBlocks = schedule.filter(b => String(b.taskId) === String(taskId));
+    console.log('🔄 Updating', associatedBlocks.length, 'schedule blocks with completed:', newCompleted);
+    for (const block of associatedBlocks) {
+      console.log('💾 Saving completed status to DB for block:', block.id, 'completed:', newCompleted);
+      const result = await updateScheduleBlock(String(block.id), { completed: newCompleted });
+      console.log('✅ Save result for block', block.id, ':', result);
+    }
   };
 
   const handleToggleBlockComplete = async (blockId: number | string) => {
@@ -1620,6 +1732,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     if (block.taskId) {
       setActiveTasks(prev => prev.map(t => String(t.id) === String(block.taskId) ? { ...t, completed: newCompleted } : t));
       setLaterTasks(prev => prev.map(t => String(t.id) === String(block.taskId) ? { ...t, completed: newCompleted } : t));
+      // Update Task in DB
+      updateTask(String(block.taskId), { completed: newCompleted }).catch(err => console.error('Failed to sync task completion:', err));
     }
     if (block.habitId) toggleHabitCompletion(block.habitId, selectedDate);
     await updateScheduleBlock(String(blockId), { completed: newCompleted });
@@ -1627,15 +1741,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
   // Notes handlers (date-specific)
   const notesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   const handleNotesChange = (content: string) => {
     setNotesContent(content);
-    
+
     // Debounce save to avoid too many API calls
     if (notesSaveTimeoutRef.current) {
       clearTimeout(notesSaveTimeoutRef.current);
     }
-    
+
     notesSaveTimeoutRef.current = setTimeout(async () => {
       if (user) {
         const success = await saveNote(selectedDate, content);
@@ -1655,16 +1769,16 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const handleAddWeight = () => {
     const weight = parseFloat(newWeight);
     if (isNaN(weight) || weight <= 0) return;
-    
+
     const dateToLog = weightDate;
     const existingIndex = weightEntries.findIndex(e => e.date === dateToLog);
-    
-    let updatedEntries = existingIndex >= 0 
+
+    let updatedEntries = existingIndex >= 0
       ? weightEntries.map((e, i) => i === existingIndex ? { date: dateToLog, weight } : e)
       : [...weightEntries, { date: dateToLog, weight }].sort((a, b) => a.date.localeCompare(b.date));
-    
+
     if (updatedEntries.length > 90) updatedEntries = updatedEntries.slice(-90);
-    
+
     setWeightEntries(updatedEntries);
     localStorage.setItem('ascend_weight_entries', JSON.stringify(updatedEntries));
     setNewWeight('');
@@ -1684,7 +1798,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     try {
       const blocksData = await loadScheduleBlocks(date);
       const dateString = date.toISOString().split('T')[0];
-      
+
       // Add habit blocks
       const habitBlocks: ScheduleBlock[] = habits
         .filter(h => h.scheduledStartTime && isHabitScheduledForDay(h, date))
@@ -1717,30 +1831,55 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
         const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
         try {
-        const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
+          const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
           googleBlocks = googleEvents.map(event => ({
-          id: event.id,
-          title: event.title,
+            id: event.id,
+            title: event.title,
             tag: (event as any).calendarName || 'google',
-          start: event.start,
-          duration: event.duration,
-          color: (event as any).calendarColor ? '' : 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
-          textColor: 'text-white',
-          isGoogle: true,
-          googleEventId: event.id,
-          completed: false,
-          calendarColor: (event as any).calendarColor,
-          calendarName: (event as any).calendarName,
-        }));
+            start: event.start,
+            duration: event.duration,
+            color: (event as any).calendarColor ? '' : 'bg-fuchsia-600/90 dark:bg-fuchsia-700/90 border-fuchsia-600',
+            textColor: 'text-white',
+            isGoogle: true,
+            googleEventId: event.id,
+            completed: false,
+            calendarColor: (event as any).calendarColor,
+            calendarName: (event as any).calendarName,
+          }));
         } catch (error) {
           console.error('Failed to fetch Google Calendar events:', error);
         }
       }
-      
+
       // Combine all blocks, avoiding duplicates
       const dbBlockGoogleIds = new Set(blocksData.map(b => b.googleEventId).filter(Boolean));
-      const uniqueGoogleBlocks = googleBlocks.filter(g => !dbBlockGoogleIds.has(g.googleEventId));
-        setSchedule([...blocksData, ...uniqueGoogleBlocks, ...habitBlocks]);
+      console.log('🔍 DB Block Google IDs:', Array.from(dbBlockGoogleIds));
+
+      // Also create a "signature" set for fallback matching (Start Time + Title)
+      const dbBlockSignatures = new Set(blocksData.map(b => `${b.start}-${b.title}`));
+      console.log('🔍 DB Block Signatures:', Array.from(dbBlockSignatures));
+      console.log('🔍 Google Blocks to filter:', googleBlocks.map(g => ({ title: g.title, start: g.start, id: g.googleEventId })));
+
+      const uniqueGoogleBlocks = googleBlocks.filter(g => {
+        // 1. Exact ID Match
+        if (g.googleEventId && dbBlockGoogleIds.has(g.googleEventId)) {
+          console.log('❌ FILTERED (ID match):', g.title, 'Google ID:', g.googleEventId);
+          return false;
+        }
+
+        // 2. Signature Match
+        const signature = `${g.start}-${g.title}`;
+        if (dbBlockSignatures.has(signature)) {
+          console.log('❌ FILTERED (Signature match):', g.title, 'at', g.start, 'Signature:', signature);
+          return false;
+        }
+
+        console.log('✅ KEEPING Google event:', g.title, 'at', g.start, 'Signature:', signature);
+        return true;
+      });
+
+      console.log('📊 Final schedule: DB blocks:', blocksData.length, 'Unique Google blocks:', uniqueGoogleBlocks.length, 'Habit blocks:', habitBlocks.length);
+      setSchedule([...blocksData, ...uniqueGoogleBlocks, ...habitBlocks]);
     } catch (error) {
       console.error('Failed to load schedule for date:', error);
       setNotification({ type: 'error', message: 'Failed to load schedule' });
@@ -1754,24 +1893,24 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
   // Helper to format decimal time (e.g. 9.5 -> 9:30 AM or 09:30)
   const formatTime = (decimalTime: number, compact = false) => {
-      const hours = Math.floor(decimalTime);
-      const minutes = Math.round((decimalTime - hours) * 60);
-      const displayMinutes = minutes.toString().padStart(2, '0');
+    const hours = Math.floor(decimalTime);
+    const minutes = Math.round((decimalTime - hours) * 60);
+    const displayMinutes = minutes.toString().padStart(2, '0');
 
-      if (settings.timeFormat === '24h') {
-          const displayHours = hours.toString().padStart(2, '0');
-          return `${displayHours}:${displayMinutes}`;
-      }
+    if (settings.timeFormat === '24h') {
+      const displayHours = hours.toString().padStart(2, '0');
+      return `${displayHours}:${displayMinutes}`;
+    }
 
-      // 12h format
-      const period = hours >= 12 ? 'PM' : 'AM';
-      const displayHours = hours > 12 ? hours - 12 : (hours === 0 || hours === 24 ? 12 : hours);
-      
-      // If compact (for axis) and minutes are 0, hide minutes
-      if (compact && minutes === 0) {
-          return `${displayHours} ${period}`;
-      }
-      return `${displayHours}:${displayMinutes} ${period}`;
+    // 12h format
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours > 12 ? hours - 12 : (hours === 0 || hours === 24 ? 12 : hours);
+
+    // If compact (for axis) and minutes are 0, hide minutes
+    if (compact && minutes === 0) {
+      return `${displayHours} ${period}`;
+    }
+    return `${displayHours}:${displayMinutes} ${period}`;
   };
 
   // Use refs to access current values without triggering re-renders
@@ -1783,7 +1922,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       const currentHourHeight = hourHeightRef.current;
-      
+
       // Handle resize
       if (resizingBlockId !== null && resizeStartY !== null && resizeStartDuration !== null) {
         const deltaY = e.clientY - resizeStartY;
@@ -1793,7 +1932,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         if (newDuration < 0.25) newDuration = 0.25;
         setSchedule(prev => prev.map(block => block.id === resizingBlockId ? { ...block, duration: newDuration } : block));
       }
-      
+
       // Handle drag/move
       if (draggingBlockId !== null && dragStartY !== null && dragStartTime !== null) {
         const deltaY = e.clientY - dragStartY;
@@ -1814,16 +1953,18 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     const handleMouseUp = async () => {
       // Use ref to get current schedule
       const currentSchedule = scheduleRef.current;
-      
+
       // Helper to check if we can edit a Google Calendar event
       // Check if user has write access to edit this calendar event
       const canEditGoogleEvent = (block: ScheduleBlock) => {
         // Local blocks (not from Google) can always be edited
         if (!block.isGoogle) return true;
+        // User-created blocks (with taskId/habitId) can always be edited
+        if (block.taskId || block.habitId) return true;
         // Google blocks use the canEdit flag from the API
         return block.canEdit === true;
       };
-      
+
       // Handle resize end
       if (resizingBlockId !== null) {
         const resizedBlock = currentSchedule.find(b => b.id === resizingBlockId);
@@ -1831,20 +1972,20 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           // Only save to database if it's NOT a Google Calendar event
           // (Google events are synced from Google, not stored locally)
           if (!resizedBlock.isGoogle) {
-            await updateScheduleBlock(String(resizedBlock.id), { 
-              duration: resizedBlock.duration 
+            await updateScheduleBlock(String(resizedBlock.id), {
+              duration: resizedBlock.duration
             });
           }
-          
+
           // Update Google Calendar if it's an Ascend calendar event (we have write access)
           if (resizedBlock.googleEventId && googleAccount) {
             if (canEditGoogleEvent(resizedBlock)) {
               try {
                 await updateGoogleCalendarEvent(
-                  resizedBlock.googleEventId, 
-                  resizedBlock.title, 
-                  resizedBlock.start, 
-                  resizedBlock.duration, 
+                  resizedBlock.googleEventId,
+                  resizedBlock.title,
+                  resizedBlock.start,
+                  resizedBlock.duration,
                   selectedDate,
                   resizedBlock.calendarId,
                   resizedBlock.color || resizedBlock.calendarColor || undefined
@@ -1865,27 +2006,27 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         setResizeStartY(null);
         setResizeStartDuration(null);
       }
-      
+
       // Handle drag/move end
       if (draggingBlockId !== null) {
         const movedBlock = currentSchedule.find(b => b.id === draggingBlockId);
         if (movedBlock) {
           // Only save to database if it's NOT a Google Calendar event
           if (!movedBlock.isGoogle) {
-            await updateScheduleBlock(String(movedBlock.id), { 
-              start: movedBlock.start 
+            await updateScheduleBlock(String(movedBlock.id), {
+              start: movedBlock.start
             });
           }
-          
+
           // Update Google Calendar if it's an Ascend calendar event (we have write access)
           if (movedBlock.googleEventId && googleAccount) {
             if (canEditGoogleEvent(movedBlock)) {
               try {
                 await updateGoogleCalendarEvent(
-                  movedBlock.googleEventId, 
-                  movedBlock.title, 
-                  movedBlock.start, 
-                  movedBlock.duration, 
+                  movedBlock.googleEventId,
+                  movedBlock.title,
+                  movedBlock.start,
+                  movedBlock.duration,
                   selectedDate,
                   movedBlock.calendarId,
                   movedBlock.color || movedBlock.calendarColor || undefined
@@ -1900,6 +2041,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               // External calendar - can't edit, show message
               setNotification({ type: 'info', message: `External calendar events (${movedBlock.calendarName}) are read-only` });
             }
+          }
+
+          // Update linked task's time in To-Do list
+          if (movedBlock.taskId) {
+            const newTimeString = formatTime(movedBlock.start);
+            setActiveTasks(prev => prev.map(t => String(t.id) === String(movedBlock.taskId) ? { ...t, time: newTimeString } : t));
+            setLaterTasks(prev => prev.map(t => String(t.id) === String(movedBlock.taskId) ? { ...t, time: newTimeString } : t));
+            await updateTask(String(movedBlock.taskId), { time: newTimeString });
+            console.log('📅 Updated task time to:', newTimeString);
           }
         }
         setDraggingBlockId(null);
@@ -1916,37 +2066,37 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  // Removed 'schedule' from deps - using scheduleRef instead to prevent listener churn during drag
+    // Removed 'schedule' from deps - using scheduleRef instead to prevent listener churn during drag
   }, [resizingBlockId, resizeStartY, resizeStartDuration, draggingBlockId, dragStartY, dragStartTime, googleAccount, selectedDate]);
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newTaskInput.trim()) {
-        // Create task in database
-        const savedTask = await createTask(newTaskInput.trim(), 'active');
-        
-        if (savedTask) {
-          const newTask: Task = {
-              id: savedTask.id,
-              title: savedTask.title,
-              tag: savedTask.tag,
-              tagColor: savedTask.tagColor,
-              time: savedTask.time,
-              completed: savedTask.completed
-          };
-          setActiveTasks([...activeTasks, newTask]);
-        } else {
-          // Fallback to local-only if not logged in
-          const newTask: Task = {
-              id: Date.now(),
-              title: newTaskInput.trim(),
-              tag: null,
-              tagColor: null,
-              time: null,
-              completed: false
-          };
-          setActiveTasks([...activeTasks, newTask]);
-        }
-        setNewTaskInput("");
+      // Create task in database
+      const savedTask = await createTask(newTaskInput.trim(), 'active');
+
+      if (savedTask) {
+        const newTask: Task = {
+          id: savedTask.id,
+          title: savedTask.title,
+          tag: savedTask.tag,
+          tagColor: savedTask.tagColor,
+          time: savedTask.time,
+          completed: savedTask.completed
+        };
+        setActiveTasks([...activeTasks, newTask]);
+      } else {
+        // Fallback to local-only if not logged in
+        const newTask: Task = {
+          id: Date.now(),
+          title: newTaskInput.trim(),
+          tag: null,
+          tagColor: null,
+          time: null,
+          completed: false
+        };
+        setActiveTasks([...activeTasks, newTask]);
+      }
+      setNewTaskInput("");
     }
   };
 
@@ -1964,7 +2114,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       await deleteScheduleBlock(String(linkedBlock.id));
       setSchedule(prev => prev.filter(b => String(b.id) !== String(linkedBlock.id)));
     }
-    
+
     // Delete task from database
     await deleteTaskFromDb(String(taskId));
     if (listType === 'active') {
@@ -1976,23 +2126,30 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
   const handleDeleteBlock = async (blockId: number | string) => {
     const block = schedule.find(b => String(b.id) === String(blockId));
-    
-    // Check if this is an external calendar event (read-only)
-    const isReadOnlyEvent = block?.isGoogle && block?.canEdit !== true;
-    
+
+    // Check if this is a truly external calendar event (read-only)
+    // Events with taskId/habitId are USER-CREATED and can always be deleted
+    const isUserCreated = block?.taskId || block?.habitId;
+    const isReadOnlyEvent = block?.isGoogle && block?.canEdit !== true && !isUserCreated;
+
     if (isReadOnlyEvent) {
       // Read-only calendar events can't be deleted - just hide from view
       setNotification({ type: 'info', message: `Calendar events from "${block?.calendarName}" can only be hidden (read-only access)` });
       setSchedule(prev => prev.filter(b => String(b.id) !== String(blockId)));
       return;
     }
-    
-    // Delete from Google Calendar (only if we have write access)
-    if (block?.googleEventId && googleAccount && block?.canEdit) {
+
+    // Delete from Google Calendar (if we created it or have write access)
+    // We should delete if: 1) It's NOT a read-only external calendar, OR 2) We created it (has taskId/habitId)
+    const shouldDeleteFromGoogle = block?.googleEventId && googleAccount && (!block?.isGoogle || block?.canEdit || block?.taskId || block?.habitId);
+
+    if (shouldDeleteFromGoogle) {
       try {
+        console.log('🗑️ Deleting from Google Calendar:', block.googleEventId);
         await deleteGoogleCalendarEvent(block.googleEventId);
+        console.log('✅ Deleted from Google Calendar successfully');
       } catch (error) {
-        console.error('Failed to delete from Google Calendar:', error);
+        console.error('❌ Failed to delete from Google Calendar:', error);
         setNotification({ type: 'error', message: 'Failed to delete from Google Calendar' });
       }
     }
@@ -2020,9 +2177,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       setNotification({ type: 'info', message: 'Connect Google Calendar in Settings first' });
       return;
     }
-    
+
     setIsSyncing(true);
-    
+
     try {
       // Prepare local blocks for sync comparison
       const localBlocksForSync = schedule
@@ -2057,8 +2214,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
         // Update changed events
         for (const { localId, event } of syncResult.toUpdate) {
-          updated = updated.map(b => 
-            b.id === localId 
+          updated = updated.map(b =>
+            b.id === localId
               ? { ...b, title: event.title, start: event.start, duration: event.duration }
               : b
           );
@@ -2075,9 +2232,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       const { stats } = syncResult;
       const total = stats.added + stats.updated + stats.removed;
       if (total > 0) {
-        setNotification({ 
-          type: 'success', 
-          message: `Synced: ${stats.added} added, ${stats.updated} updated, ${stats.removed} removed` 
+        setNotification({
+          type: 'success',
+          message: `Synced: ${stats.added} added, ${stats.updated} updated, ${stats.removed} removed`
         });
       } else {
         setNotification({ type: 'success', message: 'Calendar is up to date!' });
@@ -2088,7 +2245,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     } catch (error: any) {
       console.error('Sync failed:', error);
       const errorMessage = error?.message || '';
-      
+
       // Check if user needs to reconnect
       if (errorMessage.includes('reconnect') || errorMessage.includes('expired') || errorMessage.includes('401')) {
         clearGoogleData();
@@ -2096,7 +2253,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         setIsCalendarSynced(false);
         setNotification({ type: 'error', message: 'Please reconnect Google Calendar in Settings to enable sync.' });
       } else {
-      setNotification({ type: 'error', message: 'Failed to sync with Google Calendar' });
+        setNotification({ type: 'error', message: 'Failed to sync with Google Calendar' });
       }
     } finally {
       setIsSyncing(false);
@@ -2110,7 +2267,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   };
 
   const handleListDragOver = (e, listId) => {
-    e.preventDefault(); 
+    e.preventDefault();
     if (dragOverList !== listId) setDragOverList(listId);
     e.dataTransfer.dropEffect = 'move';
   };
@@ -2123,195 +2280,274 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     if (sourceList === targetListId) return;
 
     if (sourceList === 'active') {
-        setActiveTasks(prev => prev.filter(t => t.id !== task.id));
+      setActiveTasks(prev => prev.filter(t => t.id !== task.id));
     } else {
-        setLaterTasks(prev => prev.filter(t => t.id !== task.id));
+      setLaterTasks(prev => prev.filter(t => t.id !== task.id));
     }
 
     const newTask = { ...task };
     if (targetListId !== 'active') newTask.time = null;
 
     if (targetListId === 'active') {
-        setActiveTasks(prev => [...prev, newTask]);
+      setActiveTasks(prev => [...prev, newTask]);
     } else {
-        setLaterTasks(prev => [...prev, newTask]);
+      setLaterTasks(prev => [...prev, newTask]);
     }
-    
+
     // Save to database
     await moveTask(String(task.id), targetListId);
-    
+
     setDraggedItem(null);
   };
 
   const handleHourDragOver = (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
   };
 
   const handleHourDrop = async (e, hour) => {
-      e.preventDefault();
-      setDragOverHour(null);
-      
-      // Check if a habit was dropped
-      const habitId = e.dataTransfer.getData('habitId');
-      if (habitId) {
-        const habitName = e.dataTransfer.getData('habitName');
-        const habitTag = e.dataTransfer.getData('habitTag') || null;
-        const habitTagColor = e.dataTransfer.getData('habitTagColor') || null;
-        
-        // Check if already on timeline
-        const existingBlock = schedule.find(b => b.habitId === habitId);
-        if (existingBlock) {
-          setNotification({ type: 'info', message: 'This habit is already on the timeline!' });
-          return;
-        }
-        
-        const blockData = {
-          title: habitName,
-          tag: habitTag,
-          start: hour,
-          duration: 1,
-          color: habitTagColor || '#6F00FF',
-          textColor: 'text-white',
-          isGoogle: false,
-          completed: false,
-          habitId: habitId,
-        };
-        
-        // Save to database
-        const savedBlock = await createScheduleBlock(blockData, selectedDate);
-        
-        const habitBlock: ScheduleBlock = savedBlock ? {
-          ...savedBlock,
-          habitId: habitId,
-          calendarColor: habitTagColor,
-        } : {
-          id: Date.now(),
-          ...blockData,
-          calendarColor: habitTagColor,
-        };
-        
-        // Sync to Google Calendar if connected - do this BEFORE adding to state
-        let googleEventId: string | undefined;
-        console.log('Checking Google sync for habit:', { googleAccount: !!googleAccount });
-        
-        if (googleAccount) {
-          try {
-            console.log('Creating Google Calendar event for habit:', habitName, 'at hour:', hour);
-            googleEventId = await createGoogleCalendarEvent(habitName, hour, 1, selectedDate, habitTag || undefined, habitTagColor || undefined);
-            console.log('Google Calendar event created with ID:', googleEventId);
-            
-            // Update database with Google event ID
-            if (savedBlock && googleEventId) {
-              await updateScheduleBlock(String(savedBlock.id), { googleEventId: googleEventId });
-            }
-          } catch (error: any) {
-            console.error('Failed to create Google Calendar event for habit:', error);
-            setNotification({ type: 'error', message: `Failed to sync "${habitName}" to Google Calendar` });
-          }
-        }
-        
-        // Add to schedule with Google event ID if available
-        const finalBlock: ScheduleBlock = {
-          ...habitBlock,
-          googleEventId: googleEventId,
-        };
-        
-        setSchedule(prev => [...prev, finalBlock]);
-        
-        if (googleEventId) {
-          setNotification({ type: 'success', message: `Scheduled "${habitName}" and synced to Google Calendar` });
-        } else if (!googleAccount) {
-          setNotification({ type: 'success', message: `Scheduled "${habitName}" at ${formatTime(hour)}` });
-        }
-        return;
-      }
-      
-      if (!draggedItem) return;
-      const { task } = draggedItem;
+    e.preventDefault();
+    setDragOverHour(null);
 
-      // Check if task is already on timeline
-      const existingBlock = schedule.find(b => b.taskId === task.id);
+    // Check if a habit was dropped
+    const habitId = e.dataTransfer.getData('habitId');
+    if (habitId) {
+      const habitName = e.dataTransfer.getData('habitName');
+      const habitTag = e.dataTransfer.getData('habitTag') || null;
+      const habitTagColor = e.dataTransfer.getData('habitTagColor') || null;
+
+      // Check if already on timeline
+      const existingBlock = schedule.find(b => b.habitId === habitId);
       if (existingBlock) {
-        setNotification({ type: 'info', message: 'This task is already on the timeline!' });
-        setDraggedItem(null);
+        setNotification({ type: 'info', message: 'This habit is already on the timeline!' });
         return;
       }
 
       const blockData = {
-          title: task.title,
-          tag: task.tag || null,
-          start: hour,
-          duration: 1,
-          color: task.tagColor || '#4285f4',
-          textColor: "text-white",
-          isGoogle: false,
-          completed: task.completed || false,
-          taskId: task.id
+        title: habitName,
+        tag: habitTag,
+        start: hour,
+        duration: 1,
+        color: habitTagColor || '#6F00FF',
+        textColor: 'text-white',
+        isGoogle: false,
+        completed: false,
+        habitId: habitId,
       };
 
+      // Save to database
       const savedBlock = await createScheduleBlock(blockData, selectedDate);
-      
-      const newBlock: ScheduleBlock = savedBlock ? {
-          ...savedBlock,
-          taskId: task.id,
-          calendarColor: task.tagColor || undefined,
-          completed: task.completed || false
+
+      const habitBlock: ScheduleBlock = savedBlock ? {
+        ...savedBlock,
+        habitId: habitId,
+        calendarColor: habitTagColor,
       } : {
-          id: Date.now(),
-          ...blockData,
-          calendarColor: task.tagColor || undefined
+        id: Date.now(),
+        ...blockData,
+        calendarColor: habitTagColor,
       };
 
-      setSchedule(prev => [...prev, newBlock]);
-      
-      // Update task time in both UI and database
-          const timeString = formatTime(hour);
-      if (draggedItem.sourceList === 'active') {
-          setActiveTasks(prev => prev.map(t => t.id === task.id ? { ...t, time: timeString } : t));
-      } else {
-          setLaterTasks(prev => prev.map(t => t.id === task.id ? { ...t, time: timeString } : t));
-      }
-      await updateTask(String(task.id), { time: timeString });
-      
-      setDraggedItem(null);
+      // Sync to Google Calendar if connected - do this BEFORE adding to state
+      let googleEventId: string | undefined;
+      console.log('Checking Google sync for habit:', { googleAccount: !!googleAccount });
 
       if (googleAccount) {
-          try {
-              const eventId = await createGoogleCalendarEvent(task.title, hour, newBlock.duration, selectedDate, task.tag || undefined, task.tagColor || undefined);
-              setSchedule(prev => prev.map(b => b.id === newBlock.id ? { ...b, googleEventId: eventId } : b));
-              setNotification({ type: 'success', message: `Added "${task.title}" to Google Calendar` });
-          } catch (error: any) {
-              console.error('Failed to create Google Calendar event:', error);
-              const errorMessage = error?.message || 'Unknown error';
-              if (errorMessage.includes('token expired') || errorMessage.includes('Not signed in')) {
-                setNotification({ type: 'error', message: 'Google session expired. Please reconnect in Settings.' });
-                setGoogleAccount(null);
-              } else {
-                setNotification({ type: 'error', message: `Failed to add to Google Calendar: ${errorMessage}` });
-              }
+        try {
+          console.log('Creating Google Calendar event for habit:', habitName, 'at hour:', hour);
+          googleEventId = await createGoogleCalendarEvent(habitName, hour, 1, selectedDate, habitTag || undefined, habitTagColor || undefined);
+          console.log('Google Calendar event created with ID:', googleEventId);
+
+          // Update database with Google event ID
+          if (savedBlock && googleEventId) {
+            await updateScheduleBlock(String(savedBlock.id), { googleEventId: googleEventId });
           }
+        } catch (error: any) {
+          console.error('Failed to create Google Calendar event for habit:', error);
+          setNotification({ type: 'error', message: `Failed to sync "${habitName}" to Google Calendar` });
+        }
       }
+
+      // Add to schedule with Google event ID if available
+      const finalBlock: ScheduleBlock = {
+        ...habitBlock,
+        googleEventId: googleEventId,
+      };
+
+      setSchedule(prev => [...prev, finalBlock]);
+
+      if (googleEventId) {
+        setNotification({ type: 'success', message: `Scheduled "${habitName}" and synced to Google Calendar` });
+      } else if (!googleAccount) {
+        setNotification({ type: 'success', message: `Scheduled "${habitName}" at ${formatTime(hour)}` });
+      }
+      return;
+    }
+
+    if (!draggedItem) return;
+    const { task } = draggedItem;
+
+    // Check if task is already on timeline
+    const existingBlock = schedule.find(b => b.taskId === task.id);
+
+    // If block exists, we might need to move it OR just warn
+    if (existingBlock) {
+      // If it's already on the timeline, let's move it to the new time
+      // This handles the "drag from list again" scenario which users often do to move tasks
+      const newStart = hour;
+
+      // Update local state
+      setSchedule(prev => prev.map(b => b.id === existingBlock.id ? { ...b, start: newStart } : b));
+
+      // Update DB
+      if (!existingBlock.isGoogle) {
+        await updateScheduleBlock(String(existingBlock.id), { start: newStart });
+      }
+
+      // Handle Google Sync
+      if (googleAccount) {
+        // If it already has a Google ID, update the time
+        if (existingBlock.googleEventId) {
+          // Logic to update existing event time...
+          // We can reuse the updateGoogleCalendarEvent logic here if we extract it or call it
+          try {
+            await updateGoogleCalendarEvent(
+              existingBlock.googleEventId,
+              existingBlock.title,
+              newStart,
+              existingBlock.duration,
+              selectedDate,
+              undefined, // calendarId
+              existingBlock.color || existingBlock.calendarColor || undefined
+            );
+            setNotification({ type: 'success', message: `Updated "${task.title}" time on Google Calendar` });
+          } catch (error) {
+            console.error('Failed to update Google event on drop:', error);
+          }
+        } else {
+          // It doesn't have a Google ID yet! Create one now.
+          try {
+            const eventId = await createGoogleCalendarEvent(
+              existingBlock.title,
+              newStart,
+              existingBlock.duration,
+              selectedDate,
+              task.tag || undefined,
+              task.tagColor || undefined
+            );
+
+            // Update state with new ID
+            setSchedule(prev => prev.map(b => b.id === existingBlock.id ? { ...b, googleEventId: eventId, isGoogle: true } : b));
+
+            // Save ID to DB immediately
+            console.log('💾 Saving Google ID to DB (existing block):', { blockId: existingBlock.id, googleId: eventId });
+            await updateScheduleBlock(String(existingBlock.id), { googleEventId: eventId, isGoogle: true });
+
+            setNotification({ type: 'success', message: `Synced "${task.title}" to Google Calendar` });
+          } catch (error) {
+            console.error('Failed to create Google event for existing block:', error);
+          }
+        }
+      } else {
+        setNotification({ type: 'success', message: `Moved "${task.title}" to ${formatTime(hour)}` });
+      }
+
+      setDraggedItem(null);
+      return;
+    }
+
+    const blockData = {
+      title: task.title,
+      tag: task.tag || null,
+      start: hour,
+      duration: 1,
+      color: task.tagColor || '#8e24aa',
+      textColor: "text-white",
+      isGoogle: false,
+      completed: task.completed || false,
+      taskId: String(task.id) // Explicitly cast to string
+    };
+
+    const savedBlock = await createScheduleBlock(blockData, selectedDate);
+
+    if (!savedBlock) {
+      console.error('❌ Failed to save block to DB immediately after creation');
+      setNotification({ type: 'error', message: 'Failed to save to database! Please try logging out and in again.' });
+    }
+
+    const newBlock: ScheduleBlock = savedBlock ? {
+      ...savedBlock,
+      taskId: String(task.id),
+      calendarColor: task.tagColor || undefined,
+      completed: task.completed || false
+    } : {
+      id: Date.now(),
+      ...blockData,
+      calendarColor: task.tagColor || undefined
+    };
+
+    setSchedule(prev => [...prev, newBlock]);
+
+    // AUTO-SYNC: If Google is connected, sync immediately!
+    if (googleAccount && savedBlock) {
+      try {
+        console.log('🔄 Auto-syncing new block to Google Calendar...');
+        const eventId = await createGoogleCalendarEvent(
+          task.title,
+          hour,
+          1,
+          selectedDate,
+          task.tag || undefined,
+          task.tagColor || undefined
+        );
+
+        if (eventId) {
+          console.log('✅ Google Sync Success, ID:', eventId);
+
+          // Update local state isGoogle=true immediately so UI reflects it (and hides duplicates on refresh)
+          const updatedBlock = { ...newBlock, googleEventId: eventId, isGoogle: true };
+          setSchedule(prev => prev.map(b => b.id === savedBlock.id ? updatedBlock : b));
+
+          // Update DB isGoogle=true and googleEventId
+          await updateScheduleBlock(String(savedBlock.id), { googleEventId: eventId, isGoogle: true });
+        }
+      } catch (err) {
+        console.error('❌ Failed to auto-sync to Google:', err);
+      }
+    }
+
+    // Update task time in both UI and database
+    const timeString = formatTime(hour);
+    if (draggedItem.sourceList === 'active') {
+      setActiveTasks(prev => prev.map(t => t.id === task.id ? { ...t, time: timeString } : t));
+    } else {
+      setLaterTasks(prev => prev.map(t => t.id === task.id ? { ...t, time: timeString } : t));
+    }
+    await updateTask(String(task.id), { time: timeString });
+
+    setDraggedItem(null);
+
+    // REMOVED: Old Google sync code - now handled by AUTO-SYNC above (line ~2408)
+    // This was creating duplicate events!
   };
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden">
       {/* Toast Notification */}
       {notification && (
-        <div 
-          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-in slide-in-from-top-2 duration-300 ${
-            notification.type === 'success' 
-              ? 'bg-emerald-500 text-white' 
-              : notification.type === 'error'
+        <div
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-in slide-in-from-top-2 duration-300 ${notification.type === 'success'
+            ? 'bg-emerald-500 text-white'
+            : notification.type === 'error'
               ? 'bg-red-500 text-white'
               : 'bg-blue-500 text-white'
-          }`}
+            }`}
         >
           {notification.type === 'success' && <CalendarCheck size={18} />}
           {notification.type === 'error' && <X size={18} />}
           {notification.type === 'info' && <Calendar size={18} />}
           <span className="text-sm font-medium">{notification.message}</span>
-          <button 
+          <button
             onClick={() => setNotification(null)}
             className="ml-2 opacity-70 hover:opacity-100 transition-opacity"
           >
@@ -2320,14 +2556,17 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         </div>
       )}
 
+      {/* DEBUGGER UI */}
+      {/* DEBUGGER UI REMOVED */}
+
       {/* App Header */}
       <header className="relative h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 z-20 shrink-0">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="flex items-center gap-2 group cursor-pointer">
             <div className="w-8 h-8 rounded-lg overflow-hidden shadow-md shadow-violet-600/20">
               <svg width="32" height="32" viewBox="0 0 512 512" fill="none">
-                <rect width="512" height="512" rx="100" fill="#6d3dc1"/>
-                <path d="M 65.148438 215.859375 L 81.007812 225.375 L 150.804688 136.546875 L 184.117188 176.992188 L 311.011719 0.136719 L 385.5625 84.199219 L 415.699219 66.785156 L 517.222656 177.023438 L 571.117188 155.582031 L 713.113281 288.820312 L 567.582031 187.308594 L 511.699219 214.703125 C 511.699219 214.703125 510.898438 308.683594 510.898438 312.648438 C 510.898438 316.613281 414.082031 179.410156 414.082031 179.410156 L 414.082031 278.542969 L 315.398438 49.339844 L 124.363281 332.972656 L 166.761719 225.765625 L 133.746094 252.339844 L 146.972656 192.921875 L 85.773438 259.898438 L 64.351562 245.617188 L 0.910156 288.839844 Z" fill="white" transform="translate(20, 120) scale(0.65)"/>
+                <rect width="512" height="512" rx="100" fill="#6d3dc1" />
+                <path d="M 65.148438 215.859375 L 81.007812 225.375 L 150.804688 136.546875 L 184.117188 176.992188 L 311.011719 0.136719 L 385.5625 84.199219 L 415.699219 66.785156 L 517.222656 177.023438 L 571.117188 155.582031 L 713.113281 288.820312 L 567.582031 187.308594 L 511.699219 214.703125 C 511.699219 214.703125 510.898438 308.683594 510.898438 312.648438 C 510.898438 316.613281 414.082031 179.410156 414.082031 179.410156 L 414.082031 278.542969 L 315.398438 49.339844 L 124.363281 332.972656 L 166.761719 225.765625 L 133.746094 252.339844 L 146.972656 192.921875 L 85.773438 259.898438 L 64.351562 245.617188 L 0.910156 288.839844 Z" fill="white" transform="translate(20, 120) scale(0.65)" />
               </svg>
             </div>
             <span className="font-bold text-lg tracking-tight">Ascend<span className="text-[#6F00FF]">.</span></span>
@@ -2336,19 +2575,19 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
         {/* Center Navigation Tabs */}
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center bg-slate-100 dark:bg-slate-800 rounded-full p-1">
-          <button 
+          <button
             onClick={() => setActiveTab('dashboard')}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'dashboard' ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
           >
             <LayoutDashboard size={16} /> Dashboard
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('timebox')}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'timebox' ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
           >
             <Clock size={16} /> Timebox
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('habittracker')}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'habittracker' ? 'bg-white dark:bg-slate-700 text-[#6F00FF] shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
           >
@@ -2357,22 +2596,22 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         </div>
 
         <div className="flex items-center gap-3">
-           <button onClick={toggleTheme} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-             {isDark ? <Sun size={18} /> : <Moon size={18} />}
-           </button>
-           
-           <button onClick={() => {
-             setSettingsInitialTab('account');
-             setIsSettingsOpen(true);
-           }} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors" title="Settings">
-             <Settings size={18} />
-           </button>
+          <button onClick={toggleTheme} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+
+          <button onClick={() => {
+            setSettingsInitialTab('account');
+            setIsSettingsOpen(true);
+          }} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors" title="Settings">
+            <Settings size={18} />
+          </button>
         </div>
       </header>
 
       {/* Settings Modal */}
       {isSettingsOpen && (
-        <SettingsModal 
+        <SettingsModal
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
           settings={settings}
@@ -2391,10 +2630,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       )}
 
       {/* Tag Modal */}
-      <TagModal 
-        isOpen={isTagModalOpen} 
-        onClose={() => { setIsTagModalOpen(false); setTagModalTaskId(null); setTagModalHabitId(null); setEditingTag(null); }} 
-        onSave={handleCreateTag} 
+      <TagModal
+        isOpen={isTagModalOpen}
+        onClose={() => { setIsTagModalOpen(false); setTagModalTaskId(null); setTagModalHabitId(null); setEditingTag(null); }}
+        onSave={handleCreateTag}
         editTag={editingTag}
         onDelete={handleDeleteTag}
       />
@@ -2403,22 +2642,24 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       {activeTab === 'dashboard' && (
         <div className="flex-1 overflow-y-auto animate-fade-in-up">
           <div className="max-w-6xl mx-auto p-6 space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-slate-800 dark:text-white">
-                  {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}{user ? `, ${user.name?.split(' ')[0] || ''}` : ''}! 👋
-                </h1>
-                <p className="text-slate-500 dark:text-slate-400 mt-1">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="bg-white dark:bg-slate-800 rounded-xl px-4 py-3 shadow-sm border border-slate-200 dark:border-slate-700">
-                  <div className="text-2xl font-bold text-[#6F00FF]">{activeTasks.filter(t => t.completed).length}/{activeTasks.length}</div>
-                  <div className="text-xs text-slate-500">Tasks done</div>
+            {/* Header with Stats */}
+            <div className="bg-gradient-to-br from-violet-50 via-purple-50 to-indigo-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-6 border border-violet-100 dark:border-slate-700 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
+                    {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}{user ? `, ${user.name?.split(' ')[0] || ''}` : ''}! 👋
+                  </h1>
+                  <p className="text-slate-600 dark:text-slate-400 mt-1 font-medium">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
                 </div>
-                <div className="bg-white dark:bg-slate-800 rounded-xl px-4 py-3 shadow-sm border border-slate-200 dark:border-slate-700">
-                  <div className="text-2xl font-bold text-emerald-500">{schedule.reduce((sum, b) => sum + b.duration, 0).toFixed(1)}h</div>
-                  <div className="text-xs text-slate-500">Scheduled</div>
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl px-5 py-3 shadow-sm border border-white/50 dark:border-slate-700">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Tasks done</div>
+                    <div className="text-2xl font-bold text-[#6F00FF]">{activeTasks.filter(t => t.completed).length}<span className="text-slate-400 text-lg">/{activeTasks.length}</span></div>
+                  </div>
+                  <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl px-5 py-3 shadow-sm border border-white/50 dark:border-slate-700">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Scheduled</div>
+                    <div className="text-2xl font-bold text-emerald-500">{schedule.reduce((sum, b) => sum + b.duration, 0).toFixed(1)}<span className="text-lg">h</span></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2427,10 +2668,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Today's Tasks */}
               <div className="lg:col-span-1">
-                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 h-full">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-5 h-full">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><ListTodo size={20} className="text-[#6F00FF]" /> Today's Tasks</h2>
-                    <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-full">{activeTasks.filter(t => t.completed).length} of {activeTasks.length}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center">
+                        <ListTodo size={16} className="text-white" />
+                      </div>
+                      <h2 className="font-bold text-lg text-slate-800 dark:text-white">Today's Tasks</h2>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-full">{activeTasks.filter(t => t.completed).length} of {activeTasks.length}</span>
                   </div>
                   <div className="space-y-2 max-h-80 overflow-y-auto">
                     {activeTasks.length === 0 ? (
@@ -2447,32 +2693,76 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       ))
                     )}
                   </div>
-                  <button onClick={() => setActiveTab('timebox')} className="w-full mt-4 py-2 text-sm text-[#6F00FF] hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-lg transition-colors font-medium">Open Timebox →</button>
+                  <button onClick={() => setActiveTab('timebox')} className="w-full mt-4 py-2.5 text-sm text-white bg-gradient-to-r from-[#6F00FF] to-purple-600 hover:shadow-lg hover:shadow-purple-500/30 rounded-lg transition-all font-semibold">Open Timebox →</button>
                 </div>
               </div>
 
               {/* Weight Tracker */}
               <div className="lg:col-span-2">
-                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><Activity size={20} className="text-[#6F00FF]" /> Weight Tracker</h2>
-                    {weightEntries.length > 0 && (
-                      <div className="flex items-center gap-4 text-sm">
-                        <span className="text-slate-500">Current: <strong className="text-slate-800 dark:text-white">{weightEntries[weightEntries.length - 1]?.weight} kg</strong></span>
-                        {weightEntries.length > 1 && (
-                          <span className={`font-medium ${weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight ? 'text-emerald-500' : 'text-red-500'}`}>
-                            {weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight ? '↓' : '↑'}
-                            {Math.abs(weightEntries[weightEntries.length - 1].weight - weightEntries[0].weight).toFixed(1)} kg
-                          </span>
-                        )}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-purple-50 to-violet-50 dark:from-slate-800 dark:to-slate-800 p-6 border-b border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
+                          <Activity size={24} className="text-white" />
+                        </div>
+                        <div>
+                          <h2 className="font-bold text-xl text-slate-800 dark:text-white">Weight Tracker</h2>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">Track your progress</p>
+                        </div>
                       </div>
-                    )}
+                      {weightEntries.length > 0 && (
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="text-sm text-slate-500 dark:text-slate-400">Current</div>
+                            <div className="text-3xl font-bold text-slate-800 dark:text-white">{weightEntries[weightEntries.length - 1]?.weight} <span className="text-lg text-slate-400">kg</span></div>
+                          </div>
+                          {weightEntries.length > 1 && (
+                            <div className={`flex items-center gap-1 px-3 py-2 rounded-xl font-semibold ${weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight
+                              ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                              : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                              }`}>
+                              {weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight ? '↓' : '↑'}
+                              {Math.abs(weightEntries[weightEntries.length - 1].weight - weightEntries[0].weight).toFixed(1)} kg
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <WeightLineChart entries={weightEntries} height={220} />
-                  <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
-                    <input type="date" value={weightDate} onChange={(e) => setWeightDate(e.target.value)} max={new Date().toISOString().split('T')[0]} className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50" />
-                    <input type="number" step="0.1" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} placeholder="Weight (kg)" className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50" onKeyDown={(e) => e.key === 'Enter' && handleAddWeight()} />
-                    <button onClick={handleAddWeight} className="px-4 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors">Log</button>
+
+                  {/* Chart */}
+                  <div className="px-4 py-2">
+                    <WeightLineChart entries={weightEntries} height={240} />
+                  </div>
+
+                  {/* Input Section */}
+                  <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex gap-3">
+                      <input
+                        type="date"
+                        value={weightDate}
+                        onChange={(e) => setWeightDate(e.target.value)}
+                        max={new Date().toISOString().split('T')[0]}
+                        className="px-4 py-3 text-sm border-2 border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] focus:border-transparent transition-all"
+                      />
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={newWeight}
+                        onChange={(e) => setNewWeight(e.target.value)}
+                        placeholder="Today's weight (kg)"
+                        className="flex-1 px-4 py-3 text-sm border-2 border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] focus:border-transparent transition-all"
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddWeight()}
+                      />
+                      <button
+                        onClick={handleAddWeight}
+                        className="px-6 py-3 bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white text-sm font-semibold rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all hover:scale-105"
+                      >
+                        Log
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2525,7 +2815,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   <Zap size={18} className="text-amber-500" /> Today's Habits
                   <span className="text-sm font-normal text-slate-400 ml-2">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
                 </h2>
-                
+
                 {getTodaysHabits().length === 0 ? (
                   <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-700">
                     <Activity size={48} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
@@ -2606,131 +2896,179 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       )}
 
       {activeTab === 'timebox' && (
-      <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-slate-800 animate-fade-in-up">
-        
-        {/* Left Column: To-Do List */}
-        <div className="md:col-span-3 flex flex-col bg-white dark:bg-slate-900 overflow-y-auto">
-          <div className="p-4 space-y-6">
-            
-            {/* Header & Input */}
-            <div>
-              <div className="flex items-center gap-2 mb-3 text-slate-800 dark:text-slate-100">
-                <ListTodo size={20} className="text-[#6F00FF]" />
-                <h2 className="font-bold text-lg">To-do</h2>
-              </div>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  value={newTaskInput}
-                  onChange={(e) => setNewTaskInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Type task & press Enter" 
-                  className="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/20 focus:border-[#6F00FF] transition-all"
-                />
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs text-slate-400 font-mono shadow-sm">
-                  ↵
+        <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-slate-800 animate-fade-in-up">
+
+          {/* Left Column: To-Do List */}
+          <div className="md:col-span-3 flex flex-col bg-white dark:bg-slate-900 overflow-y-auto">
+            <div className="p-4 space-y-6">
+
+              {/* Header & Input */}
+              <div>
+                <div className="flex items-center gap-2 mb-3 text-slate-800 dark:text-slate-100">
+                  <ListTodo size={20} className="text-[#6F00FF]" />
+                  <h2 className="font-bold text-lg">To-do</h2>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={newTaskInput}
+                    onChange={(e) => setNewTaskInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Type task & press Enter"
+                    className="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/20 focus:border-[#6F00FF] transition-all"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs text-slate-400 font-mono shadow-sm">
+                    ↵
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Active Tasks Drop Zone */}
-            <div 
+              {/* Active Tasks Drop Zone */}
+              <div
                 className={`space-y-2 min-h-[100px] rounded-lg transition-colors ${dragOverList === 'active' ? 'bg-indigo-50 dark:bg-indigo-900/20 ring-2 ring-indigo-400 ring-inset' : ''}`}
                 onDragOver={(e) => handleListDragOver(e, 'active')}
                 onDrop={(e) => handleListDrop(e, 'active')}
                 onDragLeave={() => setDragOverList(null)}
-            >
-              {activeTasks.length === 0 && getUnscheduledTodaysHabits().length === 0 && <p className="text-center text-sm text-slate-400 py-8">Drop tasks here</p>}
-              
-              {/* Unscheduled habits for today */}
-              {getUnscheduledTodaysHabits().map(habit => {
-                const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
-                return (
-                  <div key={`habit-${habit.id}`} className={`relative flex items-center gap-3 p-2.5 bg-white dark:bg-slate-800 rounded-lg border transition-all hover:shadow-sm ${isCompleted ? 'border-emerald-200 dark:border-emerald-800 opacity-60' : 'border-slate-200 dark:border-slate-700 hover:border-[#6F00FF]/30'}`}>
-                    <div 
-                      draggable 
-                      onDragStart={(e) => { e.dataTransfer.setData('habitId', habit.id); e.dataTransfer.setData('habitName', habit.name); e.dataTransfer.setData('habitTag', habit.tag || ''); e.dataTransfer.setData('habitTagColor', habit.tagColor || ''); }} 
-                      className="flex items-center gap-3 flex-1 cursor-grab active:cursor-grabbing"
-                    >
-                      <button onClick={(e) => { e.stopPropagation(); toggleHabitCompletion(habit.id); }} className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${isCompleted ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}>
-                        {isCompleted && <Check size={12} className="text-white" strokeWidth={3} />}
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <span className={`text-sm font-medium text-slate-700 dark:text-slate-200 ${isCompleted ? 'line-through opacity-60' : ''}`}>{habit.name}</span>
-                        {habit.tag && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded text-white font-medium" style={{ backgroundColor: habit.tagColor || '#6F00FF' }}>{habit.tag}</span>}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-slate-400"><Flame size={12} className="text-orange-400" /><span className="font-medium">{habit.currentStreak}</span></div>
-                    </div>
-                    
-                    {/* Menu button */}
-                    <button 
-                      onClick={() => setHabitTagMenuOpen(habitTagMenuOpen === habit.id ? null : habit.id)}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
-                    >
-                      <MoreVertical size={16} className="text-slate-400" />
-                    </button>
-                    
-                    {/* Tag menu dropdown */}
-                    {habitTagMenuOpen === habit.id && (
-                      <div 
-                        className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 min-w-[160px]"
-                        onMouseDown={(e) => e.stopPropagation()}
+              >
+                {activeTasks.length === 0 && getUnscheduledTodaysHabits().length === 0 && <p className="text-center text-sm text-slate-400 py-8">Drop tasks here</p>}
+
+                {/* Unscheduled habits for today */}
+                {getUnscheduledTodaysHabits().map(habit => {
+                  const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
+                  return (
+                    <div key={`habit-${habit.id}`} className={`relative flex items-center gap-3 p-2.5 bg-white dark:bg-slate-800 rounded-lg border transition-all hover:shadow-sm ${isCompleted ? 'border-emerald-200 dark:border-emerald-800 opacity-60' : 'border-slate-200 dark:border-slate-700 hover:border-[#6F00FF]/30'}`}>
+                      <div
+                        draggable
+                        onDragStart={(e) => { e.dataTransfer.setData('habitId', habit.id); e.dataTransfer.setData('habitName', habit.name); e.dataTransfer.setData('habitTag', habit.tag || ''); e.dataTransfer.setData('habitTagColor', habit.tagColor || ''); }}
+                        className="flex items-center gap-3 flex-1 cursor-grab active:cursor-grabbing"
                       >
-                        {/* Create Tag */}
-                        <button 
-                          onClick={() => { setTagModalHabitId(habit.id); setIsTagModalOpen(true); setHabitTagMenuOpen(null); }} 
-                          className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
-                        >
-                          <Plus size={14} /> Create Tag
+                        <button onClick={(e) => { e.stopPropagation(); toggleHabitCompletion(habit.id); }} className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${isCompleted ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}>
+                          {isCompleted && <Check size={12} className="text-white" strokeWidth={3} />}
                         </button>
-                        
-                        {/* Edit Tag (only if habit has a tag) */}
-                        {habit.tag && habit.tagColor && (
-                          <button 
-                            onClick={() => { handleOpenEditTagModal({ name: habit.tag!, color: habit.tagColor! }); setHabitTagMenuOpen(null); }} 
+                        <div className="flex-1 min-w-0">
+                          <span className={`text-sm font-medium text-slate-700 dark:text-slate-200 ${isCompleted ? 'line-through opacity-60' : ''}`}>{habit.name}</span>
+                          {habit.tag && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded text-white font-medium" style={{ backgroundColor: habit.tagColor || '#6F00FF' }}>{habit.tag}</span>}
+                        </div>
+
+                        {/* Time and Streak */}
+                        <div className="flex items-center gap-1.5">
+                          {(() => {
+                            // Find if this habit has a schedule block today
+                            const habitBlock = schedule.find(b => b.habitId === habit.id);
+                            if (habitBlock) {
+                              return (
+                                <span className="text-[10px] opacity-70 text-slate-600 dark:text-slate-400">
+                                  {formatTime(habitBlock.start)}
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
+
+                          {habit.currentStreak > 0 && (
+                            <div
+                              className="flex items-center gap-0.5 text-xs"
+                              style={{
+                                animation: isCompleted ? 'flameGrow 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none'
+                              }}
+                            >
+                              <div className="relative">
+                                {/* Outline flame (always visible) */}
+                                <Flame
+                                  size={14}
+                                  className="text-orange-500 transition-all duration-500"
+                                  strokeWidth={2}
+                                  fill="none"
+                                />
+                                {/* Filled flame (fades in when completed) */}
+                                <Flame
+                                  size={14}
+                                  className={`absolute inset-0 text-orange-500 transition-opacity duration-500 ${isCompleted ? 'opacity-100' : 'opacity-0'
+                                    }`}
+                                  fill="currentColor"
+                                  stroke="none"
+                                />
+                              </div>
+                              <span
+                                className="font-semibold text-orange-600 dark:text-orange-400 transition-all duration-300"
+                                style={{
+                                  animation: isCompleted ? 'numberPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none'
+                                }}
+                              >
+                                {habit.currentStreak}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setHabitTagMenuOpen(habitTagMenuOpen === habit.id ? null : habit.id)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
+                      >
+                        <MoreVertical size={16} className="text-slate-400" />
+                      </button>
+
+                      {/* Tag menu dropdown */}
+                      {habitTagMenuOpen === habit.id && (
+                        <div
+                          className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 min-w-[160px]"
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
+                          {/* Create Tag */}
+                          <button
+                            onClick={() => { setTagModalHabitId(habit.id); setIsTagModalOpen(true); setHabitTagMenuOpen(null); }}
                             className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
                           >
-                            <Edit3 size={14} /> Edit Tag
+                            <Plus size={14} /> Create Tag
                           </button>
-                        )}
-                        
-                        <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-                        <div className="px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">Add Tag</div>
-                        {userTags.length > 0 ? (
-                          userTags.map((tag, idx) => (
-                            <button 
-                              key={idx} 
-                              onClick={() => { handleAddTagToHabit(habit.id, tag.name, tag.color); setHabitTagMenuOpen(null); }} 
-                              className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+
+                          {/* Edit Tag (only if habit has a tag) */}
+                          {habit.tag && habit.tagColor && (
+                            <button
+                              onClick={() => { handleOpenEditTagModal({ name: habit.tag!, color: habit.tagColor! }); setHabitTagMenuOpen(null); }}
+                              className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
                             >
-                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
-                              <span className="text-slate-600 dark:text-slate-300 text-sm">{tag.name}</span>
+                              <Edit3 size={14} /> Edit Tag
                             </button>
-                          ))
-                        ) : (
-                          <div className="px-3 py-2 text-sm text-slate-400">No tags yet</div>
-                        )}
-                        {habit.tag && (
-                          <>
-                            <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-                            <button 
-                              onClick={() => { handleRemoveTagFromHabit(habit.id); setHabitTagMenuOpen(null); }} 
-                              className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-red-500"
-                            >
-                              <X size={14} /> Remove Tag
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              
-              {activeTasks.map(task => (
-                <TaskItem 
-                    key={task.id} 
+                          )}
+
+                          <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                          <div className="px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">Add Tag</div>
+                          {userTags.length > 0 ? (
+                            userTags.map((tag, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => { handleAddTagToHabit(habit.id, tag.name, tag.color); setHabitTagMenuOpen(null); }}
+                                className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                              >
+                                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                                <span className="text-slate-600 dark:text-slate-300 text-sm">{tag.name}</span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-slate-400">No tags yet</div>
+                          )}
+                          {habit.tag && (
+                            <>
+                              <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                              <button
+                                onClick={() => { handleRemoveTagFromHabit(habit.id); setHabitTagMenuOpen(null); }}
+                                className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-red-500"
+                              >
+                                <X size={14} /> Remove Tag
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {activeTasks.map(task => (
+                  <TaskItem
+                    key={task.id}
                     task={task}
                     listType="active"
                     userTags={userTags}
@@ -2742,402 +3080,912 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                     onRemoveTag={handleRemoveTagFromTask}
                     onOpenTagModal={handleOpenTagModal}
                     onEditTag={handleOpenEditTagModal}
-                />
-              ))}
-            </div>
+                  />
+                ))}
+              </div>
 
-            {/* To-Do Later Section */}
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800/50">
-              <button 
-                onClick={() => setIsLaterOpen(!isLaterOpen)}
-                className="flex items-center gap-2 text-slate-600 dark:text-slate-400 font-semibold mb-3 hover:text-[#6F00FF] transition-colors w-full"
-              >
-                <Calendar size={18} className={isLaterOpen ? "text-[#6F00FF]" : ""} />
-                To-do Later
-                {isLaterOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              </button>
-              
-              {isLaterOpen && (
-                <div 
+              {/* To-Do Later Section */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800/50">
+                <button
+                  onClick={() => setIsLaterOpen(!isLaterOpen)}
+                  className="flex items-center gap-2 text-slate-600 dark:text-slate-400 font-semibold mb-3 hover:text-[#6F00FF] transition-colors w-full"
+                >
+                  <Calendar size={18} className={isLaterOpen ? "text-[#6F00FF]" : ""} />
+                  To-do Later
+                  {isLaterOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </button>
+
+                {isLaterOpen && (
+                  <div
                     className={`space-y-2 pl-2 border-l-2 border-slate-100 dark:border-slate-800 ml-2 min-h-[50px] transition-colors ${dragOverList === 'later' ? 'bg-indigo-50 dark:bg-indigo-900/20 ring-2 ring-indigo-400 ring-inset rounded-r-lg' : ''}`}
                     onDragOver={(e) => handleListDragOver(e, 'later')}
                     onDrop={(e) => handleListDrop(e, 'later')}
                     onDragLeave={() => setDragOverList(null)}
-                >
-                  {laterTasks.length === 0 && <p className="text-xs text-slate-400 py-4 italic">Drag tasks here for later</p>}
-                  {laterTasks.map(task => (
-                    <div key={task.id} className="pl-4">
-                       <TaskItem 
-                            task={task}
-                            listType="later"
-                            userTags={userTags}
-                            onDragStart={(e) => handleTaskDragStart(e, task, 'later')} 
-                            onDelete={(id) => handleDeleteTask(id, 'later')}
-                            onToggleComplete={(id) => handleToggleComplete(id, 'later')}
-                            onMoveToList={handleMoveTaskToList}
-                            onAddTag={handleAddTagToTask}
-                            onRemoveTag={handleRemoveTagFromTask}
-                            onOpenTagModal={handleOpenTagModal}
-                            onEditTag={handleOpenEditTagModal}
+                  >
+                    {laterTasks.length === 0 && <p className="text-xs text-slate-400 py-4 italic">Drag tasks here for later</p>}
+                    {laterTasks.map(task => (
+                      <div key={task.id} className="pl-4">
+                        <TaskItem
+                          task={task}
+                          listType="later"
+                          userTags={userTags}
+                          onDragStart={(e) => handleTaskDragStart(e, task, 'later')}
+                          onDelete={(id) => handleDeleteTask(id, 'later')}
+                          onToggleComplete={(id) => handleToggleComplete(id, 'later')}
+                          onMoveToList={handleMoveTaskToList}
+                          onAddTag={handleAddTagToTask}
+                          onRemoveTag={handleRemoveTagFromTask}
+                          onOpenTagModal={handleOpenTagModal}
+                          onEditTag={handleOpenEditTagModal}
                         />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+
+          {/* Middle Column: Calendar/Timeline */}
+          <div className="md:col-span-6 bg-white dark:bg-slate-900 flex flex-col relative overflow-hidden">
+            {/* Date Selector Header */}
+            <div className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center shrink-0 relative">
+              <div ref={calendarRef} className="relative flex items-center">
+                <div className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-sm font-medium text-slate-700 dark:text-slate-200">
+                  <div
+                    onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+                    className="flex items-center gap-2 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
+                  >
+                    <div className={`w-2 h-2 rounded-full ${isToday(selectedDate) ? 'bg-emerald-500' : 'bg-slate-400'}`}></div>
+                    {selectedDate.toLocaleDateString('sv-SE', { month: 'long', day: 'numeric' })}
+                  </div>
+                  {/* Calendar Integration Button */}
+                  <button
+                    onClick={() => {
+                      setSettingsInitialTab('integrations');
+                      setIsSettingsOpen(true);
+                    }}
+                    className={`p-1 rounded-full transition-all ${googleAccount
+                      ? 'text-emerald-500 hover:text-emerald-600'
+                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                      }`}
+                    title={googleAccount ? 'Calendar synced' : 'Connect Google Calendar'}
+                  >
+                    {googleAccount ? (
+                      <CalendarCheck size={14} />
+                    ) : (
+                      <Calendar size={14} />
+                    )}
+                  </button>
+
+                  {/* Zoom Toggle Button - also centers current time */}
+                  <button
+                    onClick={handleZoomToggle}
+                    className={`p-1 rounded-full transition-all ${isZoomedOut
+                      ? 'text-[#6F00FF] hover:text-[#5800cc]'
+                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                      }`}
+                    title={isZoomedOut ? 'Zoom in & center on now' : 'Zoom out & center on now'}
+                  >
+                    {isZoomedOut ? <ZoomIn size={14} /> : <ZoomOut size={14} />}
+                  </button>
+                </div>
+
+                {/* Calendar Popup */}
+                {isCalendarOpen && (
+                  <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 z-50 min-w-[280px]">
+                    <div className="flex items-center justify-between mb-4">
+                      <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronLeft size={18} className="text-slate-500" /></button>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">{calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                      <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronRight size={18} className="text-slate-500" /></button>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <div className="grid grid-cols-7 gap-1 mb-2">
+                      {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (<div key={day} className="text-center text-xs font-medium text-slate-400 py-1">{day}</div>))}
+                    </div>
+                    <div className="grid grid-cols-7 gap-1">
+                      {Array.from({ length: getFirstDayOfMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => (<div key={`empty-${i}`} className="w-9 h-9" />))}
+                      {Array.from({ length: getDaysInMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => {
+                        const day = i + 1;
+                        const date = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
+                        const isSelected = isSameDay(date, selectedDate);
+                        const isTodayDate = isToday(date);
+                        return (
+                          <button key={day} onClick={() => handleDateSelect(day)} className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${isSelected ? 'bg-emerald-500 text-white ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900' : isTodayDate ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>{day}</button>
+                        );
+                      })}
+                    </div>
+                    <button onClick={async () => { const today = new Date(); setSelectedDate(today); setCalendarViewDate(today); setIsCalendarOpen(false); await loadScheduleForDate(today); }} className="mt-3 w-full py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg">Today</button>
+                  </div>
+                )}
+              </div>
             </div>
 
-          </div>
-        </div>
+            <div ref={timelineRef} className="flex-1 overflow-y-auto relative custom-scrollbar scroll-smooth">
 
-        {/* Middle Column: Calendar/Timeline */}
-        <div className="md:col-span-6 bg-white dark:bg-slate-900 flex flex-col relative overflow-hidden">
-          {/* Date Selector Header */}
-          <div className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center shrink-0 relative">
-            <div ref={calendarRef} className="relative flex items-center">
-              <div className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-sm font-medium text-slate-700 dark:text-slate-200">
-                <div 
-                  onClick={() => setIsCalendarOpen(!isCalendarOpen)} 
-                  className="flex items-center gap-2 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
-                >
-                <div className={`w-2 h-2 rounded-full ${isToday(selectedDate) ? 'bg-emerald-500' : 'bg-slate-400'}`}></div>
-                {selectedDate.toLocaleDateString('sv-SE', { month: 'long', day: 'numeric' })}
-                </div>
-                {/* Calendar Integration Button */}
-                <button 
-                  onClick={() => {
-                    setSettingsInitialTab('integrations');
-                    setIsSettingsOpen(true);
-                  }}
-                  className={`p-1 rounded-full transition-all ${
-                    googleAccount 
-                      ? 'text-emerald-500 hover:text-emerald-600' 
-                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-                  }`}
-                  title={googleAccount ? 'Calendar synced' : 'Connect Google Calendar'}
-                >
-                  {googleAccount ? (
-                    <CalendarCheck size={14} />
-                  ) : (
-                    <Calendar size={14} />
-                  )}
-                </button>
-                
-                {/* Zoom Toggle Button - also centers current time */}
-                <button 
-                  onClick={handleZoomToggle}
-                  className={`p-1 rounded-full transition-all ${
-                    isZoomedOut 
-                      ? 'text-[#6F00FF] hover:text-[#5800cc]' 
-                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-                  }`}
-                  title={isZoomedOut ? 'Zoom in & center on now' : 'Zoom out & center on now'}
-                >
-                  {isZoomedOut ? <ZoomIn size={14} /> : <ZoomOut size={14} />}
-                </button>
-              </div>
-              
-              {/* Calendar Popup */}
-              {isCalendarOpen && (
-                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 z-50 min-w-[280px]">
-                  <div className="flex items-center justify-between mb-4">
-                    <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronLeft size={18} className="text-slate-500" /></button>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">{calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
-                    <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronRight size={18} className="text-slate-500" /></button>
-                  </div>
-                  <div className="grid grid-cols-7 gap-1 mb-2">
-                    {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (<div key={day} className="text-center text-xs font-medium text-slate-400 py-1">{day}</div>))}
-                  </div>
-                  <div className="grid grid-cols-7 gap-1">
-                    {Array.from({ length: getFirstDayOfMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => (<div key={`empty-${i}`} className="w-9 h-9" />))}
-                    {Array.from({ length: getDaysInMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => {
-                      const day = i + 1;
-                      const date = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
-                      const isSelected = isSameDay(date, selectedDate);
-                      const isTodayDate = isToday(date);
-                      return (
-                        <button key={day} onClick={() => handleDateSelect(day)} className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${isSelected ? 'bg-emerald-500 text-white ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900' : isTodayDate ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>{day}</button>
-                      );
-                    })}
-                  </div>
-                  <button onClick={async () => { const today = new Date(); setSelectedDate(today); setCalendarViewDate(today); setIsCalendarOpen(false); await loadScheduleForDate(today); }} className="mt-3 w-full py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg">Today</button>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          <div ref={timelineRef} className="flex-1 overflow-y-auto relative custom-scrollbar scroll-smooth">
-            
-            {/* Calendar Grid - 24 hours */}
-            <div className="relative" style={{ minHeight: `${24 * hourHeight}px` }}>
-              
-              {/* Current Time Indicator (Dynamic) - precisely aligned */}
-              <div 
-                className="absolute left-0 right-0 z-20 flex items-center pointer-events-none transition-all duration-300" 
-                style={{ top: `${currentTimeDecimal * hourHeight}px` }}
-              >
-                {/* Time label - h-0 ensures exact vertical centering with the line */}
-                <div className="w-14 text-right pr-2 flex items-center justify-end h-0">
-                  <span className="text-[10px] font-bold text-emerald-500 bg-white dark:bg-slate-900 px-1 rounded leading-none">
-                    {formatTime(currentTimeDecimal)}
-                  </span>
-                </div>
-                {/* Green line with dot - dot uses transform for perfect centering */}
-                <div className="h-0.5 bg-emerald-500 flex-1 relative shadow-sm">
-                  <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-emerald-500 shadow-md"></div>
-                </div>
-              </div>
+              {/* Calendar Grid - 24 hours */}
+              <div className="relative" style={{ minHeight: `${24 * hourHeight}px` }}>
 
-              {timeLabels.map((hour) => (
-                <div 
-                    key={hour} 
+                {/* Current Time Indicator (Dynamic) - precisely aligned */}
+                <div
+                  className="absolute left-0 right-0 z-20 flex items-center pointer-events-none transition-all duration-300"
+                  style={{ top: `${currentTimeDecimal * hourHeight}px` }}
+                >
+                  {/* Time label - h-0 ensures exact vertical centering with the line */}
+                  <div className="w-14 text-right pr-2 flex items-center justify-end h-0">
+                    <span className="text-[10px] font-bold text-emerald-500 bg-white dark:bg-slate-900 px-1 rounded leading-none">
+                      {formatTime(currentTimeDecimal)}
+                    </span>
+                  </div>
+                  {/* Green line with dot - dot uses transform for perfect centering */}
+                  <div className="h-0.5 bg-emerald-500 flex-1 relative shadow-sm">
+                    <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-emerald-500 shadow-md"></div>
+                  </div>
+                </div>
+
+                {timeLabels.map((hour) => (
+                  <div
+                    key={hour}
                     className={`flex group relative transition-colors ${dragOverHour === hour ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : ''}`}
                     style={{ height: `${hourHeight}px` }}
                     onDragEnter={() => setDragOverHour(hour)}
                     onDragOver={handleHourDragOver}
                     onDrop={(e) => handleHourDrop(e, hour)}
                     onDragLeave={() => setDragOverHour(null)}
-                >
-                  {/* Time Label - perfectly aligned with grid line */}
-                  <div className="w-14 shrink-0 text-right pr-3 text-xs text-slate-400 dark:text-slate-500 font-medium relative">
-                    <span className="absolute right-3 -top-2">{formatTime(hour, true)}</span>
-                  </div>
-                  
-                  {/* Grid Line */}
-                  <div className="flex-1 border-t border-slate-200 dark:border-slate-700 relative">
-                    {/* Half-hour guideline */}
-                    <div className="absolute left-0 right-0 border-t border-dashed border-slate-100 dark:border-slate-800/50 w-full" style={{ top: `${hourHeight / 2}px` }}></div>
-                    
-                    {/* Ghost Block Preview when dragging over */}
-                    {dragOverHour === hour && (
-                        <div className="absolute top-0 left-2 right-4 border-2 border-dashed border-[#6F00FF] bg-[#6F00FF]/10 rounded-lg z-0 pointer-events-none flex items-center justify-center text-[#6F00FF] font-medium text-sm" style={{ height: `${hourHeight - 4}px` }}>
-                            {!isZoomedOut && 'Drop to schedule'}
-                        </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+                  >
+                    {/* Time Label - perfectly aligned with grid line */}
+                    <div className="w-14 shrink-0 text-right pr-3 text-xs text-slate-400 dark:text-slate-500 font-medium relative">
+                      <span className="absolute right-3 -top-2">{formatTime(hour, true)}</span>
+                    </div>
 
-              {/* Render Time Blocks */}
-              {schedule.map((block) => {
-                // Calculate position based on midnight (0:00) using hourHeight for zoom support
-                const topOffset = block.start * hourHeight; 
-                const height = block.duration * hourHeight;
-                const endTime = block.start + block.duration;
-                
-                // Determine block color:
-                // 1. If completed, use gray
-                // 2. If has tag color from task/habit, use that
-                // 3. If Google event with calendar color, use that
-                // 4. Default to Google Calendar blue (#4285f4)
-                const DEFAULT_BLUE = '#4285f4';
-                
-                // Find the associated task or habit tag color
-                const linkedTask = block.taskId ? [...activeTasks, ...laterTasks].find(t => String(t.id) === String(block.taskId)) : null;
-                const linkedHabit = block.habitId ? habits.find(h => h.id === block.habitId) : null;
-                const tagColor = linkedTask?.tagColor || linkedHabit?.tagColor || null;
-                
-                // Determine the final background color
-                // Priority: 1. linked task/habit tagColor, 2. calendarColor, 3. saved color, 4. default
-                let bgColor = DEFAULT_BLUE;
-                
-                if (tagColor) {
-                  bgColor = tagColor;
-                } else if (block.calendarColor) {
-                  bgColor = block.calendarColor;
-                } else if (block.color) {
-                  // Handle both hex colors (#FF5733) and old Tailwind format (bg-[#FF5733])
-                  if (block.color.startsWith('#')) {
-                    bgColor = block.color;
-                  } else {
-                    const hexMatch = block.color.match(/#[0-9A-Fa-f]{6}/);
-                    if (hexMatch) {
-                      bgColor = hexMatch[0];
+                    {/* Grid Line */}
+                    <div className="flex-1 border-t border-slate-200 dark:border-slate-700 relative">
+                      {/* Half-hour guideline */}
+                      <div className="absolute left-0 right-0 border-t border-dashed border-slate-100 dark:border-slate-800/50 w-full" style={{ top: `${hourHeight / 2}px` }}></div>
+
+                      {/* Ghost Block Preview when dragging over */}
+                      {dragOverHour === hour && (
+                        <div className="absolute top-0 left-2 right-4 border-2 border-dashed border-[#6F00FF] bg-[#6F00FF]/10 rounded-lg z-0 pointer-events-none flex items-center justify-center text-[#6F00FF] font-medium text-sm" style={{ height: `${hourHeight - 4}px` }}>
+                          {!isZoomedOut && 'Drop to schedule'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Render Time Blocks */}
+                {schedule.map((block) => {
+                  // Calculate position based on midnight (0:00) using hourHeight for zoom support
+                  const topOffset = block.start * hourHeight;
+                  const height = block.duration * hourHeight;
+                  const endTime = block.start + block.duration;
+
+                  // Determine block color:
+                  // 1. If completed, use gray
+                  // 2. If has tag color from task/habit, use that
+                  // 3. If Google event with calendar color, use that
+                  // 4. Default to Google Calendar blue (#4285f4)
+                  const DEFAULT_BLUE = '#4285f4';
+
+                  // Find the associated task or habit tag color
+                  const linkedTask = block.taskId ? [...activeTasks, ...laterTasks].find(t => String(t.id) === String(block.taskId)) : null;
+                  const linkedHabit = block.habitId ? habits.find(h => h.id === block.habitId) : null;
+                  const tagColor = linkedTask?.tagColor || linkedHabit?.tagColor || null;
+
+                  // Determine the final background color
+                  // Priority: 1. linked task/habit tagColor, 2. calendarColor, 3. saved color, 4. default
+                  let bgColor = DEFAULT_BLUE;
+
+                  if (tagColor) {
+                    bgColor = tagColor;
+                  } else if (block.calendarColor) {
+                    bgColor = block.calendarColor;
+                  } else if (block.color) {
+                    // Handle both hex colors (#FF5733) and old Tailwind format (bg-[#FF5733])
+                    if (block.color.startsWith('#')) {
+                      bgColor = block.color;
+                    } else {
+                      const hexMatch = block.color.match(/#[0-9A-Fa-f]{6}/);
+                      if (hexMatch) {
+                        bgColor = hexMatch[0];
+                      }
                     }
                   }
-                }
-                
-                const blockStyle = { 
-                  top: `${topOffset}px`, 
-                  height: `${height}px`, 
-                  backgroundColor: block.completed ? undefined : bgColor,
-                  borderColor: block.completed ? undefined : bgColor 
+
+                  const blockStyle = {
+                    top: `${topOffset}px`,
+                    height: `${height}px`,
+                    backgroundColor: block.completed ? undefined : bgColor,
+                    borderColor: block.completed ? undefined : bgColor
+                  };
+
+                  // Determine if this is a compact event (less than 1 hour)
+                  const isCompact = block.duration < 1;
+                  const isVeryCompact = block.duration <= 0.5;
+
+                  return (
+                    <div
+                      key={block.id}
+                      style={blockStyle}
+                      className={`absolute left-16 right-4 rounded-lg border shadow-sm cursor-move hover:brightness-95 transition-all z-10 group text-white overflow-hidden ${isVeryCompact ? 'p-1.5 pr-6' : isCompact ? 'p-2 pr-8' : 'p-3 pr-10'} ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 !text-slate-500' : ''} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
+                      onMouseDown={(e) => {
+                        if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.cursor-ns-resize')) return;
+                        e.preventDefault();
+                        setDraggingBlockId(block.id);
+                        setDragStartY(e.clientY);
+                        setDragStartTime(block.start);
+                      }}
+                    >
+                      {/* Top right corner: Tag + Close button grouped together */}
+                      <div className={`absolute ${isVeryCompact ? 'top-1 right-1' : isCompact ? 'top-1.5 right-1.5' : 'top-2 right-2'} flex flex-row items-center gap-1.5`}>
+                        {/* Category tag - prioritize actual tag over calendar name, skip "Ascend" as it's not a real tag */}
+                        {(block.tag || (block.calendarName && block.calendarName !== 'Ascend')) && (
+                          <span className={`uppercase font-bold bg-black/10 dark:bg-white/15 px-1.5 py-0.5 rounded pointer-events-none ${isVeryCompact ? 'text-[8px]' : 'text-[10px]'}`}>
+                            {block.tag || block.calendarName}
+                          </span>
+                        )}
+                        {/* Close button - always visible on hover */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-300 bg-black/20 hover:bg-black/30 rounded p-0.5 pointer-events-auto"
+                        >
+                          <X size={isVeryCompact ? 10 : 12} />
+                        </button>
+                      </div>
+
+                      {/* Content: Title first, then time below */}
+                      <div className="flex flex-col min-w-0 overflow-hidden">
+                        {/* Title row with checkbox */}
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {/* Completion checkbox */}
+                          <div
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleToggleBlockComplete(block.id); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className={`shrink-0 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${isVeryCompact ? 'w-3.5 h-3.5' : isCompact ? 'w-4 h-4' : 'w-5 h-5'} ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-white/50 hover:border-emerald-400 bg-white/20'}`}
+                          >
+                            {block.completed && <Check size={isVeryCompact ? 8 : isCompact ? 10 : 14} className="text-white" strokeWidth={3} />}
+                          </div>
+                          <h3 className={`font-bold pointer-events-none truncate ${isVeryCompact ? 'text-[11px]' : isCompact ? 'text-xs' : 'text-sm'} ${block.completed ? 'line-through opacity-70' : ''}`}>{block.title}</h3>
+                        </div>
+
+                        {/* Time row - below title */}
+                        {!isVeryCompact && (
+                          <div className={`flex items-center gap-1 ${isCompact ? 'mt-0.5' : 'mt-1'} pointer-events-none`}>
+                            {block.isGoogle && <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" className="w-3 h-3 opacity-80" alt="GCal" />}
+                            <span className={`opacity-70 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>
+                              {formatTime(block.start)} – {formatTime(endTime)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Resize Handle */}
+                      <div
+                        className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-end justify-center pb-1 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity z-20"
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setResizingBlockId(block.id);
+                          setResizeStartY(e.clientY);
+                          setResizeStartDuration(block.duration);
+                        }}
+                      >
+                        <div className="w-8 h-1 rounded-full bg-slate-400/50 dark:bg-slate-500/50 backdrop-blur-sm"></div>
+                      </div>
+                    </div>
+                  )
+                })}
+
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Notes & Extras */}
+          <div className="md:col-span-3 bg-slate-50/50 dark:bg-slate-950 flex flex-col overflow-y-auto">
+            <div className="p-4 space-y-8">
+
+              {/* Inline formatting helper */}
+              {(() => {
+                const renderInlineFormatting = (text: string) => {
+                  const parts: React.ReactNode[] = [];
+                  let remaining = text;
+                  let key = 0;
+
+                  while (remaining.length > 0) {
+                    // Bold (**text**)
+                    const boldMatch = remaining.match(/^\*\*(.+?)\*\*/);
+                    if (boldMatch) {
+                      parts.push(<strong key={key++} className="font-semibold">{boldMatch[1]}</strong>);
+                      remaining = remaining.substring(boldMatch[0].length);
+                      continue;
+                    }
+
+                    // Italic (*text*)
+                    const italicMatch = remaining.match(/^\*(.+?)\*/);
+                    if (italicMatch) {
+                      parts.push(<em key={key++} className="italic">{italicMatch[1]}</em>);
+                      remaining = remaining.substring(italicMatch[0].length);
+                      continue;
+                    }
+
+                    // Strikethrough (~~text~~)
+                    const strikeMatch = remaining.match(/^~~(.+?)~~/);
+                    if (strikeMatch) {
+                      parts.push(<span key={key++} className="line-through opacity-70">{strikeMatch[1]}</span>);
+                      remaining = remaining.substring(strikeMatch[0].length);
+                      continue;
+                    }
+
+                    // Regular character
+                    parts.push(remaining[0]);
+                    remaining = remaining.substring(1);
+                  }
+
+                  return <>{parts}</>;
                 };
 
-                // Determine if this is a compact event (less than 1 hour)
-                const isCompact = block.duration < 1;
-                const isVeryCompact = block.duration <= 0.5;
+                // Make renderInlineFormatting available in outer scope
+                (window as any).renderInlineFormatting = renderInlineFormatting;
+                return null;
+              })()}
 
-                return (
-                  <div 
-                    key={block.id}
-                    style={blockStyle}
-                    className={`absolute left-16 right-4 rounded-lg border shadow-sm cursor-move hover:brightness-95 transition-all z-10 group text-white overflow-hidden ${isVeryCompact ? 'p-1.5 pr-6' : isCompact ? 'p-2 pr-8' : 'p-3 pr-10'} ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 !text-slate-500' : ''} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
-                    onMouseDown={(e) => {
-                      if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.cursor-ns-resize')) return;
-                      e.preventDefault();
-                      setDraggingBlockId(block.id);
-                      setDragStartY(e.clientY);
-                      setDragStartTime(block.start);
-                    }}
-                  >
-                    {/* Top right corner: Tag + Close button grouped together */}
-                    <div className={`absolute ${isVeryCompact ? 'top-1 right-1' : isCompact ? 'top-1.5 right-1.5' : 'top-2 right-2'} flex flex-row items-center gap-1.5`}>
-                      {/* Category tag - prioritize actual tag over calendar name, skip "Ascend" as it's not a real tag */}
-                      {(block.tag || (block.calendarName && block.calendarName !== 'Ascend')) && (
-                        <span className={`uppercase font-bold bg-black/10 dark:bg-white/15 px-1.5 py-0.5 rounded pointer-events-none ${isVeryCompact ? 'text-[8px]' : 'text-[10px]'}`}>
-                          {block.tag || block.calendarName}
-                        </span>
-                      )}
-                      {/* Close button - always visible on hover */}
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-300 bg-black/20 hover:bg-black/30 rounded p-0.5 pointer-events-auto"
+              {/* Notes Section */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100">
+                    <div className="text-[#6F00FF]">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z" /><path d="M15 3v6h6" /></svg>
+                    </div>
+                    <h2 className="font-bold text-lg">Notes</h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {notesLoading && <Loader2 size={12} className="animate-spin text-slate-400" />}
+                    {notesSaved && <span className="text-xs text-emerald-500 flex items-center gap-1"><Check size={12} /> Saved</span>}
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden">
+                  {/* Formatting Toolbar */}
+                  <div className="flex items-center gap-1 p-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+                    {/* Text Formatting */}
+                    <div className="flex items-center gap-0.5 border-r border-slate-200 dark:border-slate-700 pr-2">
+                      <button
+                        onClick={() => {
+                          const activeInput = document.activeElement as HTMLInputElement;
+                          if (!activeInput || activeInput.tagName !== 'INPUT') return;
+
+                          const start = activeInput.selectionStart || 0;
+                          const end = activeInput.selectionEnd || 0;
+                          const currentValue = activeInput.value;
+
+                          if (start === end) {
+                            // No selection, insert template
+                            const newValue = currentValue.substring(0, start) + '**bold**' + currentValue.substring(end);
+                            const lines = notesContent.split('\n');
+                            const lineIndex = Array.from(document.querySelectorAll('input[type="text"]')).indexOf(activeInput);
+                            if (lineIndex >= 0) {
+                              lines[lineIndex] = newValue;
+                              handleNotesChange(lines.join('\n'));
+                              setTimeout(() => activeInput.focus(), 10);
+                            }
+                          } else {
+                            // Wrap selection
+                            const selectedText = currentValue.substring(start, end);
+                            const newValue = currentValue.substring(0, start) + '**' + selectedText + '**' + currentValue.substring(end);
+                            const lines = notesContent.split('\n');
+                            const lineIndex = Array.from(document.querySelectorAll('input[type="text"]')).indexOf(activeInput);
+                            if (lineIndex >= 0) {
+                              lines[lineIndex] = newValue;
+                              handleNotesChange(lines.join('\n'));
+                              setTimeout(() => {
+                                activeInput.focus();
+                                activeInput.setSelectionRange(start, end + 4);
+                              }, 10);
+                            }
+                          }
+                        }}
+                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors group"
+                        title="Bold"
                       >
-                        <X size={isVeryCompact ? 10 : 12}/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">
+                          <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
+                          <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const activeInput = document.activeElement as HTMLInputElement;
+                          if (!activeInput || activeInput.tagName !== 'INPUT') return;
+
+                          const start = activeInput.selectionStart || 0;
+                          const end = activeInput.selectionEnd || 0;
+                          const currentValue = activeInput.value;
+
+                          if (start === end) {
+                            const newValue = currentValue.substring(0, start) + '*italic*' + currentValue.substring(end);
+                            const lines = notesContent.split('\n');
+                            const lineIndex = Array.from(document.querySelectorAll('input[type="text"]')).indexOf(activeInput);
+                            if (lineIndex >= 0) {
+                              lines[lineIndex] = newValue;
+                              handleNotesChange(lines.join('\n'));
+                              setTimeout(() => activeInput.focus(), 10);
+                            }
+                          } else {
+                            const selectedText = currentValue.substring(start, end);
+                            const newValue = currentValue.substring(0, start) + '*' + selectedText + '*' + currentValue.substring(end);
+                            const lines = notesContent.split('\n');
+                            const lineIndex = Array.from(document.querySelectorAll('input[type="text"]')).indexOf(activeInput);
+                            if (lineIndex >= 0) {
+                              lines[lineIndex] = newValue;
+                              handleNotesChange(lines.join('\n'));
+                              setTimeout(() => {
+                                activeInput.focus();
+                                activeInput.setSelectionRange(start, end + 2);
+                              }, 10);
+                            }
+                          }
+                        }}
+                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors group"
+                        title="Italic"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">
+                          <line x1="19" y1="4" x2="10" y2="4"></line>
+                          <line x1="14" y1="20" x2="5" y2="20"></line>
+                          <line x1="15" y1="4" x2="9" y2="20"></line>
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const activeInput = document.activeElement as HTMLInputElement;
+                          if (!activeInput || activeInput.tagName !== 'INPUT') return;
+
+                          const start = activeInput.selectionStart || 0;
+                          const end = activeInput.selectionEnd || 0;
+                          const currentValue = activeInput.value;
+
+                          if (start === end) {
+                            const newValue = currentValue.substring(0, start) + '~~strikethrough~~' + currentValue.substring(end);
+                            const lines = notesContent.split('\n');
+                            const lineIndex = Array.from(document.querySelectorAll('input[type="text"]')).indexOf(activeInput);
+                            if (lineIndex >= 0) {
+                              lines[lineIndex] = newValue;
+                              handleNotesChange(lines.join('\n'));
+                              setTimeout(() => activeInput.focus(), 10);
+                            }
+                          } else {
+                            const selectedText = currentValue.substring(start, end);
+                            const newValue = currentValue.substring(0, start) + '~~' + selectedText + '~~' + currentValue.substring(end);
+                            const lines = notesContent.split('\n');
+                            const lineIndex = Array.from(document.querySelectorAll('input[type="text"]')).indexOf(activeInput);
+                            if (lineIndex >= 0) {
+                              lines[lineIndex] = newValue;
+                              handleNotesChange(lines.join('\n'));
+                              setTimeout(() => {
+                                activeInput.focus();
+                                activeInput.setSelectionRange(start, end + 4);
+                              }, 10);
+                            }
+                          }
+                        }}
+                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors group"
+                        title="Strikethrough"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">
+                          <path d="M17.5 5H9a4 4 0 0 0 0 8h6a4 4 0 0 1 0 8H5"></path>
+                          <line x1="3" y1="12" x2="21" y2="12"></line>
+                        </svg>
                       </button>
                     </div>
 
-                    {/* Content: Title first, then time below */}
-                    <div className="flex flex-col min-w-0 overflow-hidden">
-                      {/* Title row with checkbox */}
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {/* Completion checkbox */}
-                        <div 
-                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleToggleBlockComplete(block.id); }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          className={`shrink-0 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${isVeryCompact ? 'w-3.5 h-3.5' : isCompact ? 'w-4 h-4' : 'w-5 h-5'} ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-white/50 hover:border-emerald-400 bg-white/20'}`}
-                        >
-                          {block.completed && <Check size={isVeryCompact ? 8 : isCompact ? 10 : 14} className="text-white" strokeWidth={3} />}
-                        </div>
-                        <h3 className={`font-bold pointer-events-none truncate ${isVeryCompact ? 'text-[11px]' : isCompact ? 'text-xs' : 'text-sm'} ${block.completed ? 'line-through opacity-70' : ''}`}>{block.title}</h3>
-                      </div>
-                      
-                      {/* Time row - below title */}
-                      {!isVeryCompact && (
-                        <div className={`flex items-center gap-1 ${isCompact ? 'mt-0.5' : 'mt-1'} pointer-events-none`}>
-                          {block.isGoogle && <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" className="w-3 h-3 opacity-80" alt="GCal" />}
-                          <span className={`opacity-70 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>
-                            {formatTime(block.start)} – {formatTime(endTime)}
-                          </span>
-                        </div>
-                      )}
+                    {/* Headers */}
+                    <div className="flex items-center gap-0.5 border-r border-slate-200 dark:border-slate-700 pr-2">
+                      <button
+                        onClick={() => {
+                          const newText = notesContent + (notesContent && !notesContent.endsWith('\n') ? '\n' : '') + '# Heading 1';
+                          handleNotesChange(newText);
+                        }}
+                        className="px-2 py-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                        title="Heading 1"
+                      >
+                        H1
+                      </button>
+                      <button
+                        onClick={() => {
+                          const newText = notesContent + (notesContent && !notesContent.endsWith('\n') ? '\n' : '') + '## Heading 2';
+                          handleNotesChange(newText);
+                        }}
+                        className="px-2 py-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                        title="Heading 2"
+                      >
+                        H2
+                      </button>
+                      <button
+                        onClick={() => {
+                          const newText = notesContent + (notesContent && !notesContent.endsWith('\n') ? '\n' : '') + '### Heading 3';
+                          handleNotesChange(newText);
+                        }}
+                        className="px-2 py-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                        title="Heading 3"
+                      >
+                        H3
+                      </button>
                     </div>
 
-                    {/* Resize Handle */}
-                    <div 
-                      className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-end justify-center pb-1 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity z-20"
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        setResizingBlockId(block.id);
-                        setResizeStartY(e.clientY);
-                        setResizeStartDuration(block.duration);
-                      }}
-                    >
-                      <div className="w-8 h-1 rounded-full bg-slate-400/50 dark:bg-slate-500/50 backdrop-blur-sm"></div>
+                    {/* Lists */}
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        onClick={() => {
+                          const newText = notesContent + (notesContent && !notesContent.endsWith('\n') ? '\n' : '') + '1. List item';
+                          handleNotesChange(newText);
+                        }}
+                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors group"
+                        title="Numbered List"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">
+                          <line x1="10" y1="6" x2="21" y2="6"></line>
+                          <line x1="10" y1="12" x2="21" y2="12"></line>
+                          <line x1="10" y1="18" x2="21" y2="18"></line>
+                          <path d="M4 6h1v4"></path>
+                          <path d="M4 10h2"></path>
+                          <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path>
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const newText = notesContent + (notesContent && !notesContent.endsWith('\n') ? '\n' : '') + '- List item';
+                          handleNotesChange(newText);
+                        }}
+                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors group"
+                        title="Bullet List"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">
+                          <line x1="8" y1="6" x2="21" y2="6"></line>
+                          <line x1="8" y1="12" x2="21" y2="12"></line>
+                          <line x1="8" y1="18" x2="21" y2="18"></line>
+                          <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                          <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                          <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          // Add a new checkbox line
+                          const newText = notesContent + (notesContent && !notesContent.endsWith('\n') ? '\n' : '') + '☐ ';
+                          handleNotesChange(newText);
+                          // Focus last input
+                          setTimeout(() => {
+                            const inputs = document.querySelectorAll('.notes-input');
+                            const lastInput = inputs[inputs.length - 1] as HTMLInputElement;
+                            lastInput?.focus();
+                          }, 0);
+                        }}
+                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors group"
+                        title="Add Checkbox"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        </svg>
+                      </button>
                     </div>
                   </div>
-                )
-              })}
 
-            </div>
-          </div>
-        </div>
+                  {/* Notes Content Area - Hybrid Editor */}
+                  <div
+                    className="p-3 min-h-[120px] max-h-[500px] overflow-y-auto text-sm"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      // Cmd+A / Ctrl+A - Select all
+                      if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+                        e.preventDefault();
+                        // Select all text in all inputs
+                        const inputs = document.querySelectorAll('.notes-container input[type="text"]') as NodeListOf<HTMLInputElement>;
+                        inputs.forEach(input => {
+                          input.select();
+                        });
+                        // Store that we want to delete everything
+                        (window as any).notesSelectAll = true;
+                      }
+                      // Backspace or Delete after Cmd+A
+                      if ((e.key === 'Backspace' || e.key === 'Delete') && (window as any).notesSelectAll) {
+                        e.preventDefault();
+                        handleNotesChange('');
+                        (window as any).notesSelectAll = false;
+                      }
+                    }}
+                  >
+                    <div className="notes-container">
+                      {notesContent.split('\n').map((line, lineIndex) => {
+                        // Render checkboxes
+                        const checkboxMatch = line.match(/^\[([x ])\]\s*(.*)$/);
+                        if (checkboxMatch) {
+                          const isChecked = checkboxMatch[1] === 'x';
+                          const text = checkboxMatch[2];
+                          return (
+                            <div key={lineIndex} className="flex items-start gap-2 my-1.5 group">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const lines = notesContent.split('\n');
+                                  lines[lineIndex] = `[${e.target.checked ? 'x' : ' '}] ${text}`;
+                                  handleNotesChange(lines.join('\n'));
+                                }}
+                                className="mt-0.5 w-4 h-4 rounded border-2 border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                              />
+                              <input
+                                type="text"
+                                value={text}
+                                onChange={(e) => {
+                                  const lines = notesContent.split('\n');
+                                  lines[lineIndex] = `[${isChecked ? 'x' : ' '}] ${e.target.value}`;
+                                  handleNotesChange(lines.join('\n'));
+                                  (window as any).notesSelectAll = false;
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const lines = notesContent.split('\n');
+                                    lines.splice(lineIndex + 1, 0, '[ ] ');
+                                    handleNotesChange(lines.join('\n'));
+                                    setTimeout(() => {
+                                      const inputs = document.querySelectorAll('input[type="text"]');
+                                      (inputs[lineIndex + 1] as HTMLInputElement)?.focus();
+                                    }, 10);
+                                  } else if (e.key === 'Backspace' && text === '') {
+                                    e.preventDefault();
+                                    const lines = notesContent.split('\n');
+                                    lines.splice(lineIndex, 1);
+                                    handleNotesChange(lines.join('\n'));
+                                  }
+                                }}
+                                className={`flex-1 bg-transparent border-none outline-none text-slate-700 dark:text-slate-300 ${isChecked ? 'line-through opacity-60' : ''}`}
+                                placeholder="Add task..."
+                                disabled={notesLoading}
+                              />
+                            </div>
+                          );
+                        }
 
-        {/* Right Column: Notes & Extras */}
-        <div className="md:col-span-3 bg-slate-50/50 dark:bg-slate-950 flex flex-col overflow-y-auto">
-           <div className="p-4 space-y-8">
-              
-              {/* Notes Section */}
-              <div>
-                 <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100">
-                      <div className="text-[#6F00FF]">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/></svg>
-                      </div>
-                      <h2 className="font-bold text-lg">Notes</h2>
+                        // Render headings
+                        if (line.startsWith('### ')) {
+                          return (
+                            <input
+                              key={lineIndex}
+                              type="text"
+                              value={line.substring(4)}
+                              onChange={(e) => {
+                                const lines = notesContent.split('\n');
+                                lines[lineIndex] = `### ${e.target.value}`;
+                                handleNotesChange(lines.join('\n'));
+                                (window as any).notesSelectAll = false;
+                              }}
+                              className="w-full text-lg font-semibold text-slate-800 dark:text-slate-100 my-1 bg-transparent border-none outline-none"
+                              placeholder="Heading 3"
+                              disabled={notesLoading}
+                            />
+                          );
+                        }
+                        if (line.startsWith('## ')) {
+                          return (
+                            <input
+                              key={lineIndex}
+                              type="text"
+                              value={line.substring(3)}
+                              onChange={(e) => {
+                                const lines = notesContent.split('\n');
+                                lines[lineIndex] = `## ${e.target.value}`;
+                                handleNotesChange(lines.join('\n'));
+                                (window as any).notesSelectAll = false;
+                              }}
+                              className="w-full text-xl font-bold text-slate-800 dark:text-slate-100 my-1.5 bg-transparent border-none outline-none"
+                              placeholder="Heading 2"
+                              disabled={notesLoading}
+                            />
+                          );
+                        }
+                        if (line.startsWith('# ')) {
+                          return (
+                            <input
+                              key={lineIndex}
+                              type="text"
+                              value={line.substring(2)}
+                              onChange={(e) => {
+                                const lines = notesContent.split('\n');
+                                lines[lineIndex] = `# ${e.target.value}`;
+                                handleNotesChange(lines.join('\n'));
+                                (window as any).notesSelectAll = false;
+                              }}
+                              className="w-full text-2xl font-bold text-slate-900 dark:text-slate-50 my-2 bg-transparent border-none outline-none"
+                              placeholder="Heading 1"
+                              disabled={notesLoading}
+                            />
+                          );
+                        }
+
+                        // Render lists
+                        if (line.match(/^\d+\.\s/) || line.startsWith('- ')) {
+                          const isNumbered = line.match(/^\d+\.\s/);
+                          const content = isNumbered ? line.replace(/^\d+\.\s/, '') : line.substring(2);
+                          return (
+                            <div key={lineIndex} className="flex items-start gap-2 my-0.5">
+                              <span className="text-slate-500 dark:text-slate-400 mt-0.5">•</span>
+                              <input
+                                type="text"
+                                value={content}
+                                onChange={(e) => {
+                                  const lines = notesContent.split('\n');
+                                  lines[lineIndex] = isNumbered ? `1. ${e.target.value}` : `- ${e.target.value}`;
+                                  handleNotesChange(lines.join('\n'));
+                                  (window as any).notesSelectAll = false;
+                                }}
+                                className="flex-1 bg-transparent border-none outline-none text-slate-700 dark:text-slate-300"
+                                placeholder="List item"
+                                disabled={notesLoading}
+                              />
+                            </div>
+                          );
+                        }
+
+                        // Regular text or empty line
+                        return (
+                          <input
+                            key={lineIndex}
+                            type="text"
+                            value={line}
+                            onChange={(e) => {
+                              const lines = notesContent.split('\n');
+                              lines[lineIndex] = e.target.value;
+                              handleNotesChange(lines.join('\n'));
+                              (window as any).notesSelectAll = false;
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const lines = notesContent.split('\n');
+                                lines.splice(lineIndex + 1, 0, '');
+                                handleNotesChange(lines.join('\n'));
+                                setTimeout(() => {
+                                  const inputs = document.querySelectorAll('input[type="text"]');
+                                  (inputs[lineIndex + 1] as HTMLInputElement)?.focus();
+                                }, 10);
+                              }
+                            }}
+                            className="w-full bg-transparent border-none outline-none text-slate-700 dark:text-slate-300 my-0.5"
+                            placeholder={lineIndex === 0 && !notesContent ? `Write your notes for ${selectedDate.toLocaleDateString('sv-SE', { month: 'long', day: 'numeric' })}...` : ''}
+                            disabled={notesLoading}
+                          />
+                        );
+                      })}
                     </div>
-                    <div className="flex items-center gap-2">
-                      {notesLoading && <Loader2 size={12} className="animate-spin text-slate-400" />}
-                      {notesSaved && <span className="text-xs text-emerald-500 flex items-center gap-1"><Check size={12} /> Saved</span>}
-                    </div>
-                 </div>
-                 
-                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden">
-                    <textarea
-                      value={notesContent}
-                      onChange={(e) => handleNotesChange(e.target.value)}
-                      placeholder={`Write your notes for ${selectedDate.toLocaleDateString('sv-SE', { month: 'long', day: 'numeric' })}...`}
-                      className="w-full min-h-[180px] p-3 text-sm text-slate-700 dark:text-slate-300 bg-transparent resize-none focus:outline-none placeholder:text-slate-400"
-                      disabled={notesLoading}
-                    />
-                 </div>
+                  </div>
+                </div>
               </div>
 
               {/* Weight Tracking Section */}
               <div>
-                 <div className="flex items-center justify-between mb-3">
-                    <h2 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2"><Activity size={20} className="text-[#6F00FF]" /> Weight Tracker</h2>
-                    {weightEntries.length > 0 && (
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-slate-500"><strong className="text-slate-800 dark:text-white">{weightEntries[weightEntries.length - 1]?.weight} kg</strong></span>
-                        {weightEntries.length > 1 && (
-                          <span className={`font-medium ${weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight ? 'text-emerald-500' : 'text-red-500'}`}>
-                            {weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight ? '↓' : '↑'}
-                            {Math.abs(weightEntries[weightEntries.length - 1].weight - weightEntries[0].weight).toFixed(1)}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                 </div>
-                 
-                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm p-4">
-                    <WeightLineChart entries={weightEntries} height={160} />
-                    <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
-                      <input type="number" step="0.1" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} placeholder="Today's weight (kg)" className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50" onKeyDown={(e) => { if (e.key === 'Enter') { setWeightDate(new Date().toISOString().split('T')[0]); handleAddWeight(); } }} />
-                      <button onClick={() => { setWeightDate(new Date().toISOString().split('T')[0]); handleAddWeight(); }} className="px-4 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors">Log</button>
-                    </div>
-                 </div>
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Activity size={20} className="text-[#6F00FF]" />
+                    <h2 className="font-bold text-lg text-slate-800 dark:text-white">Weight Tracker</h2>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="space-y-2 mb-4">
+                    {(() => {
+                      const todayString = new Date().toISOString().split('T')[0];
+                      const todayEntry = weightEntries.find(e => e.date === todayString);
+
+                      // Get previous weight (last entry before today, or last entry if no today entry)
+                      const previousEntry = todayEntry
+                        ? weightEntries.filter(e => e.date !== todayString).slice(-1)[0]
+                        : weightEntries.slice(-1)[0];
+
+                      const hasEntries = weightEntries.length > 0;
+                      const change = todayEntry && previousEntry ? todayEntry.weight - previousEntry.weight : null;
+
+                      return (
+                        <>
+                          {/* Previous weight */}
+                          {previousEntry && (
+                            <div className="flex items-center justify-between py-2 px-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+                              <div>
+                                <div className="text-sm text-slate-600 dark:text-slate-400">Previous weight:</div>
+                                <div className="text-xs text-slate-500">({new Date(previousEntry.date).toLocaleDateString('sv-SE')})</div>
+                              </div>
+                              <span className="text-lg font-bold text-slate-800 dark:text-white">{previousEntry.weight} kg</span>
+                            </div>
+                          )}
+
+                          {/* Today's weight */}
+                          {todayEntry && (
+                            <div className="flex items-center justify-between py-2 px-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                              <div className="text-sm text-emerald-700 dark:text-emerald-400">Today's weight:</div>
+                              <span className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
+                                {todayEntry.weight} kg
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Change */}
+                          {change !== null && (
+                            <div className="flex items-center justify-between py-2 px-3 bg-violet-50 dark:bg-violet-900/20 rounded-lg border border-violet-200 dark:border-violet-800">
+                              <div className="text-sm text-[#6F00FF] dark:text-violet-400">Change:</div>
+                              <div className="flex items-center gap-1 font-bold text-[#6F00FF] dark:text-violet-400">
+                                <span className="text-lg">{change < 0 ? '↓' : '↑'}</span>
+                                <span className="text-lg">{Math.abs(change).toFixed(1)} kg</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {!hasEntries && (
+                            <div className="text-center py-4 text-slate-400 text-sm">
+                              No weight entries yet
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Input */}
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={newWeight}
+                      onChange={(e) => setNewWeight(e.target.value)}
+                      placeholder="Enter weight (kg)"
+                      className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
+                      onKeyDown={(e) => { if (e.key === 'Enter') { setWeightDate(new Date().toISOString().split('T')[0]); handleAddWeight(); } }}
+                    />
+                    <button
+                      onClick={() => { setWeightDate(new Date().toISOString().split('T')[0]); handleAddWeight(); }}
+                      className="px-4 py-2 bg-[#6F00FF] text-white text-sm font-medium rounded-lg hover:bg-[#5800cc] transition-colors"
+                    >
+                      Log
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Promo Section - Only shows once for new users */}
               {showPromo && (
-              <div className="bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/10 dark:to-indigo-900/10 rounded-xl border border-violet-100 dark:border-violet-900/20 overflow-hidden relative p-4">
+                <div className="bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/10 dark:to-indigo-900/10 rounded-xl border border-violet-100 dark:border-violet-900/20 overflow-hidden relative p-4">
                   {/* Dismiss button */}
-                  <button 
+                  <button
                     onClick={handleDismissPromo}
                     className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-violet-200/50 dark:hover:bg-violet-800/30 transition-colors z-10"
                     title="Dismiss"
                   >
                     <X size={16} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" />
                   </button>
-                  
+
                   <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-3 pr-6">
-                      <span className="text-xl">👩‍🚀</span> What else does Ascend offer?
+                    <span className="text-xl">👩‍🚀</span> What else does Ascend offer?
                   </h4>
-                  
+
                   <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
-                      <li className="flex items-center gap-2">
-                          <div className={`w-4 h-4 border rounded flex items-center justify-center ${isCalendarSynced ? 'bg-green-500 border-green-500' : 'bg-white dark:bg-slate-800'}`}>
-                              {isCalendarSynced && <Check size={10} className="text-white"/>}
-                          </div> 
-                          Google Calendar Sync
-                      </li>
-                      <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Planners for every day of the year</li>
-                      <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Everything saved to the cloud instantly</li>
-                      <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Accountability and deep work tracking!</li>
+                    <li className="flex items-center gap-2">
+                      <div className={`w-4 h-4 border rounded flex items-center justify-center ${isCalendarSynced ? 'bg-green-500 border-green-500' : 'bg-white dark:bg-slate-800'}`}>
+                        {isCalendarSynced && <Check size={10} className="text-white" />}
+                      </div>
+                      Google Calendar Sync
+                    </li>
+                    <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Planners for every day of the year</li>
+                    <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Everything saved to the cloud instantly</li>
+                    <li className="flex items-center gap-2"><div className="w-4 h-4 border rounded bg-white dark:bg-slate-800"></div> Accountability and deep work tracking!</li>
                   </ul>
                   {!user && (
-                      <button onClick={onLogin} className="inline-block mt-4 text-[#6F00FF] font-bold hover:underline">Sign in to start timeboxing!</button>
+                    <button onClick={onLogin} className="inline-block mt-4 text-[#6F00FF] font-bold hover:underline">Sign in to start timeboxing!</button>
                   )}
-              </div>
+                </div>
               )}
 
-           </div>
-        </div>
+            </div>
+          </div>
 
-      </div>
+        </div>
       )}
     </div>
   );
@@ -3150,8 +3998,8 @@ const LandingPage = ({ onGetStarted }: { onGetStarted: () => void }) => {
     <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-2xl shadow-violet-600/30 mb-8 transform rotate-3 hover:rotate-6 transition-transform">
         <svg width="80" height="80" viewBox="0 0 512 512" fill="none">
-          <rect width="512" height="512" rx="100" fill="#6d3dc1"/>
-          <path d="M 65.148438 215.859375 L 81.007812 225.375 L 150.804688 136.546875 L 184.117188 176.992188 L 311.011719 0.136719 L 385.5625 84.199219 L 415.699219 66.785156 L 517.222656 177.023438 L 571.117188 155.582031 L 713.113281 288.820312 L 567.582031 187.308594 L 511.699219 214.703125 C 511.699219 214.703125 510.898438 308.683594 510.898438 312.648438 C 510.898438 316.613281 414.082031 179.410156 414.082031 179.410156 L 414.082031 278.542969 L 315.398438 49.339844 L 124.363281 332.972656 L 166.761719 225.765625 L 133.746094 252.339844 L 146.972656 192.921875 L 85.773438 259.898438 L 64.351562 245.617188 L 0.910156 288.839844 Z" fill="white" transform="translate(20, 120) scale(0.65)"/>
+          <rect width="512" height="512" rx="100" fill="#6d3dc1" />
+          <path d="M 65.148438 215.859375 L 81.007812 225.375 L 150.804688 136.546875 L 184.117188 176.992188 L 311.011719 0.136719 L 385.5625 84.199219 L 415.699219 66.785156 L 517.222656 177.023438 L 571.117188 155.582031 L 713.113281 288.820312 L 567.582031 187.308594 L 511.699219 214.703125 C 511.699219 214.703125 510.898438 308.683594 510.898438 312.648438 C 510.898438 316.613281 414.082031 179.410156 414.082031 179.410156 L 414.082031 278.542969 L 315.398438 49.339844 L 124.363281 332.972656 L 166.761719 225.765625 L 133.746094 252.339844 L 146.972656 192.921875 L 85.773438 259.898438 L 64.351562 245.617188 L 0.910156 288.839844 Z" fill="white" transform="translate(20, 120) scale(0.65)" />
         </svg>
       </div>
       <h1 className="text-6xl font-extrabold mb-6 tracking-tight text-center">
@@ -3160,18 +4008,18 @@ const LandingPage = ({ onGetStarted }: { onGetStarted: () => void }) => {
       <p className="text-2xl text-slate-500 dark:text-slate-400 mb-12 max-w-xl text-center leading-relaxed">
         The all-in-one timeboxing workspace for <span className="text-slate-800 dark:text-slate-200 font-semibold">deep work</span>.
       </p>
-      <button 
-        onClick={onGetStarted} 
+      <button
+        onClick={onGetStarted}
         className="group flex items-center gap-3 px-8 py-4 bg-[#6F00FF] text-white rounded-full font-bold text-xl hover:bg-violet-700 hover:shadow-xl hover:shadow-violet-600/20 transition-all transform hover:-translate-y-1"
       >
-        Get Started 
+        Get Started
         <ArrowRight size={24} className="group-hover:translate-x-1 transition-transform" />
       </button>
-      
+
       <div className="mt-16 text-sm text-slate-400 flex gap-6">
-        <span className="flex items-center gap-2"><Check size={14}/> Timeboxing</span>
-        <span className="flex items-center gap-2"><Check size={14}/> Task Management</span>
-        <span className="flex items-center gap-2"><Check size={14}/> Calendar Sync</span>
+        <span className="flex items-center gap-2"><Check size={14} /> Timeboxing</span>
+        <span className="flex items-center gap-2"><Check size={14} /> Task Management</span>
+        <span className="flex items-center gap-2"><Check size={14} /> Calendar Sync</span>
       </div>
     </div>
   );
@@ -3247,7 +4095,7 @@ const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-gradient-to-br from-violet-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-2xl shadow-violet-600/30 mx-auto mb-4 overflow-hidden transform hover:scale-105 transition-transform">
             <svg width="40" height="40" viewBox="0 0 720 340" fill="white">
-              <path d="M 65.148438 215.859375 L 81.007812 225.375 L 150.804688 136.546875 L 184.117188 176.992188 L 311.011719 0.136719 L 385.5625 84.199219 L 415.699219 66.785156 L 517.222656 177.023438 L 571.117188 155.582031 L 713.113281 288.820312 L 567.582031 187.308594 L 511.699219 214.703125 C 511.699219 214.703125 510.898438 308.683594 510.898438 312.648438 C 510.898438 316.613281 414.082031 179.410156 414.082031 179.410156 L 414.082031 278.542969 L 315.398438 49.339844 L 124.363281 332.972656 L 166.761719 225.765625 L 133.746094 252.339844 L 146.972656 192.921875 L 85.773438 259.898438 L 64.351562 245.617188 L 0.910156 288.839844 Z"/>
+              <path d="M 65.148438 215.859375 L 81.007812 225.375 L 150.804688 136.546875 L 184.117188 176.992188 L 311.011719 0.136719 L 385.5625 84.199219 L 415.699219 66.785156 L 517.222656 177.023438 L 571.117188 155.582031 L 713.113281 288.820312 L 567.582031 187.308594 L 511.699219 214.703125 C 511.699219 214.703125 510.898438 308.683594 510.898438 312.648438 C 510.898438 316.613281 414.082031 179.410156 414.082031 179.410156 L 414.082031 278.542969 L 315.398438 49.339844 L 124.363281 332.972656 L 166.761719 225.765625 L 133.746094 252.339844 L 146.972656 192.921875 L 85.773438 259.898438 L 64.351562 245.617188 L 0.910156 288.839844 Z" />
             </svg>
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
@@ -3264,11 +4112,10 @@ const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
           <div className="flex border-b border-slate-200 dark:border-slate-700">
             <button
               onClick={() => handleTabChange('signin')}
-              className={`flex-1 py-4 text-sm font-semibold transition-all relative ${
-                activeTab === 'signin'
-                  ? 'text-violet-600 dark:text-violet-400'
-                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-              }`}
+              className={`flex-1 py-4 text-sm font-semibold transition-all relative ${activeTab === 'signin'
+                ? 'text-violet-600 dark:text-violet-400'
+                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
             >
               Sign In
               {activeTab === 'signin' && (
@@ -3277,11 +4124,10 @@ const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
             </button>
             <button
               onClick={() => handleTabChange('signup')}
-              className={`flex-1 py-4 text-sm font-semibold transition-all relative ${
-                activeTab === 'signup'
-                  ? 'text-violet-600 dark:text-violet-400'
-                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-              }`}
+              className={`flex-1 py-4 text-sm font-semibold transition-all relative ${activeTab === 'signup'
+                ? 'text-violet-600 dark:text-violet-400'
+                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
             >
               Sign Up
               {activeTab === 'signup' && (
@@ -3318,10 +4164,10 @@ const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
               ) : (
                 <>
                   <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                   </svg>
                   <span className="text-slate-700 dark:text-slate-200">Continue with Google</span>
                 </>
@@ -3431,7 +4277,7 @@ const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
 
 const App = () => {
   const [isDark, setIsDark] = useState(false);
-  const [user, setUser] = useState<{id: string; name: string; avatar: string; email: string} | null>(null);
+  const [user, setUser] = useState<{ id: string; name: string; avatar: string; email: string } | null>(null);
   const [view, setView] = useState<'landing' | 'auth' | 'app'>('landing');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -3517,12 +4363,12 @@ const App = () => {
         <LandingPage onGetStarted={() => setView('auth')} />
       )}
       {view === 'auth' && (
-        <AuthPage onSuccess={() => {}} />
+        <AuthPage onSuccess={() => { }} />
       )}
       {view === 'app' && user && (
-        <TimeboxApp 
-          user={user} 
-          onLogin={() => setView('auth')} 
+        <TimeboxApp
+          user={user}
+          onLogin={() => setView('auth')}
           onLogout={handleLogout}
           onBack={() => setView('landing')}
         />
