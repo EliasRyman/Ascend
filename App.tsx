@@ -2893,7 +2893,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   <div 
                     key={block.id}
                     style={blockStyle}
-                    className={`absolute left-16 right-4 rounded-lg border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group text-white overflow-hidden ${isVeryCompact ? 'p-1.5' : isCompact ? 'p-2' : 'p-3'} ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 !text-slate-500' : ''} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
+                    className={`absolute left-16 right-4 rounded-lg border shadow-sm cursor-move hover:brightness-95 transition-all z-10 group text-white overflow-hidden ${isVeryCompact ? 'p-1.5 pr-6' : isCompact ? 'p-2 pr-8' : 'p-3 pr-10'} ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 !text-slate-500' : ''} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
                     onMouseDown={(e) => {
                       if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.cursor-ns-resize')) return;
                       e.preventDefault();
@@ -2902,57 +2902,51 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       setDragStartTime(block.start);
                     }}
                   >
-                    {/* Header row: Time + Tag + Actions */}
-                    <div className="flex items-center justify-between pointer-events-none shrink-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className={`font-medium opacity-80 flex items-center gap-1 shrink-0 ${isVeryCompact ? 'text-[10px]' : 'text-xs'}`}>
-                              {block.isGoogle && <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" className="w-3 h-3" alt="GCal" />}
-                              {formatTime(block.start)} – {formatTime(endTime)}
-                          </span>
-                          {/* Tag/Calendar name inline with time */}
-                          {block.calendarName && <span className="text-[10px] font-bold opacity-80 bg-white/20 px-1.5 rounded truncate">{block.calendarName}</span>}
-                          {block.tag && !block.calendarName && <span className="text-[10px] uppercase font-bold opacity-60 bg-black/5 dark:bg-white/10 px-1.5 rounded truncate">{block.tag}</span>}
-                        </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto shrink-0">
-                            <MoreHorizontal size={14} className="cursor-pointer" />
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              className="hover:text-red-600"
-                            >
-                              <X size={14}/>
-                            </button>
-                        </div>
-                    </div>
+                    {/* Category tag - absolute top right */}
+                    {(block.tag || block.calendarName) && (
+                      <div className={`absolute ${isVeryCompact ? 'top-1 right-1' : isCompact ? 'top-1.5 right-1.5' : 'top-2 right-2'} pointer-events-none`}>
+                        <span className={`uppercase font-bold bg-black/10 dark:bg-white/15 px-1.5 py-0.5 rounded ${isVeryCompact ? 'text-[8px]' : 'text-[10px]'}`}>
+                          {block.calendarName || block.tag}
+                        </span>
+                      </div>
+                    )}
                     
-                    {/* Title row with checkbox - only show if there's room */}
-                    {!isVeryCompact && (
-                      <div className={`flex items-center gap-2 ${isCompact ? 'mt-0.5' : 'mt-1'} min-w-0`}>
+                    {/* Action buttons - show on hover, positioned after tag */}
+                    <div className={`absolute ${isVeryCompact ? 'top-1 right-1' : isCompact ? 'top-1.5 right-1.5' : 'top-2 right-2'} flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10`}>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="hover:text-red-300 bg-black/20 rounded p-0.5"
+                      >
+                        <X size={isVeryCompact ? 10 : 12}/>
+                      </button>
+                    </div>
+
+                    {/* Content: Title first, then time below */}
+                    <div className="flex flex-col min-w-0 overflow-hidden">
+                      {/* Title row with checkbox */}
+                      <div className="flex items-center gap-1.5 min-w-0">
                         {/* Completion checkbox */}
                         <div 
                           onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleToggleBlockComplete(block.id); }}
                           onMouseDown={(e) => e.stopPropagation()}
-                          className={`shrink-0 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${isCompact ? 'w-4 h-4' : 'w-5 h-5'} ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-slate-400 hover:border-emerald-500 bg-white/80 dark:bg-slate-800/80'}`}
+                          className={`shrink-0 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${isVeryCompact ? 'w-3.5 h-3.5' : isCompact ? 'w-4 h-4' : 'w-5 h-5'} ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-white/50 hover:border-emerald-400 bg-white/20'}`}
                         >
-                          {block.completed && <Check size={isCompact ? 10 : 14} className="text-white" strokeWidth={3} />}
+                          {block.completed && <Check size={isVeryCompact ? 8 : isCompact ? 10 : 14} className="text-white" strokeWidth={3} />}
                         </div>
-                        <h3 className={`font-bold pointer-events-none truncate ${isCompact ? 'text-xs' : 'text-sm'} ${block.completed ? 'line-through' : ''}`}>{block.title}</h3>
+                        <h3 className={`font-bold pointer-events-none truncate ${isVeryCompact ? 'text-[11px]' : isCompact ? 'text-xs' : 'text-sm'} ${block.completed ? 'line-through opacity-70' : ''}`}>{block.title}</h3>
                       </div>
-                    )}
-                    
-                    {/* For very compact events, show checkbox and title inline in header */}
-                    {isVeryCompact && (
-                      <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                        <div 
-                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleToggleBlockComplete(block.id); }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          className={`shrink-0 w-3.5 h-3.5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-slate-400 hover:border-emerald-500 bg-white/80 dark:bg-slate-800/80'}`}
-                        >
-                          {block.completed && <Check size={8} className="text-white" strokeWidth={3} />}
+                      
+                      {/* Time row - below title */}
+                      {!isVeryCompact && (
+                        <div className={`flex items-center gap-1 ${isCompact ? 'mt-0.5' : 'mt-1'} pointer-events-none`}>
+                          {block.isGoogle && <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" className="w-3 h-3 opacity-80" alt="GCal" />}
+                          <span className={`opacity-70 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>
+                            {formatTime(block.start)} – {formatTime(endTime)}
+                          </span>
                         </div>
-                        <h3 className={`font-bold text-[11px] pointer-events-none truncate ${block.completed ? 'line-through' : ''}`}>{block.title}</h3>
-                      </div>
-                    )}
+                      )}
+                    </div>
 
                     {/* Resize Handle */}
                     <div 
