@@ -13,7 +13,7 @@ export interface Task {
 export interface ScheduleBlock {
   id: string;
   title: string;
-  tag: string;
+  tag: string | null;
   start: number;
   duration: number;
   color: string;
@@ -46,11 +46,11 @@ function dbBlockToBlock(dbBlock: DbScheduleBlock): ScheduleBlock {
   return {
     id: dbBlock.id,
     title: dbBlock.title,
-    tag: dbBlock.tag || 'work',
+    tag: dbBlock.tag || null,
     start: dbBlock.start_hour,
     duration: dbBlock.duration,
-    color: dbBlock.color || 'bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500',
-    textColor: dbBlock.text_color || 'text-indigo-950 dark:text-indigo-50',
+    color: dbBlock.color || '#4285f4',
+    textColor: dbBlock.text_color || 'text-white',
     isGoogle: dbBlock.is_google,
     googleEventId: dbBlock.google_event_id || undefined,
   };

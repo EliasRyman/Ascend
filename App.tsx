@@ -106,7 +106,7 @@ const useTheme = () => useContext(ThemeContext);
 interface ScheduleBlock {
   id: number | string;
   title: string;
-  tag: string;
+  tag: string | null;
   start: number;
   duration: number;
   color: string;
@@ -2861,6 +2861,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 // Determine the final background color
                 // Priority: 1. linked task/habit tagColor, 2. calendarColor, 3. saved color, 4. default
                 let bgColor = DEFAULT_BLUE;
+                
                 if (tagColor) {
                   bgColor = tagColor;
                 } else if (block.calendarColor) {
