@@ -1452,6 +1452,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     const targetDate = date || new Date();
     const dateString = targetDate.toISOString().split('T')[0];
     
+    // Find current habit to determine new completion state
+    const currentHabit = habits.find(h => h.id === habitId);
+    const isCurrentlyCompleted = currentHabit?.completedDates.includes(dateString) || false;
+    const newCompleted = !isCurrentlyCompleted;
+    
     setHabits(prev => prev.map(habit => {
       if (habit.id !== habitId) return habit;
       const isCompleted = habit.completedDates.includes(dateString);
@@ -1460,6 +1465,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       const newStreak = calculateStreak(updatedHabit);
       return { ...updatedHabit, currentStreak: newStreak, longestStreak: Math.max(updatedHabit.longestStreak, newStreak) };
     }));
+    
+    // Also update any schedule blocks that reference this habit
+    setSchedule(prev => prev.map(block => 
+      block.habitId === habitId ? { ...block, completed: newCompleted } : block
+    ));
   };
 
   const addHabit = (newHabit: Omit<Habit, 'id' | 'currentStreak' | 'longestStreak' | 'completedDates' | 'createdAt'>) => {
