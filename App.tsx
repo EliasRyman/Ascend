@@ -2095,7 +2095,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           duration: 1,
           color: habitTagColor ? `bg-[${habitTagColor}]` : 'bg-[#6F00FF]',
           textColor: 'text-white',
-          isGoogle: googleAccount !== null,
+          isGoogle: false,
           completed: false,
           habitId: habitId,
         };
@@ -2167,7 +2167,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           duration: 1,
           color: "bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500", 
           textColor: "text-indigo-950 dark:text-indigo-50",
-          isGoogle: googleAccount !== null,
+          isGoogle: false,
           completed: task.completed || false,
           taskId: task.id
       };
@@ -2860,7 +2860,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 let bgColor = DEFAULT_BLUE;
                 if (tagColor) {
                   bgColor = tagColor;
-                } else if (block.calendarColor && block.isGoogle) {
+                } else if (block.calendarColor) {
                   bgColor = block.calendarColor;
                 }
                 
