@@ -2859,14 +2859,22 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 const tagColor = linkedTask?.tagColor || linkedHabit?.tagColor || null;
                 
                 // Determine the final background color
-                // Priority: 1. linked task/habit tagColor, 2. calendarColor, 3. saved color (hex), 4. default
+                // Priority: 1. linked task/habit tagColor, 2. calendarColor, 3. saved color, 4. default
                 let bgColor = DEFAULT_BLUE;
                 if (tagColor) {
                   bgColor = tagColor;
                 } else if (block.calendarColor) {
                   bgColor = block.calendarColor;
-                } else if (block.color && block.color.startsWith('#')) {
-                  bgColor = block.color;
+                } else if (block.color) {
+                  // Handle both hex colors (#FF5733) and old Tailwind format (bg-[#FF5733])
+                  if (block.color.startsWith('#')) {
+                    bgColor = block.color;
+                  } else {
+                    const hexMatch = block.color.match(/#[0-9A-Fa-f]{6}/);
+                    if (hexMatch) {
+                      bgColor = hexMatch[0];
+                    }
+                  }
                 }
                 
                 const blockStyle = { 
