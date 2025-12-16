@@ -2871,11 +2871,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   borderColor: block.completed ? undefined : bgColor 
                 };
 
+                // Determine if this is a compact event (less than 1 hour)
+                const isCompact = block.duration < 1;
+                const isVeryCompact = block.duration <= 0.5;
+
                 return (
                   <div 
                     key={block.id}
                     style={blockStyle}
-                    className={`absolute left-16 right-4 rounded-lg p-3 border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group text-white ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 !text-slate-500' : ''} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
+                    className={`absolute left-16 right-4 rounded-lg border shadow-sm cursor-move hover:brightness-95 transition-all z-10 flex flex-col group text-white overflow-hidden ${isVeryCompact ? 'p-1.5' : isCompact ? 'p-2' : 'p-3'} ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 !text-slate-500' : ''} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
                     onMouseDown={(e) => {
                       if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.cursor-ns-resize')) return;
                       e.preventDefault();
@@ -2884,12 +2888,18 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       setDragStartTime(block.start);
                     }}
                   >
-                    <div className="flex items-start justify-between pointer-events-none">
-                        <span className="text-xs font-medium opacity-80 flex items-center gap-1">
-                            {block.isGoogle && <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" className="w-3 h-3" alt="GCal" />}
-                            {formatTime(block.start)} – {formatTime(endTime)}
-                        </span>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
+                    {/* Header row: Time + Tag + Actions */}
+                    <div className="flex items-center justify-between pointer-events-none shrink-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`font-medium opacity-80 flex items-center gap-1 shrink-0 ${isVeryCompact ? 'text-[10px]' : 'text-xs'}`}>
+                              {block.isGoogle && <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" className="w-3 h-3" alt="GCal" />}
+                              {formatTime(block.start)} – {formatTime(endTime)}
+                          </span>
+                          {/* Tag/Calendar name inline with time */}
+                          {block.calendarName && <span className="text-[10px] font-bold opacity-80 bg-white/20 px-1.5 rounded truncate">{block.calendarName}</span>}
+                          {block.tag && !block.calendarName && <span className="text-[10px] uppercase font-bold opacity-60 bg-black/5 dark:bg-white/10 px-1.5 rounded truncate">{block.tag}</span>}
+                        </div>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto shrink-0">
                             <MoreHorizontal size={14} className="cursor-pointer" />
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
@@ -2900,21 +2910,35 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             </button>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      {/* Completion checkbox */}
-                      <div 
-                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleToggleBlockComplete(block.id); }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        className={`w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-slate-400 hover:border-emerald-500 bg-white/80 dark:bg-slate-800/80'}`}
-                      >
-                        {block.completed && <Check size={14} className="text-white" strokeWidth={3} />}
+                    
+                    {/* Title row with checkbox - only show if there's room */}
+                    {!isVeryCompact && (
+                      <div className={`flex items-center gap-2 ${isCompact ? 'mt-0.5' : 'mt-1'} min-w-0`}>
+                        {/* Completion checkbox */}
+                        <div 
+                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleToggleBlockComplete(block.id); }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          className={`shrink-0 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${isCompact ? 'w-4 h-4' : 'w-5 h-5'} ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-slate-400 hover:border-emerald-500 bg-white/80 dark:bg-slate-800/80'}`}
+                        >
+                          {block.completed && <Check size={isCompact ? 10 : 14} className="text-white" strokeWidth={3} />}
+                        </div>
+                        <h3 className={`font-bold pointer-events-none truncate ${isCompact ? 'text-xs' : 'text-sm'} ${block.completed ? 'line-through' : ''}`}>{block.title}</h3>
                       </div>
-                      <h3 className={`font-bold text-sm pointer-events-none ${block.completed ? 'line-through' : ''}`}>{block.title}</h3>
-                    </div>
-                    <div className="mt-auto flex items-center gap-2 pointer-events-none">
-                        {block.calendarName && <span className="text-[10px] font-bold opacity-80 bg-white/20 px-1.5 rounded">{block.calendarName}</span>}
-                        {block.tag && !block.calendarName && <span className="text-[10px] uppercase font-bold opacity-60 bg-black/5 dark:bg-white/10 px-1.5 rounded">{block.tag}</span>}
-                    </div>
+                    )}
+                    
+                    {/* For very compact events, show checkbox and title inline in header */}
+                    {isVeryCompact && (
+                      <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                        <div 
+                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleToggleBlockComplete(block.id); }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          className={`shrink-0 w-3.5 h-3.5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-slate-400 hover:border-emerald-500 bg-white/80 dark:bg-slate-800/80'}`}
+                        >
+                          {block.completed && <Check size={8} className="text-white" strokeWidth={3} />}
+                        </div>
+                        <h3 className={`font-bold text-[11px] pointer-events-none truncate ${block.completed ? 'line-through' : ''}`}>{block.title}</h3>
+                      </div>
+                    )}
 
                     {/* Resize Handle */}
                     <div 
