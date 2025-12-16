@@ -2902,21 +2902,19 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       setDragStartTime(block.start);
                     }}
                   >
-                    {/* Category tag - absolute top right */}
-                    {(block.tag || block.calendarName) && (
-                      <div className={`absolute ${isVeryCompact ? 'top-1 right-1' : isCompact ? 'top-1.5 right-1.5' : 'top-2 right-2'} pointer-events-none`}>
-                        <span className={`uppercase font-bold bg-black/10 dark:bg-white/15 px-1.5 py-0.5 rounded ${isVeryCompact ? 'text-[8px]' : 'text-[10px]'}`}>
+                    {/* Top right corner: Tag + Close button grouped together */}
+                    <div className={`absolute ${isVeryCompact ? 'top-1 right-1' : isCompact ? 'top-1.5 right-1.5' : 'top-2 right-2'} flex flex-row items-center gap-1.5`}>
+                      {/* Category tag */}
+                      {(block.tag || block.calendarName) && (
+                        <span className={`uppercase font-bold bg-black/10 dark:bg-white/15 px-1.5 py-0.5 rounded pointer-events-none ${isVeryCompact ? 'text-[8px]' : 'text-[10px]'}`}>
                           {block.calendarName || block.tag}
                         </span>
-                      </div>
-                    )}
-                    
-                    {/* Action buttons - show on hover, positioned after tag */}
-                    <div className={`absolute ${isVeryCompact ? 'top-1 right-1' : isCompact ? 'top-1.5 right-1.5' : 'top-2 right-2'} flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10`}>
+                      )}
+                      {/* Close button - always visible on hover */}
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="hover:text-red-300 bg-black/20 rounded p-0.5"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-300 bg-black/20 hover:bg-black/30 rounded p-0.5 pointer-events-auto"
                       >
                         <X size={isVeryCompact ? 10 : 12}/>
                       </button>
