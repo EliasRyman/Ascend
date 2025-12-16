@@ -1626,7 +1626,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
             tag: habit.tag,
             start: startTime,
             duration,
-            color: habit.tagColor ? `bg-[${habit.tagColor}]` : 'bg-[#6F00FF]',
+            color: habit.tagColor || '#6F00FF',
             textColor: 'text-white',
             isGoogle: false,
             completed: habit.completedDates.includes(dateString),
@@ -2093,7 +2093,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           tag: habitTag,
           start: hour,
           duration: 1,
-          color: habitTagColor ? `bg-[${habitTagColor}]` : 'bg-[#6F00FF]',
+          color: habitTagColor || '#6F00FF',
           textColor: 'text-white',
           isGoogle: false,
           completed: false,
@@ -2165,8 +2165,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           tag: task.tag || null,
           start: hour,
           duration: 1,
-          color: "bg-indigo-400/90 dark:bg-indigo-600/90 border-indigo-500", 
-          textColor: "text-indigo-950 dark:text-indigo-50",
+          color: task.tagColor || '#4285f4',
+          textColor: "text-white",
           isGoogle: false,
           completed: task.completed || false,
           taskId: task.id
@@ -2177,10 +2177,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       const newBlock: ScheduleBlock = savedBlock ? {
           ...savedBlock,
           taskId: task.id,
+          calendarColor: task.tagColor || undefined,
           completed: task.completed || false
       } : {
           id: Date.now(),
-          ...blockData
+          ...blockData,
+          calendarColor: task.tagColor || undefined
       };
 
       setSchedule(prev => [...prev, newBlock]);
@@ -2857,11 +2859,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 const tagColor = linkedTask?.tagColor || linkedHabit?.tagColor || null;
                 
                 // Determine the final background color
+                // Priority: 1. linked task/habit tagColor, 2. calendarColor, 3. saved color (hex), 4. default
                 let bgColor = DEFAULT_BLUE;
                 if (tagColor) {
                   bgColor = tagColor;
                 } else if (block.calendarColor) {
                   bgColor = block.calendarColor;
+                } else if (block.color && block.color.startsWith('#')) {
+                  bgColor = block.color;
                 }
                 
                 const blockStyle = { 
