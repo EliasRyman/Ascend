@@ -8,7 +8,7 @@ const ASCEND_CALENDAR_NAME = 'Ascend';
 // For local development, set VITE_BACKEND_URL=http://localhost:4000 in .env
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://ascend-production-ce09.up.railway.app';
 
-// Google Calendar color IDs mapping
+// Google Calendar color IDs mapping (by tag name)
 const TAG_COLOR_MAP: Record<string, string> = {
   work: '9',       // Bold Blue
   personal: '10',  // Bold Green
@@ -22,6 +22,61 @@ const TAG_COLOR_MAP: Record<string, string> = {
   demo: '3',       // Grape (Purple)
   move: '6',       // Tangerine (Orange)
 };
+
+// Google Calendar color palette with their hex values
+const GOOGLE_COLOR_PALETTE: { id: string; hex: string }[] = [
+  { id: '1', hex: '#7986cb' },  // Lavender
+  { id: '2', hex: '#33b679' },  // Sage
+  { id: '3', hex: '#8e24aa' },  // Grape
+  { id: '4', hex: '#e67c73' },  // Flamingo
+  { id: '5', hex: '#f6bf26' },  // Banana
+  { id: '6', hex: '#f4511e' },  // Tangerine
+  { id: '7', hex: '#039be5' },  // Peacock
+  { id: '8', hex: '#616161' },  // Graphite
+  { id: '9', hex: '#3f51b5' },  // Blueberry
+  { id: '10', hex: '#0b8043' }, // Basil
+  { id: '11', hex: '#d50000' }, // Tomato
+];
+
+// Helper function to convert hex to RGB
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
+}
+
+// Calculate color distance using simple Euclidean distance
+function colorDistance(hex1: string, hex2: string): number {
+  const rgb1 = hexToRgb(hex1);
+  const rgb2 = hexToRgb(hex2);
+  if (!rgb1 || !rgb2) return Infinity;
+  return Math.sqrt(
+    Math.pow(rgb1.r - rgb2.r, 2) +
+    Math.pow(rgb1.g - rgb2.g, 2) +
+    Math.pow(rgb1.b - rgb2.b, 2)
+  );
+}
+
+// Map a hex color to the closest Google Calendar colorId
+export function mapHexToGoogleColorId(hex: string): string {
+  if (!hex || !hex.startsWith('#')) return '9'; // Default to Blueberry
+  
+  let closestColorId = '9';
+  let minDistance = Infinity;
+  
+  for (const color of GOOGLE_COLOR_PALETTE) {
+    const distance = colorDistance(hex, color.hex);
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestColorId = color.id;
+    }
+  }
+  
+  return closestColorId;
+}
 
 interface GoogleCalendarEvent {
   id: string;
@@ -413,8 +468,13 @@ export async function fetchGoogleCalendarEvents(
           calendar.id!,
           canEditCalendar
         )));
-      } catch (error) {
-        console.error(`Error fetching events from calendar ${calendar.summary}:`, error);
+      } catch (error: any) {
+        // Skip 404 errors silently (calendar may have been deleted/unsubscribed)
+        if (is404Error(error)) {
+          console.warn(`Calendar ${calendar.summary} not found (404), skipping...`);
+        } else {
+          console.error(`Error fetching events from calendar ${calendar.summary}:`, error);
+        }
       }
     }
 
@@ -433,8 +493,19 @@ export async function fetchGoogleCalendarEvents(
           .filter(event => event.start?.dateTime)
           .map(event => mapGoogleEventToCalendarEvent(event, true, 'Ascend', '#7C3AED', ascendCalendarId, true)) // Ascend is always editable
         );
-      } catch (error) {
-        console.error('Error fetching Ascend calendar events:', error);
+      } catch (error: any) {
+        // Handle 404 - Ascend calendar was deleted
+        if (is404Error(error)) {
+          console.warn('Ascend calendar not found (404), creating new one...');
+          try {
+            await resetAndCreateNewCalendar();
+            // Don't retry fetching - the new calendar will be empty anyway
+          } catch (recreateError) {
+            console.error('Failed to recreate Ascend calendar:', recreateError);
+          }
+        } else {
+          console.error('Error fetching Ascend calendar events:', error);
+        }
       }
     }
 
@@ -473,20 +544,40 @@ function mapGoogleEventToCalendarEvent(
   };
 }
 
+// Helper to reset calendar ID and create new one (for 404 recovery)
+async function resetAndCreateNewCalendar(): Promise<string> {
+  console.log('Calendar not found (404). Resetting and creating new Ascend calendar...');
+  
+  // Clear saved calendar ID
+  localStorage.removeItem(STORAGE_KEY_CALENDAR_ID);
+  ascendCalendarId = null;
+  
+  // Create new calendar
+  return await findOrCreateAscendCalendar();
+}
+
+// Check if error is a 404 (calendar not found)
+function is404Error(error: any): boolean {
+  return error?.status === 404 || 
+         error?.result?.error?.code === 404 ||
+         error?.code === 404;
+}
+
 // Create an event in the Ascend calendar
 export async function createGoogleCalendarEvent(
   title: string,
   startHour: number,
   durationHours: number,
   date: Date = new Date(),
-  tag?: string
+  tag?: string,
+  hexColor?: string
 ): Promise<string> {
   const isValid = await ensureValidToken();
   if (!isValid) {
     throw new Error('Google token expired. Please reconnect Google Calendar.');
   }
 
-  const calendarId = await getAscendCalendarId();
+  let calendarId = await getAscendCalendarId();
 
   const startDate = new Date(date);
   startDate.setHours(Math.floor(startHour), Math.round((startHour % 1) * 60), 0, 0);
@@ -494,29 +585,52 @@ export async function createGoogleCalendarEvent(
   const endDate = new Date(startDate);
   endDate.setTime(startDate.getTime() + durationHours * 60 * 60 * 1000);
 
-  const colorId = tag ? (TAG_COLOR_MAP[tag.toLowerCase()] || '9') : '9';
+  // Determine colorId: prefer hex color mapping, fallback to tag mapping
+  let colorId = '9'; // Default Blueberry
+  if (hexColor) {
+    colorId = mapHexToGoogleColorId(hexColor);
+  } else if (tag) {
+    colorId = TAG_COLOR_MAP[tag.toLowerCase()] || '9';
+  }
+
+  const eventResource = {
+    summary: title,
+    colorId: colorId,
+    description: tag ? `Tag: ${tag}` : undefined,
+    start: {
+      dateTime: startDate.toISOString(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+    end: {
+      dateTime: endDate.toISOString(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+  };
 
   try {
     const response = await gapi.client.calendar.events.insert({
       calendarId: calendarId,
-      resource: {
-        summary: title,
-        colorId: colorId,
-        description: tag ? `Tag: ${tag}` : undefined,
-        start: {
-          dateTime: startDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-      },
+      resource: eventResource,
     });
 
     console.log('Created event in Ascend calendar:', response.result.id);
     return response.result.id;
-  } catch (error) {
+  } catch (error: any) {
+    // Handle 404 - calendar was deleted
+    if (is404Error(error)) {
+      console.warn('Calendar 404 detected, attempting recovery...');
+      calendarId = await resetAndCreateNewCalendar();
+      
+      // Retry with new calendar
+      const retryResponse = await gapi.client.calendar.events.insert({
+        calendarId: calendarId,
+        resource: eventResource,
+      });
+      
+      console.log('Created event in new Ascend calendar:', retryResponse.result.id);
+      return retryResponse.result.id;
+    }
+    
     console.error('Error creating calendar event:', error);
     throw error;
   }
@@ -536,7 +650,14 @@ export async function deleteGoogleCalendarEvent(eventId: string): Promise<void> 
       calendarId: calendarId,
       eventId: eventId,
     });
-  } catch (error) {
+  } catch (error: any) {
+    // If calendar or event not found (404), just log and continue
+    if (is404Error(error)) {
+      console.warn('Calendar or event not found (404), skipping delete:', eventId);
+      // Reset calendar ID for next operations
+      await resetAndCreateNewCalendar();
+      return;
+    }
     console.error('Error deleting calendar event:', error);
     throw error;
   }
@@ -549,7 +670,8 @@ export async function updateGoogleCalendarEvent(
   startHour: number,
   durationHours: number,
   date: Date = new Date(),
-  calendarId?: string
+  calendarId?: string,
+  hexColor?: string
 ): Promise<void> {
   const isValid = await ensureValidToken();
   if (!isValid) {
@@ -564,23 +686,37 @@ export async function updateGoogleCalendarEvent(
   const endDate = new Date(startDate);
   endDate.setTime(startDate.getTime() + durationHours * 60 * 60 * 1000);
 
+  const eventResource: any = {
+    summary: title,
+    start: {
+      dateTime: startDate.toISOString(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+    end: {
+      dateTime: endDate.toISOString(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+  };
+
+  // Add color if provided
+  if (hexColor) {
+    eventResource.colorId = mapHexToGoogleColorId(hexColor);
+  }
+
   try {
     await gapi.client.calendar.events.update({
       calendarId: targetCalendarId,
       eventId: eventId,
-      resource: {
-        summary: title,
-        start: {
-          dateTime: startDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-      },
+      resource: eventResource,
     });
-  } catch (error) {
+  } catch (error: any) {
+    // If calendar or event not found (404), log and don't throw
+    if (is404Error(error)) {
+      console.warn('Calendar or event not found (404), skipping update:', eventId);
+      // Reset calendar ID for next operations
+      await resetAndCreateNewCalendar();
+      return;
+    }
     console.error('Error updating calendar event:', error);
     throw error;
   }

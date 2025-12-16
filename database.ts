@@ -329,22 +329,23 @@ export async function saveUserSettings(settings: Partial<UserSettings>): Promise
 
 export async function loadNote(date: Date): Promise<string> {
   const dateStr = date.toISOString().split('T')[0];
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return '';
 
   try {
+    // Use maybeSingle() instead of single() to avoid 406 errors when no row exists
     const { data, error } = await supabase
       .from('notes')
       .select('content')
+      .eq('user_id', user.id)
       .eq('date', dateStr)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      // No note found for this date is not an error
-      if (error.code === 'PGRST116') {
-        return '';
-      }
       // Table doesn't exist (404) - silently return empty
-      if (error.code === '42P01' || error.message?.includes('404')) {
-        console.warn('Notes table not found. Please run the SQL migration.');
+      if (error.code === '42P01' || error.message?.includes('404') || error.message?.includes('406')) {
+        console.warn('Notes table issue. Please ensure the table exists.');
         return '';
       }
       console.error('Error loading note:', error);
