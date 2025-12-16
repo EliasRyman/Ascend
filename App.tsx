@@ -644,13 +644,40 @@ const SettingsModal = ({
 }: SettingsModalProps) => {
   const [activeSettingsTab, setActiveSettingsTab] = useState<'account' | 'billing' | 'customisations' | 'integrations'>(initialTab);
   const [emailUnsubscribed, setEmailUnsubscribed] = useState(false);
+  
+  // Local state for temporary changes (not saved until "Save" is clicked)
+  const [localSettings, setLocalSettings] = useState(settings);
+  
+  // Check if there are unsaved changes
+  const hasUnsavedChanges = localSettings.timeFormat !== settings.timeFormat || 
+                           localSettings.timezone !== settings.timezone;
 
-  // Reset to initialTab when modal opens
+  // Reset to initialTab and sync local settings when modal opens
   useEffect(() => {
     if (isOpen) {
       setActiveSettingsTab(initialTab);
+      setLocalSettings(settings); // Reset local state to current saved settings
     }
-  }, [isOpen, initialTab]);
+  }, [isOpen, initialTab, settings]);
+
+  // Handle save
+  const handleSave = () => {
+    setSettings(localSettings);
+    onClose();
+  };
+
+  // Handle close (discard changes)
+  const handleClose = () => {
+    setLocalSettings(settings); // Reset to saved settings
+    onClose();
+  };
+
+  // Handle backdrop click
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      handleClose();
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -662,8 +689,14 @@ const SettingsModal = ({
   ] as const;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClick={handleBackdropClick}
+    >
+      <div 
+        className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 dark:border-slate-800"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-6 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center justify-between">
@@ -685,7 +718,7 @@ const SettingsModal = ({
                 </div>
               </button>
               <button 
-                onClick={onClose} 
+                onClick={handleClose} 
                 className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"
               >
                 <X size={20} />
@@ -800,14 +833,14 @@ const SettingsModal = ({
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Choose how times are displayed in your calendar.</p>
                   <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
                     <button 
-                      onClick={() => setSettings({...settings, timeFormat: '12h'})}
-                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '12h' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                      onClick={() => setLocalSettings({...localSettings, timeFormat: '12h'})}
+                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${localSettings.timeFormat === '12h' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                     >
                       12-hour (9:00 AM)
                     </button>
                     <button 
-                      onClick={() => setSettings({...settings, timeFormat: '24h'})}
-                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${settings.timeFormat === '24h' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                      onClick={() => setLocalSettings({...localSettings, timeFormat: '24h'})}
+                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${localSettings.timeFormat === '24h' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                     >
                       24-hour (09:00)
                     </button>
@@ -820,8 +853,8 @@ const SettingsModal = ({
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Your calendar events will be displayed in this timezone.</p>
                   <div className="relative w-full max-w-xs">
                     <select 
-                      value={settings.timezone}
-                      onChange={(e) => setSettings({...settings, timezone: e.target.value})}
+                      value={localSettings.timezone}
+                      onChange={(e) => setLocalSettings({...localSettings, timezone: e.target.value})}
                       className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm appearance-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
                     >
                       <option value="Local">Local Time</option>
@@ -911,6 +944,39 @@ const SettingsModal = ({
             )}
           </div>
         </div>
+
+        {/* Footer with Save button and unsaved changes warning */}
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+          <div className="flex items-center justify-between">
+            <div>
+              {hasUnsavedChanges && (
+                <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                  You have unsaved changes
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!hasUnsavedChanges}
+                className={`px-5 py-2 text-sm font-semibold rounded-lg transition-all ${
+                  hasUnsavedChanges 
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm' 
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                }`}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -925,7 +991,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'account' | 'billing' | 'customisations' | 'integrations'>('account');
   const [settings, setSettings] = useState({
-    timeFormat: '12h',
+    timeFormat: '24h',
     timezone: 'Local'
   });
 
@@ -1141,7 +1207,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         // Load user settings
         if (userSettings) {
           setSettings({
-            timeFormat: userSettings.timeFormat || '12h',
+            timeFormat: userSettings.timeFormat || '24h',
             timezone: userSettings.timezone || 'Local'
           });
         }
