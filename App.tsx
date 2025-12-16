@@ -3490,6 +3490,10 @@ const App = () => {
 
   const handleLogout = async () => {
     try {
+      // IMPORTANT: Only sign out from Supabase auth
+      // DO NOT call disconnectGoogle() or delete any Google Calendar data
+      // Google Calendar events should persist even after logout
+      console.log('🔒 Signing out - NOT touching Google Calendar data');
       await signOut();
       setUser(null);
       setView('landing');

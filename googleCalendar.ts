@@ -93,6 +93,27 @@ const GOOGLE_COLOR_NAMES: Record<string, string> = {
   '11': 'Tomato',
 };
 
+// Reverse mapping: Google colorId -> Hex color (for fetching events back)
+const GOOGLE_ID_TO_HEX: Record<string, string> = {
+  '1': '#7986cb',  // Lavender
+  '2': '#33b679',  // Sage
+  '3': '#8e24aa',  // Grape
+  '4': '#e67c73',  // Flamingo
+  '5': '#f6bf26',  // Banana
+  '6': '#f4511e',  // Tangerine
+  '7': '#039be5',  // Peacock
+  '8': '#616161',  // Graphite
+  '9': '#3f51b5',  // Blueberry
+  '10': '#0b8043', // Basil
+  '11': '#d50000', // Tomato
+};
+
+// Map Google colorId back to app's hex color
+export function mapGoogleIdToAppColor(colorId?: string): string | undefined {
+  if (!colorId) return undefined;
+  return GOOGLE_ID_TO_HEX[colorId];
+}
+
 // Main function to get Google colorId from app color
 // Returns "3" (Grape) as default if no color provided
 export function getGoogleColorId(hexColor?: string | null, tagName?: string | null): string {
@@ -565,6 +586,17 @@ function mapGoogleEventToCalendarEvent(
   const startHour = startDate.getHours() + startDate.getMinutes() / 60;
   const durationHours = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
 
+  // IMPORTANT: Use event's colorId to get the actual event color
+  // If the event has a colorId, convert it to hex; otherwise use calendar's default color
+  const eventColor = event.colorId ? mapGoogleIdToAppColor(event.colorId) : undefined;
+  
+  console.log('📥 Mapping Google event:', {
+    title: event.summary,
+    colorId: event.colorId,
+    mappedColor: eventColor,
+    calendarColor: calendarColor
+  });
+
   return {
     id: event.id,
     title: event.summary || 'Untitled',
@@ -572,8 +604,10 @@ function mapGoogleEventToCalendarEvent(
     duration: Math.max(0.25, durationHours),
     isGoogle: true,
     isFromAscendCalendar: isFromAscend,
+    colorId: event.colorId,
     calendarName,
-    calendarColor,
+    // Use event's color if available, otherwise calendar's color
+    calendarColor: eventColor || calendarColor,
     calendarId,
     canEdit,
   };
