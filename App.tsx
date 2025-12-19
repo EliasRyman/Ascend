@@ -689,7 +689,7 @@ const SettingsModal = ({
             {activeSettingsTab === 'billing' && (
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <button className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">
+                  <button className="px-5 py-2.5 bg-gradient-to-r from-[#6F00FF] to-purple-600 hover:from-[#5800cc] hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40">
                     Upgrade to Lifetime
                   </button>
                   <button className="px-5 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
@@ -775,11 +775,21 @@ const SettingsModal = ({
                   {googleAccount ? (
                     <div className="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={googleAccount.picture}
-                          alt={googleAccount.name}
-                          className="w-10 h-10 rounded-full"
-                        />
+                        {googleAccount.picture ? (
+                          <img
+                            src={googleAccount.picture}
+                            alt={googleAccount.name || googleAccount.email}
+                            className="w-10 h-10 rounded-full"
+                            onError={(e) => {
+                              // Fallback if image fails to load
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null}
+                        <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-semibold ${googleAccount.picture ? 'hidden' : ''}`}>
+                          <User size={20} />
+                        </div>
                         <div>
                           <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">{googleAccount.name}</p>
                           <p className="text-xs text-emerald-600 dark:text-emerald-400">{googleAccount.email}</p>
