@@ -18,6 +18,11 @@ export interface DbTask {
   tag_color: string | null;
   time: string | null;
   completed: boolean;
+  completed_at: string | null; // Timestamp when task was completed
+  assigned_date: string | null; // Date this task is assigned to (YYYY-MM-DD format)
+  is_recurring: boolean; // Whether this is a recurring task template
+  recurrence_pattern: 'daily' | 'weekly' | 'monthly'; // How often it recurs
+  parent_task_id: string | null; // Reference to parent recurring task (for instances)
   list_type: 'active' | 'later';
   created_at: string;
 }
@@ -33,6 +38,7 @@ export interface DbScheduleBlock {
   text_color: string | null;
   is_google: boolean;
   google_event_id: string | null;
+  completed: boolean;
   date: string;
   created_at: string;
   task_id: string | null;
