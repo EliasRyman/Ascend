@@ -4994,7 +4994,16 @@ const App = () => {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const currentUser = await getCurrentUser();
+        // Add a timeout to prevent infinite loading
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Session check timed out')), 5000)
+        );
+        
+        const currentUser = await Promise.race([
+          getCurrentUser(),
+          timeoutPromise
+        ]) as any;
+
         if (currentUser) {
           setUser({
             id: currentUser.id,
