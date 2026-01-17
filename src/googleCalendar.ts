@@ -6,7 +6,7 @@ const ASCEND_CALENDAR_NAME = 'Ascend';
 
 // Backend URL - Production Railway server
 // For local development, set VITE_BACKEND_URL=http://localhost:4000 in .env
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://ascend-production-ce09.up.railway.app';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://hmnbdkwjgmwchuyhtmqh.supabase.co/functions/v1/google-auth';
 
 // Google Calendar color IDs mapping (by tag name)
 const TAG_COLOR_MAP: Record<string, string> = {
@@ -63,10 +63,10 @@ function colorDistance(hex1: string, hex2: string): number {
 // Map a hex color to the closest Google Calendar colorId
 export function mapHexToGoogleColorId(hex: string): string {
   if (!hex || !hex.startsWith('#')) return '3'; // Default to Grape (Vindruva)
-  
+
   let closestColorId = '3';
   let minDistance = Infinity;
-  
+
   for (const color of GOOGLE_COLOR_PALETTE) {
     const distance = colorDistance(hex, color.hex);
     if (distance < minDistance) {
@@ -74,7 +74,7 @@ export function mapHexToGoogleColorId(hex: string): string {
       closestColorId = color.id;
     }
   }
-  
+
   return closestColorId;
 }
 
@@ -121,7 +121,7 @@ export function getGoogleColorId(hexColor?: string | null, tagName?: string | nu
   if (hexColor && hexColor.startsWith('#')) {
     return mapHexToGoogleColorId(hexColor);
   }
-  
+
   // Priority 2: Tag name provided - use tag color mapping
   if (tagName) {
     const tagLower = tagName.toLowerCase();
@@ -129,7 +129,7 @@ export function getGoogleColorId(hexColor?: string | null, tagName?: string | nu
       return TAG_COLOR_MAP[tagLower];
     }
   }
-  
+
   // Priority 3: Default to Grape (Vindruva)
   return '3';
 }
@@ -227,7 +227,7 @@ export async function getValidAccessToken(): Promise<string | null> {
       }
       throw new Error(data.error || 'Failed to get token');
     }
-    
+
     const data = await response.json();
     accessToken = data.accessToken;
     return accessToken;
@@ -266,7 +266,7 @@ export async function disconnectGoogle(): Promise<boolean> {
     const response = await backendFetch('/auth/google/disconnect', {
       method: 'POST',
     });
-    
+
     if (response.ok) {
       accessToken = null;
       clearLocalData();
@@ -325,11 +325,11 @@ export function handleGoogleOAuthCallback(): { connected: boolean; email?: strin
   if (googleConnected === 'true') {
     // Clear the params from URL
     window.history.replaceState({}, '', window.location.pathname);
-    
+
     if (googleEmail) {
       saveGoogleUser({ email: googleEmail });
     }
-    
+
     return { connected: true, email: googleEmail || undefined };
   }
 
@@ -403,7 +403,7 @@ async function findOrCreateAscendCalendar(): Promise<string> {
   try {
     const listResponse = await gapi.client.calendar.calendarList.list();
     const calendars = listResponse.result.items || [];
-    
+
     const existingCalendar = calendars.find(
       (cal: any) => cal.summary === ASCEND_CALENDAR_NAME
     );
@@ -472,7 +472,7 @@ export async function fetchGoogleCalendarEvents(
 
   try {
     let calendars: any[] = [];
-    
+
     if (includeAllCalendars) {
       try {
         console.log('Fetching calendar list...');
@@ -492,12 +492,12 @@ export async function fetchGoogleCalendarEvents(
     } else {
       calendars = [{ id: 'primary', summary: 'Primary', backgroundColor: '#4285f4' }];
     }
-    
+
     for (const calendar of calendars) {
       if (includeAscendCalendar && calendar.id === ascendCalendarId) {
         continue;
       }
-      
+
       if (calendar.accessRole === 'freeBusyReader') {
         continue;
       }
@@ -517,8 +517,8 @@ export async function fetchGoogleCalendarEvents(
         const events: GoogleCalendarEvent[] = response.result.items || [];
         const timedEvents = events.filter(event => event.start?.dateTime);
         allEvents.push(...timedEvents.map(event => mapGoogleEventToCalendarEvent(
-          event, 
-          false, 
+          event,
+          false,
           calendar.summary || 'Calendar',
           calendar.backgroundColor || '#4285f4',
           calendar.id!,
@@ -573,7 +573,7 @@ export async function fetchGoogleCalendarEvents(
 }
 
 function mapGoogleEventToCalendarEvent(
-  event: GoogleCalendarEvent, 
+  event: GoogleCalendarEvent,
   isFromAscend: boolean,
   calendarName: string = 'Calendar',
   calendarColor: string = '#4285f4',
@@ -582,14 +582,14 @@ function mapGoogleEventToCalendarEvent(
 ): CalendarEvent {
   const startDate = new Date(event.start.dateTime!);
   const endDate = new Date(event.end.dateTime || event.start.dateTime!);
-  
+
   const startHour = startDate.getHours() + startDate.getMinutes() / 60;
   const durationHours = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
 
   // IMPORTANT: Use event's colorId to get the actual event color
   // If the event has a colorId, convert it to hex; otherwise use calendar's default color
   const eventColor = event.colorId ? mapGoogleIdToAppColor(event.colorId) : undefined;
-  
+
   console.log('📥 Mapping Google event:', {
     title: event.summary,
     colorId: event.colorId,
@@ -616,20 +616,20 @@ function mapGoogleEventToCalendarEvent(
 // Helper to reset calendar ID and create new one (for 404 recovery)
 async function resetAndCreateNewCalendar(): Promise<string> {
   console.log('Calendar not found (404). Resetting and creating new Ascend calendar...');
-  
+
   // Clear saved calendar ID
   localStorage.removeItem(STORAGE_KEY_CALENDAR_ID);
   ascendCalendarId = null;
-  
+
   // Create new calendar
   return await findOrCreateAscendCalendar();
 }
 
 // Check if error is a 404 (calendar not found)
 function is404Error(error: any): boolean {
-  return error?.status === 404 || 
-         error?.result?.error?.code === 404 ||
-         error?.code === 404;
+  return error?.status === 404 ||
+    error?.result?.error?.code === 404 ||
+    error?.code === 404;
 }
 
 // Create an event in the Ascend calendar
@@ -650,13 +650,13 @@ export async function createGoogleCalendarEvent(
 
   const startDate = new Date(date);
   startDate.setHours(Math.floor(startHour), Math.round((startHour % 1) * 60), 0, 0);
-  
+
   const endDate = new Date(startDate);
   endDate.setTime(startDate.getTime() + durationHours * 60 * 60 * 1000);
 
   // Determine colorId: prefer hex color mapping, fallback to tag mapping, then Grape as default
   const colorId = getGoogleColorId(hexColor, tag);
-  
+
   console.log('🎨 Color mapping:', {
     input: { hexColor, tag },
     output: colorId,
@@ -692,17 +692,17 @@ export async function createGoogleCalendarEvent(
     if (is404Error(error)) {
       console.warn('Calendar 404 detected, attempting recovery...');
       calendarId = await resetAndCreateNewCalendar();
-      
+
       // Retry with new calendar
       const retryResponse = await gapi.client.calendar.events.insert({
         calendarId: calendarId,
         resource: eventResource,
       });
-      
+
       console.log('Created event in new Ascend calendar:', retryResponse.result.id);
       return retryResponse.result.id;
     }
-    
+
     console.error('Error creating calendar event:', error);
     throw error;
   }
@@ -754,13 +754,13 @@ export async function updateGoogleCalendarEvent(
 
   const startDate = new Date(date);
   startDate.setHours(Math.floor(startHour), Math.round((startHour % 1) * 60), 0, 0);
-  
+
   const endDate = new Date(startDate);
   endDate.setTime(startDate.getTime() + durationHours * 60 * 60 * 1000);
 
   // Always include colorId - use Grape as default if no color provided
   const colorId = getGoogleColorId(hexColor, null);
-  
+
   console.log('🎨 Update color mapping:', {
     input: { hexColor },
     output: colorId,
@@ -849,15 +849,15 @@ export async function syncCalendarEvents(
 
   for (const googleEvent of googleEvents) {
     const localBlock = localBlocksByGoogleId.get(googleEvent.id);
-    
+
     if (!localBlock) {
       toAdd.push(googleEvent);
     } else {
-      const hasChanged = 
+      const hasChanged =
         localBlock.title !== googleEvent.title ||
         Math.abs(localBlock.start - googleEvent.start) > 0.01 ||
         Math.abs(localBlock.duration - googleEvent.duration) > 0.01;
-      
+
       if (hasChanged) {
         toUpdate.push({ localId: localBlock.id, event: googleEvent });
       }
