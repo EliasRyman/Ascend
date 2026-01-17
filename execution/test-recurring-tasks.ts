@@ -1,7 +1,7 @@
 // Quick Test Script for Recurring Tasks
 // Open browser console and paste this to create test recurring tasks
 
-import { createRecurringTask } from './database';
+import { createRecurringTask } from '../src/database';
 
 // Test Function 1: Create "GYMMA" daily task
 async function createGymmaTask() {

@@ -1,8 +1,8 @@
-import { supabase } from './supabase';
+import { supabase } from '../src/supabase';
 
 async function cleanup() {
   console.log('🧹 Starting database cleanup...');
-  
+
   const { error: tasksErr } = await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   if (tasksErr) console.error('Error clearing tasks:', tasksErr);
   else console.log('✅ Tasks cleared');

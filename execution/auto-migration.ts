@@ -1,16 +1,16 @@
-import { supabase } from './supabase';
+import { supabase } from '../src/supabase';
 
 /**
  * Auto-run minimal database migration
  * Adds assigned_date column if it doesn't exist
  */
 export async function runMinimalMigration(): Promise<boolean> {
-    try {
-        console.log('🔧 Checking if migration is needed...');
+  try {
+    console.log('🔧 Checking if migration is needed...');
 
-        // Try to add the column - if it exists, this will be a no-op
-        const { error: alterError } = await supabase.rpc('exec_sql', {
-            sql: `
+    // Try to add the column - if it exists, this will be a no-op
+    const { error: alterError } = await supabase.rpc('exec_sql', {
+      sql: `
         DO $$ 
         BEGIN
           -- Add assigned_date column if it doesn't exist
@@ -34,18 +34,18 @@ export async function runMinimalMigration(): Promise<boolean> {
           END IF;
         END $$;
       `
-        });
+    });
 
-        if (alterError) {
-            console.warn('⚠️ Could not run auto-migration:', alterError.message);
-            console.log('📝 Please run MINIMAL_MIGRATION.sql manually in Supabase');
-            return false;
-        }
-
-        console.log('✅ Migration check complete');
-        return true;
-    } catch (error) {
-        console.error('❌ Migration error:', error);
-        return false;
+    if (alterError) {
+      console.warn('⚠️ Could not run auto-migration:', alterError.message);
+      console.log('📝 Please run MINIMAL_MIGRATION.sql manually in Supabase');
+      return false;
     }
+
+    console.log('✅ Migration check complete');
+    return true;
+  } catch (error) {
+    console.error('❌ Migration error:', error);
+    return false;
+  }
 }
