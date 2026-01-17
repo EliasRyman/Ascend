@@ -221,6 +221,7 @@ export async function getValidAccessToken(): Promise<string | null> {
     const response = await backendFetch('/auth/google/token');
     if (!response.ok) {
       const data = await response.json();
+      console.error('❌ DEBUG: Google Auth Token Error:', data);
       if (data.needsReauth) {
         console.log('Google connection needs re-authorization');
         return null;

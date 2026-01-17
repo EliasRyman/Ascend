@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
+import LandingPage from './components/LandingPage';
+
 import {
   Check,
   X,
@@ -62,6 +64,7 @@ import {
   setAccessToken
 } from './googleCalendar';
 import StreakFlame from './components/StreakFlame';
+import ConsistencyCard from './components/ConsistencyCard';
 import {
   signIn,
   signUp,
@@ -3106,6 +3109,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
             </div>
 
           </div>
+
+          {/* Consistency/Streak View */}
+          <div className="mb-6">
+            <ConsistencyCard habits={habits} />
+          </div>
         </div>
       )}{activeTab === 'habittracker' && (<>
         <div className="flex-1 overflow-hidden bg-gradient-to-br from-slate-50 via-purple-50/20 to-slate-50 dark:from-[#0B1121] dark:via-purple-950/10 dark:to-[#0B1121] animate-fade-in-up">
@@ -4702,37 +4710,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
 // --- Landing Page & Root App ---
 
-const LandingPage = ({ onGetStarted }: { onGetStarted: () => void }) => {
-  return (
-    <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
-      <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-2xl shadow-violet-600/30 mb-8 transform rotate-3 hover:rotate-6 transition-transform">
-        <svg width="80" height="80" viewBox="0 0 512 512" fill="none">
-          <rect width="512" height="512" rx="100" fill="#6d3dc1" />
-          <path d="M 65.148438 215.859375 L 81.007812 225.375 L 150.804688 136.546875 L 184.117188 176.992188 L 311.011719 0.136719 L 385.5625 84.199219 L 415.699219 66.785156 L 517.222656 177.023438 L 571.117188 155.582031 L 713.113281 288.820312 L 567.582031 187.308594 L 511.699219 214.703125 C 511.699219 214.703125 510.898438 308.683594 510.898438 312.648438 C 510.898438 316.613281 414.082031 179.410156 414.082031 179.410156 L 414.082031 278.542969 L 315.398438 49.339844 L 124.363281 332.972656 L 166.761719 225.765625 L 133.746094 252.339844 L 146.972656 192.921875 L 85.773438 259.898438 L 64.351562 245.617188 L 0.910156 288.839844 Z" fill="white" transform="translate(20, 120) scale(0.65)" />
-        </svg>
-      </div>
-      <h1 className="text-6xl font-extrabold mb-6 tracking-tight text-center">
-        Ascend<span className="text-[#6F00FF]">.</span>
-      </h1>
-      <p className="text-2xl text-slate-500 dark:text-slate-400 mb-12 max-w-xl text-center leading-relaxed">
-        The all-in-one timeboxing workspace for <span className="text-slate-800 dark:text-slate-200 font-semibold">deep work</span>.
-      </p>
-      <button
-        onClick={onGetStarted}
-        className="group flex items-center gap-3 px-8 py-4 bg-[#6F00FF] text-white rounded-full font-bold text-xl hover:bg-violet-700 hover:shadow-xl hover:shadow-violet-600/20 transition-all transform hover:-translate-y-1"
-      >
-        Get Started
-        <ArrowRight size={24} className="group-hover:translate-x-1 transition-transform" />
-      </button>
 
-      <div className="mt-16 text-sm text-slate-400 flex gap-6">
-        <span className="flex items-center gap-2"><Check size={14} /> Timeboxing</span>
-        <span className="flex items-center gap-2"><Check size={14} /> Task Management</span>
-        <span className="flex items-center gap-2"><Check size={14} /> Calendar Sync</span>
-      </div>
-    </div>
-  );
-};
 
 // Auth Page Component
 const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
@@ -4995,10 +4973,10 @@ const App = () => {
     const checkSession = async () => {
       try {
         // Add a timeout to prevent infinite loading
-        const timeoutPromise = new Promise((_, reject) => 
+        const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Session check timed out')), 5000)
         );
-        
+
         const currentUser = await Promise.race([
           getCurrentUser(),
           timeoutPromise

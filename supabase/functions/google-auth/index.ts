@@ -69,7 +69,7 @@ serve(async (req) => {
         const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID') ?? '';
         const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET') ?? '';
         const ENCRYPTION_KEY = Deno.env.get('ENCRYPTION_KEY') ?? 'default-key-change-in-production-32c';
-        const REDIRECT_URI = `${url.origin}/functions/v1/google-auth/callback`; // Auto-detect callback URL
+        const REDIRECT_URI = 'https://hmnbdkwjgmwchuyhtmqh.supabase.co/functions/v1/google-auth/callback';
         const FRONTEND_URL = 'https://www.ascendtimebox.com'; // Hardcoded allowed origin or env var
 
         // Validate Env
@@ -107,10 +107,8 @@ serve(async (req) => {
                 state: state,
             });
 
-            return new Response(JSON.stringify({ url: authUrl }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 200 // Frontend will handle the redirect
-            });
+            // Returning 302 Redirect so the browser goes directly to Google
+            // This is better for a direct link click.
             // Note: original backend did server-side redirect. 
             // Here we can return the URL for frontend to redirect, or 302 directly.
             // Let's do 302 directly to match previous behavior if link is clicked directly, 
@@ -183,6 +181,7 @@ serve(async (req) => {
         // All subsequent routes require the user to be JWT authenticated with Supabase
         const authHeader = req.headers.get('Authorization');
         if (!authHeader) {
+            console.error('Missing Authorization header');
             return new Response(JSON.stringify({ error: 'No authorization header' }), { status: 401, headers: corsHeaders });
         }
 
@@ -192,7 +191,12 @@ serve(async (req) => {
         const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
 
         if (authError || !user) {
-            return new Response(JSON.stringify({ error: 'Invalid token' }), { status: 401, headers: corsHeaders });
+            console.error('Auth Error:', authError);
+            return new Response(JSON.stringify({
+                error: 'Invalid token',
+                details: authError?.message,
+                hint: 'Check if token is expired or project keys mismatch'
+            }), { status: 401, headers: corsHeaders });
         }
         const userId = user.id;
 
