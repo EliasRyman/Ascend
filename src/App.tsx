@@ -3108,11 +3108,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               </div>
             </div>
 
-          </div>
-
-          {/* Consistency/Streak View */}
-          <div className="mb-6">
-            <ConsistencyCard habits={habits} />
+            {/* Consistency/Streak View */}
+            <div className="pt-6">
+              <ConsistencyCard habits={habits} />
+            </div>
           </div>
         </div>
       )}{activeTab === 'habittracker' && (<>

@@ -4,8 +4,8 @@
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
 const ASCEND_CALENDAR_NAME = 'Ascend';
 
-// Backend URL - Production Railway server
-// For local development, set VITE_BACKEND_URL=http://localhost:4000 in .env
+// Backend URL - Supabase Edge Function
+// For local development, set VITE_BACKEND_URL=http://localhost:54321/functions/v1/google-auth in .env
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://hmnbdkwjgmwchuyhtmqh.supabase.co/functions/v1/google-auth';
 
 // Google Calendar color IDs mapping (by tag name)
