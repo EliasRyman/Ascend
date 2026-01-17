@@ -181,20 +181,17 @@ serve(async (req) => {
         // All subsequent routes require the user to be JWT authenticated with Supabase
         const authHeader = req.headers.get('Authorization');
         if (!authHeader) {
-            console.error('Missing Authorization header');
             return new Response(JSON.stringify({ error: 'No authorization header' }), { status: 401, headers: corsHeaders });
         }
 
-        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            global: { headers: { Authorization: authHeader } }
-        });
-        const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+        const token = authHeader.replace('Bearer ', '');
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
 
         if (authError || !user) {
-            console.error('Auth Error:', authError);
             return new Response(JSON.stringify({
                 error: 'Invalid token',
-                details: authError?.message,
+                details: authError?.message || 'No user found',
                 hint: 'Check if token is expired or project keys mismatch'
             }), { status: 401, headers: corsHeaders });
         }

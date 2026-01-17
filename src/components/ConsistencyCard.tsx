@@ -196,93 +196,79 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits }) => {
     };
 
     return (
-        <div className="bg-white dark:bg-[#151e32] rounded-3xl p-8 shadow-sm dark:shadow-lg dark:shadow-black/20 border border-slate-200 dark:border-white/5">
-            <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
-                <div>
-                    <div className="flex items-center gap-3 mb-2">
-                        <Target className="text-[#6F00FF]" size={24} />
-                        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Track your progress</h2>
+        <div className="bg-white dark:bg-[#151e32] rounded-3xl p-6 shadow-sm dark:shadow-lg dark:shadow-black/20 border border-slate-200 dark:border-white/5 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                    <div className="bg-purple-100 dark:bg-purple-500/10 p-2 rounded-xl">
+                        <Target className="text-[#6F00FF] dark:text-purple-400" size={20} />
                     </div>
-                    <p className="text-slate-500 dark:text-slate-400 max-w-md">
-                        Stay consistent with your productivity by tracking your to-do completion over time with our activity calendar.
-                    </p>
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Consistency</h2>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm hidden sm:block">{totalActivities} activities in the last year</p>
+                    </div>
                 </div>
 
-                {/* Call to action (Upsell) or just Stats if already pro? 
-            For now, user requested a "Streak View", let's replicate the design roughly. 
-            The design had "Start your 14-day free trial" which implies this might be a locked feature or just an upsell component.
-            But user asked "add streak view", implying functionality. 
-            I will show the Stats instead of the button, as it's more useful for the user.
-        */}
+                <div className="text-right">
+                    <div className="text-2xl font-bold text-slate-800 dark:text-white">{currentStreak} <span className="text-sm font-normal text-slate-400 dark:text-slate-500">day streak</span></div>
+                </div>
             </div>
 
-            <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-6 bg-white dark:bg-[#0f1623]">
-                <div className="mb-6">
-                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Consistency</p>
-                    <div className="flex items-baseline gap-3">
-                        <h3 className="text-3xl font-black text-slate-900 dark:text-white">{currentStreak} day streak</h3>
-                        <span className="text-sm text-slate-400 dark:text-slate-500">{totalActivities} activities in the last year</span>
-                    </div>
-                </div>
-
-                {/* The Grid Scroller for mobile */}
-                <div className="overflow-x-auto pb-2 custom-scrollbar">
-                    <div className="min-w-[700px]">
-                        {/* Month Labels */}
-                        <div className="flex mb-2 text-xs text-slate-400 dark:text-slate-500 relative h-4">
-                            {monthLabels.map((label, i) => (
-                                <div
-                                    key={i}
-                                    className="absolute transform"
-                                    style={{ left: `${(label.colIndex / 53) * 100}%` }}
-                                >
-                                    {label.text}
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* The Grid */}
-                        <div className="flex gap-[3px]">
-                            {/* Render Columns */}
-                            {Array.from({ length: 53 }).map((_, colIndex) => (
-                                <div key={colIndex} className="flex flex-col gap-[3px]">
-                                    {/* Render Rows (Days) */}
-                                    {Array.from({ length: 7 }).map((_, rowIndex) => {
-                                        const dataIndex = colIndex * 7 + rowIndex;
-                                        const cellData = gridData[dataIndex];
-
-                                        if (!cellData) return <div key={rowIndex} className="w-3 h-3 md:w-4 md:h-4 opacity-0" />;
-
-                                        return (
-                                            <div
-                                                key={rowIndex}
-                                                className={`w-3 h-3 md:w-3.5 md:h-3.5 rounded-sm transition-colors ${getCellColor(cellData.level)} group relative`}
-                                                title={`${cellData.count} activities on ${cellData.date.toDateString()}`}
-                                            >
-                                                {/* Tooltip on hover */}
-                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10 transition-opacity">
-                                                    {cellData.count} activities<br />
-                                                    <span className="opacity-70">{cellData.dateStr}</span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Legend */}
-                        <div className="flex items-center justify-end mt-4 gap-2 text-xs text-slate-400 dark:text-slate-500">
-                            <span>Less</span>
-                            <div className="flex gap-1">
-                                <div className="w-3 h-3 rounded-sm bg-slate-100 dark:bg-slate-800"></div>
-                                <div className="w-3 h-3 rounded-sm bg-purple-200 dark:bg-purple-900/40"></div>
-                                <div className="w-3 h-3 rounded-sm bg-purple-300 dark:bg-purple-700/60"></div>
-                                <div className="w-3 h-3 rounded-sm bg-purple-400 dark:bg-purple-600"></div>
-                                <div className="w-3 h-3 rounded-sm bg-[#6F00FF] dark:bg-[#6F00FF]"></div>
+            {/* The Grid Scroller */}
+            <div className="overflow-x-auto pb-2 custom-scrollbar">
+                <div className="min-w-[700px]">
+                    {/* Month Labels */}
+                    <div className="flex mb-2 text-xs text-slate-400 dark:text-slate-500 relative h-4">
+                        {monthLabels.map((label, i) => (
+                            <div
+                                key={i}
+                                className="absolute transform"
+                                style={{ left: `${(label.colIndex / 53) * 100}%` }}
+                            >
+                                {label.text}
                             </div>
-                            <span>More</span>
+                        ))}
+                    </div>
+
+                    {/* The Grid */}
+                    <div className="flex gap-[3px]">
+                        {/* Render Columns */}
+                        {Array.from({ length: 53 }).map((_, colIndex) => (
+                            <div key={colIndex} className="flex flex-col gap-[3px]">
+                                {/* Render Rows (Days) */}
+                                {Array.from({ length: 7 }).map((_, rowIndex) => {
+                                    const dataIndex = colIndex * 7 + rowIndex;
+                                    const cellData = gridData[dataIndex];
+
+                                    if (!cellData) return <div key={rowIndex} className="w-3 h-3 md:w-3.5 md:h-3.5 opacity-0" />;
+
+                                    return (
+                                        <div
+                                            key={rowIndex}
+                                            className={`w-3 h-3 md:w-3.5 md:h-3.5 rounded-sm transition-colors ${getCellColor(cellData.level)} group relative`}
+                                        >
+                                            {/* Tooltip on hover */}
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10 transition-opacity">
+                                                {cellData.count} activities<br />
+                                                <span className="opacity-70">{cellData.dateStr}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Legend */}
+                    <div className="flex items-center justify-end mt-4 gap-2 text-xs text-slate-400 dark:text-slate-500">
+                        <span>Less</span>
+                        <div className="flex gap-1">
+                            <div className="w-3 h-3 rounded-sm bg-slate-100 dark:bg-slate-800"></div>
+                            <div className="w-3 h-3 rounded-sm bg-purple-200 dark:bg-purple-900/40"></div>
+                            <div className="w-3 h-3 rounded-sm bg-purple-300 dark:bg-purple-700/60"></div>
+                            <div className="w-3 h-3 rounded-sm bg-purple-400 dark:bg-purple-600"></div>
+                            <div className="w-3 h-3 rounded-sm bg-[#6F00FF] dark:bg-[#6F00FF]"></div>
                         </div>
+                        <span>More</span>
                     </div>
                 </div>
             </div>
