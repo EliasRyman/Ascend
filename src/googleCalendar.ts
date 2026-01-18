@@ -243,7 +243,7 @@ async function ensureValidToken(): Promise<boolean> {
   if (token) {
     // Ensure GAPI client is configured with the token
     if (typeof gapi !== 'undefined' && gapi.client) {
-      gapi.client.setToken({ access_token: token });
+      (gapi.client as any).setToken({ access_token: token });
     }
     return true;
   }
@@ -380,7 +380,7 @@ export function setAccessToken(token: string | null): void {
   accessToken = token;
   // Configure GAPI client with the token for authenticated API calls
   if (token && typeof gapi !== 'undefined' && gapi.client) {
-    gapi.client.setToken({ access_token: token });
+    (gapi.client as any).setToken({ access_token: token });
     console.log('GAPI client token configured');
   }
 }

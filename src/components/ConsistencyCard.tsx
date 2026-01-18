@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Target } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Target, Clock, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Habit {
     id: string;
@@ -12,6 +12,29 @@ interface ConsistencyCardProps {
 }
 
 const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits }) => {
+    const [viewRange, setViewRange] = useState<'week' | 'month' | 'year'>('year');
+    const [currentDate, setCurrentDate] = useState(new Date());
+
+    const handleNavigate = (direction: 'prev' | 'next') => {
+        const newDate = new Date(currentDate);
+        if (viewRange === 'year') {
+            newDate.setFullYear(currentDate.getFullYear() + (direction === 'next' ? 1 : -1));
+        } else if (viewRange === 'month') {
+            newDate.setMonth(currentDate.getMonth() + (direction === 'next' ? 1 : -1));
+        } else {
+            newDate.setDate(currentDate.getDate() + (direction === 'next' ? 7 : -7));
+        }
+        setCurrentDate(newDate);
+    };
+
+    const getWeekNumber = (d: Date) => {
+        const date = new Date(d.getTime());
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+        const week1 = new Date(date.getFullYear(), 0, 4);
+        return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+    };
+
     // 1. Calculate Activity Data
     const { activityMap, totalActivities, currentStreak } = useMemo(() => {
         const map = new Map<string, number>();
@@ -77,110 +100,165 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits }) => {
         return { activityMap: map, totalActivities: total, currentStreak: streak };
     }, [habits]);
 
-    // 2. Generate Grid Data (Last 365 days / 52 weeks)
-    // We want to align columns by week (Sunday start)
-    const gridData = useMemo(() => {
-        const today = new Date();
-        const daysToRender = [];
-        // We want roughly 52 weeks (364 days) + alignment
-        // Let's just create a grid for the last 53 weeks to ensure coverage
-        const endDate = new Date(today);
-
-        // Start date: Go back 52 full weeks + current week days
-        // Actually, GitHub style is usually fixed columns (52 or 53).
-        // Let's generate days for the last 365 days, but aligned to start on a Sunday?
-        // User wants "Calendar" style.
-        // Let's generate exactly 53 weeks of data ending with current week.
-
-        // Find the Sunday of the current week
-        const currentDay = today.getDay(); // 0 = Sunday
-        // We want the last day of our grid to be this coming Saturday, or today?
-        // Usually these graphs go left-to-right, ending at Today (rightmost).
-
-        // Let's construct it backwards from Today, filling 53 columns * 7 rows
-
-        const rows = 7;
-        const cols = 53;
-        const totalDays = rows * cols;
-
+    // 2. Generate Grid Data based on viewRange
+    const { gridData, totalCols, subText } = useMemo(() => {
         const data = [];
-        // Start from `totalDays` ago (roughly)
-        // Actually, to align typical contribution graph:
-        // It's a grid where columns are weeks.
-        // Last column is current week.
-        // Last cell in last column is Saturday (if row 0 is Sunday).
+        let startDate: Date;
+        let endDate: Date;
+        let cols: number;
 
-        // Let's assume standard: Sunday (Row 0) -> Saturday (Row 6)
-        // Last column (Index 52)
-        // We need to find the date for Column 0, Row 0.
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
 
-        // End Date = Today.
-        // But to make the grid neat, let's say the last column contains Today.
+        if (viewRange === 'year') {
+            // Full calendar year: Jan 1 to Dec 31
+            startDate = new Date(year, 0, 1);
+            const startDay = startDate.getDay();
+            startDate.setDate(startDate.getDate() - startDay);
+            cols = 53;
 
-        // Let's generate a flat array of dates that fits into a 7x53 grid.
-        // The very last cell (Col 52, Row 6) should be the Saturday of the specific week containing Today?
-        // Or just ensure Today is visible.
+            for (let i = 0; i < cols * 7; i++) {
+                const current = new Date(startDate);
+                current.setDate(startDate.getDate() + i);
 
-        // Let's pivot:
-        // Determine the Saturday of the current week.
-        const dayOfWeek = today.getDay(); // 0(Sun) - 6(Sat)
-        const offsetToSaturday = 6 - dayOfWeek;
-        const endOfGridDate = new Date(today);
-        endOfGridDate.setDate(today.getDate() + offsetToSaturday); // This is the Saturday of current week
+                const y = current.getFullYear();
+                const m = String(current.getMonth() + 1).padStart(2, '0');
+                const day = String(current.getDate()).padStart(2, '0');
+                const dateStr = `${y}-${m}-${day}`;
 
-        // Now generate 7 * 53 days backwards from endOfGridDate
-        for (let i = (totalDays - 1); i >= 0; i--) {
-            const d = new Date(endOfGridDate);
-            d.setDate(endOfGridDate.getDate() - i);
+                const count = activityMap.get(dateStr) || 0;
+                let level = 0;
+                if (count === 0) level = 0;
+                else if (count <= 1) level = 1;
+                else if (count <= 3) level = 2;
+                else if (count <= 5) level = 3;
+                else level = 4;
 
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            const dateStr = `${y}-${m}-${day}`;
+                data.push({
+                    date: current,
+                    dateStr,
+                    count,
+                    level
+                });
+            }
+        } else if (viewRange === 'month') {
+            // Full month: 1st to last day
+            startDate = new Date(year, month, 1);
+            const startDay = startDate.getDay();
+            startDate.setDate(startDate.getDate() - startDay);
 
-            const count = activityMap.get(dateStr) || 0;
+            const lastDay = new Date(year, month + 1, 0);
+            const endDay = lastDay.getDay();
+            const endDate = new Date(lastDay);
+            endDate.setDate(lastDay.getDate() + (6 - endDay));
 
-            let level = 0;
-            if (count === 0) level = 0;
-            else if (count <= 1) level = 1;
-            else if (count <= 3) level = 2;
-            else if (count <= 5) level = 3;
-            else level = 4;
+            cols = Math.ceil(((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1) / 7);
 
-            data.push({
-                date: d,
-                dateStr,
-                count,
-                level
-            });
-        }
-        return data;
-    }, [activityMap]);
+            for (let i = 0; i < cols * 7; i++) {
+                const current = new Date(startDate);
+                current.setDate(startDate.getDate() + i);
 
-    // Months labels
-    // We need to place labels above the columns.
-    // A label appears if a month starts in that column (or roughly).
-    const monthLabels = useMemo(() => {
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const labels: { text: string, colIndex: number }[] = [];
+                const y = current.getFullYear();
+                const m = String(current.getMonth() + 1).padStart(2, '0');
+                const day = String(current.getDate()).padStart(2, '0');
+                const dateStr = `${y}-${m}-${day}`;
 
-        // Iterate through columns (every 7 days)
-        for (let col = 0; col < 53; col++) {
-            const dayIndex = col * 7; // The Sunday of that week
-            if (dayIndex >= gridData.length) break;
-            const date = gridData[dayIndex].date;
+                const count = activityMap.get(dateStr) || 0;
+                let level = 0;
+                if (count === 0) level = 0;
+                else if (count <= 1) level = 1;
+                else if (count <= 3) level = 2;
+                else if (count <= 5) level = 3;
+                else level = 4;
 
-            // If this is the first week of the month, add label
-            // Heuristic: If date is 1-7, it's the first week (roughly)
-            if (date.getDate() <= 7) {
-                // Only add if we haven't just added one (to avoid crowding)
-                // But simpler: just check if month changed from previous column?
-                // Let's just use the date check.
-                labels.push({ text: months[date.getMonth()], colIndex: col });
+                data.push({
+                    date: current,
+                    dateStr,
+                    count,
+                    level
+                });
+            }
+        } else {
+            // Week: Current week
+            startDate = new Date(currentDate);
+            const startDay = startDate.getDay();
+            startDate.setDate(startDate.getDate() - startDay);
+            cols = 1;
+
+            for (let i = 0; i < 7; i++) {
+                const current = new Date(startDate);
+                current.setDate(startDate.getDate() + i);
+
+                const y = current.getFullYear();
+                const m = String(current.getMonth() + 1).padStart(2, '0');
+                const day = String(current.getDate()).padStart(2, '0');
+                const dateStr = `${y}-${m}-${day}`;
+
+                const count = activityMap.get(dateStr) || 0;
+                let level = 0;
+                if (count === 0) level = 0;
+                else if (count <= 1) level = 1;
+                else if (count <= 3) level = 2;
+                else if (count <= 5) level = 3;
+                else level = 4;
+
+                data.push({
+                    date: current,
+                    dateStr,
+                    count,
+                    level
+                });
             }
         }
+
+        // Calculate Subtext
+        let text = "";
+        if (viewRange === 'year') {
+            let yearTotal = 0;
+            activityMap.forEach((count, date) => {
+                if (date.startsWith(String(year))) yearTotal += count;
+            });
+            text = `${yearTotal} ${yearTotal === 1 ? 'activity' : 'activities'} in ${year}`;
+        } else if (viewRange === 'month') {
+            let monthTotal = 0;
+            const prefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+            activityMap.forEach((count, date) => {
+                if (date.startsWith(prefix)) monthTotal += count;
+            });
+            const monthName = currentDate.toLocaleString('default', { month: 'long' });
+            text = `${monthTotal} ${monthTotal === 1 ? 'activity' : 'activities'} in ${monthName} ${year}`;
+        } else {
+            text = `Week ${getWeekNumber(currentDate)}, ${year}`;
+        }
+
+        return { gridData: data, totalCols: cols, subText: text };
+    }, [activityMap, viewRange, currentDate, getWeekNumber]);
+
+    // 3. Grid Labels
+    const gridLabels = useMemo(() => {
+        const labels: { text: string, colIndex: number, type?: 'month' | 'week' }[] = [];
+        if (viewRange === 'year') {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            for (let col = 0; col < totalCols; col++) {
+                const dayIndex = col * 7;
+                if (dayIndex >= gridData.length) break;
+                const date = gridData[dayIndex].date;
+                if (date.getDate() <= 7) {
+                    labels.push({ text: months[date.getMonth()], colIndex: col });
+                }
+            }
+        } else if (viewRange === 'month') {
+            for (let col = 0; col < totalCols; col++) {
+                const dayIndex = col * 7;
+                if (dayIndex >= gridData.length) break;
+                const date = gridData[dayIndex].date;
+                labels.push({ text: `W${getWeekNumber(date)}`, colIndex: col, type: 'week' });
+            }
+        } else if (viewRange === 'week') {
+            // No grid-level labels needed for single week view as it's in the header
+        }
         return labels;
-    }, [gridData]);
+    }, [gridData, viewRange, totalCols]);
 
     // Color functions
     const getCellColor = (level: number) => {
@@ -200,29 +278,64 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits }) => {
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                     <div className="bg-purple-100 dark:bg-purple-500/10 p-2 rounded-xl">
-                        <Target className="text-[#6F00FF] dark:text-purple-400" size={20} />
+                        <Flame className="text-[#6F00FF] dark:text-purple-400" size={20} />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Consistency</h2>
-                        <p className="text-slate-500 dark:text-slate-400 text-sm hidden sm:block">{totalActivities} activities in the last year</p>
+                        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Habit Consistency</h2>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm">
+                            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
                     </div>
                 </div>
 
-                <div className="text-right">
-                    <div className="text-2xl font-bold text-slate-800 dark:text-white">{currentStreak} <span className="text-sm font-normal text-slate-400 dark:text-slate-500">day streak</span></div>
+                <div className="flex items-center gap-4">
+                    {/* Period Display */}
+                    <div className="flex items-center bg-slate-100 dark:bg-white/10 px-4 py-2 rounded-xl border border-slate-200 dark:border-white/5 shadow-sm">
+                        <span className="text-sm font-bold bg-gradient-to-r from-violet-600 to-purple-600 dark:from-violet-400 dark:to-purple-400 bg-clip-text text-transparent">
+                            {viewRange === 'month'
+                                ? currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })
+                                : viewRange === 'week'
+                                    ? `Week ${getWeekNumber(currentDate)}, ${currentDate.getFullYear()}`
+                                    : currentDate.getFullYear()
+                            }
+                        </span>
+                    </div>
+
+                    {/* Range Selector */}
+                    <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-xl">
+                        {(['week', 'month', 'year'] as const).map((range) => (
+                            <button
+                                key={range}
+                                onClick={() => setViewRange(range)}
+                                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${viewRange === range
+                                    ? 'bg-white dark:bg-violet-600 text-violet-600 dark:text-white shadow-sm'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                    }`}
+                            >
+                                {range === 'week' ? 'Week' : range === 'month' ? 'Month' : 'Year'}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="text-right ml-4">
+                        <div className="text-2xl font-bold text-slate-800 dark:text-white">{currentStreak} <span className="text-sm font-normal text-slate-400 dark:text-slate-500">day streak</span></div>
+                    </div>
                 </div>
             </div>
 
             {/* The Grid Scroller */}
-            <div className="overflow-x-auto pb-2 custom-scrollbar">
-                <div className="min-w-[700px]">
-                    {/* Month Labels */}
-                    <div className="flex mb-2 text-xs text-slate-400 dark:text-slate-500 relative h-4">
-                        {monthLabels.map((label, i) => (
+            <div className="pb-4">
+                <div className="w-full relative">
+                    {/* Month/Week Labels */}
+                    <div className="w-full mb-8 text-[10px] md:text-xs text-slate-400 dark:text-slate-500 relative h-4">
+                        {gridLabels.map((label, i) => (
                             <div
                                 key={i}
-                                className="absolute transform"
-                                style={{ left: `${(label.colIndex / 53) * 100}%` }}
+                                className={`absolute transform ${label.type === 'month' ? 'text-sm font-bold text-slate-700 dark:text-slate-200 -translate-y-6' : '-translate-x-1/2'}`}
+                                style={{
+                                    left: label.type === 'month' ? '0' : `${((label.colIndex + 0.5) / 53) * 100}%`,
+                                    whiteSpace: 'nowrap'
+                                }}
                             >
                                 {label.text}
                             </div>
@@ -232,19 +345,23 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits }) => {
                     {/* The Grid */}
                     <div className="flex gap-[3px]">
                         {/* Render Columns */}
-                        {Array.from({ length: 53 }).map((_, colIndex) => (
-                            <div key={colIndex} className="flex flex-col gap-[3px]">
+                        {Array.from({ length: totalCols }).map((_, colIndex) => (
+                            <div
+                                key={colIndex}
+                                className="flex flex-col gap-[3px]"
+                                style={{ width: 'calc((100% - 52 * 3px) / 53)' }}
+                            >
                                 {/* Render Rows (Days) */}
                                 {Array.from({ length: 7 }).map((_, rowIndex) => {
                                     const dataIndex = colIndex * 7 + rowIndex;
                                     const cellData = gridData[dataIndex];
 
-                                    if (!cellData) return <div key={rowIndex} className="w-3 h-3 md:w-3.5 md:h-3.5 opacity-0" />;
+                                    if (!cellData) return <div key={rowIndex} className="w-full aspect-square opacity-0" />;
 
                                     return (
                                         <div
                                             key={rowIndex}
-                                            className={`w-3 h-3 md:w-3.5 md:h-3.5 rounded-sm transition-colors ${getCellColor(cellData.level)} group relative`}
+                                            className={`w-full aspect-square rounded-[1.5px] md:rounded-sm transition-colors ${getCellColor(cellData.level)} group relative`}
                                         >
                                             {/* Tooltip on hover */}
                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10 transition-opacity">
@@ -270,6 +387,30 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits }) => {
                         </div>
                         <span>More</span>
                     </div>
+
+                    {/* Year Navigation - Only show in year view */}
+                    {viewRange === 'year' && (
+                        <div className="flex justify-center gap-2 mt-4">
+                            <button
+                                onClick={() => {
+                                    const newDate = new Date(currentDate);
+                                    newDate.setFullYear(currentDate.getFullYear() - 1);
+                                    setCurrentDate(newDate);
+                                }}
+                                className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg transition-all border border-slate-200 dark:border-white/5"
+                            >
+                                Last year
+                            </button>
+                            {currentDate.getFullYear() !== new Date().getFullYear() && (
+                                <button
+                                    onClick={() => setCurrentDate(new Date())}
+                                    className="px-3 py-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 rounded-lg transition-all border border-violet-200 dark:border-violet-500/30"
+                                >
+                                    Current year
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
