@@ -24,6 +24,7 @@
           animation: {
             blob: "blob 7s infinite",
             'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
+            marquee: 'marquee 80s linear infinite',
           },
           keyframes: {
             blob: {
@@ -35,6 +36,10 @@
             fadeInUp: {
               "0%": { opacity: 0, transform: "translateY(20px)" },
               "100%": { opacity: 1, transform: "translateY(0)" },
+            },
+            marquee: {
+              '0%': { transform: 'translateX(0)' },
+              '100%': { transform: 'translateX(-100%)' },
             }
           },
         }
@@ -129,7 +134,8 @@
   }
 }
 </script>
-  <script type="module" crossorigin src="/assets/index-aAZJAWZF.js"></script>
+  <script type="module" crossorigin src="/assets/index-DpgnPbsA.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-C6G_3qQV.css">
 </head>
 
 <body
