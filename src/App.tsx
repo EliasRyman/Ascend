@@ -66,7 +66,8 @@ import {
   disconnectGoogle,
   setSupabaseToken,
   getValidAccessToken,
-  setAccessToken
+  setAccessToken,
+  debugGoogleCalendarSync
 } from './googleCalendar';
 import StreakFlame from './components/StreakFlame';
 import ConsistencyCard from './components/ConsistencyCard';
@@ -1042,6 +1043,18 @@ const SettingsModal = ({
                 </div>
               </div>
             )}
+
+            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={async () => {
+                  const result = await debugGoogleCalendarSync();
+                  alert(result);
+                }}
+                className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 underline"
+              >
+                Test Google Sync (Debug)
+              </button>
+            </div>
           </div>
         </div >
 

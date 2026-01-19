@@ -801,6 +801,46 @@ export async function updateGoogleCalendarEvent(
   }
 }
 
+// Debug function to check calendar connectivity and events
+export async function debugGoogleCalendarSync(): Promise<string> {
+  try {
+    const token = await getValidAccessToken();
+    if (!token) return "❌ No valid access token found. Please reconnect.";
+
+    if (typeof gapi === 'undefined' || !gapi.client) return "❌ GAPI not initialized.";
+
+    let logs = "--- Google Calendar Debug Info ---\n";
+
+    // 1. Check Calendars
+    const calList = await gapi.client.calendar.calendarList.list();
+    const calendars = calList.result.items || [];
+    logs += `📅 Calendars found: ${calendars.length}\n`;
+    calendars.forEach((c: any) => {
+      logs += `- ${c.summary} (Access: ${c.accessRole})\n`;
+    });
+
+    // 2. Fetch Events for Today
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+    logs += `\n🕒 Fetching events for today (${start.toLocaleDateString()})...\n`;
+
+    // We manually fetch to debug raw response
+    const events = await fetchGoogleCalendarEvents(start, end, true, true);
+    logs += `🎉 Events found: ${events.length}\n`;
+
+    events.forEach(e => {
+      logs += `  • [${e.start.toFixed(1)}h] ${e.title} (Cal: ${e.calendarName})\n`;
+    });
+
+    return logs;
+
+  } catch (error: any) {
+    return `❌ Debug Error: ${error.message || JSON.stringify(error)}`;
+  }
+}
+
 // Two-way sync interface
 export interface SyncResult {
   toAdd: CalendarEvent[];
