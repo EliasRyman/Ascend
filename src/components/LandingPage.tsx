@@ -19,10 +19,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
                 <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <div className="bg-[#6F00FF] p-1.5 rounded-lg">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                            </svg>
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+                            <img src="/favicon.svg" alt="Ascend Logo" className="w-full h-full" />
                         </div>
                         <span className="font-bold text-lg tracking-tight">Ascend</span>
                     </div>
