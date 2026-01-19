@@ -69,7 +69,7 @@ import {
   setAccessToken,
   debugGoogleCalendarSync
 } from './googleCalendar';
-import StreakFlame from './components/StreakFlame';
+
 import ConsistencyCard from './components/ConsistencyCard';
 import WeightSection from './components/WeightSection';
 import {
@@ -110,6 +110,8 @@ import {
   deleteRecurringTemplate,
   updateTagNameAndColor,
 } from './database';
+import DeleteHabitModal from './components/DeleteHabitModal';
+import StreakFlame from './components/StreakFlame';
 
 // --- Constants & Utilities ---
 
@@ -249,6 +251,8 @@ interface Habit {
   completedDates: string[];
   createdAt: string;
   startDate: string; // ISO date string (YYYY-MM-DD) - when user starts tracking this habit
+  archivedAt?: string | null; // ISO date string - if set, habit is archived from this date onwards
+  endDate?: string | null; // ISO date string - if set, habit stops appearing after this date
 }
 
 // Google Calendar color palette
@@ -543,8 +547,11 @@ const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: {
   const [tag, setTag] = useState<string | null>(initialHabit?.tag || null);
   const [tagColor, setTagColor] = useState<string | null>(initialHabit?.tagColor || null);
   const [startDate, setStartDate] = useState(initialHabit?.startDate || formatDateISO(new Date()));
+  const [endDate, setEndDate] = useState(initialHabit?.endDate || null); // New state for end date
   const [isStartDateCalendarOpen, setIsStartDateCalendarOpen] = useState(false);
+  const [isEndDateCalendarOpen, setIsEndDateCalendarOpen] = useState(false); // New calendar state
   const [startDateCalendarView, setStartDateCalendarView] = useState(new Date(initialHabit?.startDate || new Date()));
+  const [endDateCalendarView, setEndDateCalendarView] = useState(new Date(initialHabit?.endDate || new Date())); // New calendar view
 
   // Auto-select newly created tags
   const [prevTagsLength, setPrevTagsLength] = useState(userTags.length);
@@ -570,7 +577,8 @@ const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: {
       scheduledDays: [],
       scheduledStartTime: null,
       scheduledEndTime: null,
-      startDate
+      startDate,
+      endDate
     });
   };
 
@@ -627,7 +635,7 @@ const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: {
                   <div key={day} className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 py-1">{day}</div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-1 place-items-center">
                 {Array.from({ length: getFirstDayOfMonth(startDateCalendarView.getFullYear(), startDateCalendarView.getMonth()) }).map((_, i) => (
                   <div key={`empty-${i}`} className="w-8 h-8" />
                 ))}
@@ -673,6 +681,93 @@ const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: {
           )}
         </div>
       </div>
+
+      {/* End Date Field (Optional) */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">End Date <span className="text-slate-400 font-normal">(optional)</span></label>
+        <div className="relative">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setIsEndDateCalendarOpen(!isEndDateCalendarOpen)}
+              className={`flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] text-left flex items-center justify-between ${!endDate ? 'text-slate-400 dark:text-slate-500' : ''}`}
+            >
+              <span>{endDate ? new Date(endDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'No end date'}</span>
+              <Calendar size={16} className="text-slate-400" />
+            </button>
+            {endDate && (
+              <button
+                type="button"
+                onClick={() => setEndDate(null)}
+                className="px-3 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors"
+                title="Remove End Date"
+              >
+                <X size={20} />
+              </button>
+            )}
+          </div>
+
+          {isEndDateCalendarOpen && (
+            <div className="relative mt-4 left-0 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-4 z-10">
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  type="button"
+                  onClick={() => setEndDateCalendarView(new Date(endDateCalendarView.getFullYear(), endDateCalendarView.getMonth() - 1))}
+                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                >
+                  <ChevronLeft size={18} className="text-slate-500" />
+                </button>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {endDateCalendarView.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEndDateCalendarView(new Date(endDateCalendarView.getFullYear(), endDateCalendarView.getMonth() + 1))}
+                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                >
+                  <ChevronRight size={18} className="text-slate-500" />
+                </button>
+              </div>
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                  <div key={day} className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 py-1">{day}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1 place-items-center">
+                {Array.from({ length: getFirstDayOfMonth(endDateCalendarView.getFullYear(), endDateCalendarView.getMonth()) }).map((_, i) => (
+                  <div key={`empty-${i}`} className="w-8 h-8" />
+                ))}
+                {Array.from({ length: getDaysInMonth(endDateCalendarView.getFullYear(), endDateCalendarView.getMonth()) }).map((_, i) => {
+                  const day = i + 1;
+                  const date = new Date(endDateCalendarView.getFullYear(), endDateCalendarView.getMonth(), day);
+                  const dateStr = formatDateISO(date);
+                  const isSelected = dateStr === endDate;
+                  const isTodayDate = isToday(date);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => {
+                        setEndDate(dateStr);
+                        setIsEndDateCalendarOpen(false);
+                      }}
+                      className={`w-8 h-8 rounded-full text-sm font-semibold transition-all flex items-center justify-center ${isSelected
+                        ? 'bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white shadow-lg shadow-purple-500/30'
+                        : isTodayDate
+                          ? 'bg-purple-50 dark:bg-purple-500/10 stroke-gradient dark:text-purple-400 border border-purple-200 dark:border-purple-500/30'
+                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'
+                        }`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
         <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
           <Repeat size={16} className="stroke-gradient" />
@@ -1174,6 +1269,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const habitsRef = useRef<Habit[]>(habits);
   const [isAddHabitOpen, setIsAddHabitOpen] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const [habitToDelete, setHabitToDelete] = useState<Habit | null>(null); // For delete confirmation modal
 
   // Migrate existing habits to have startDate
   useEffect(() => {
@@ -1898,12 +1994,63 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     setEditingHabit(null);
   };
 
-  const deleteHabit = (habitId: string) => setHabits(prev => prev.filter(h => h.id !== habitId));
+  // Handle habit deletion button (opens modal)
+  const deleteHabit = (habitId: string) => {
+    const habit = habits.find(h => h.id === habitId);
+    if (habit) setHabitToDelete(habit);
+  };
+
+  // Confirm: Hard Delete
+  const confirmDeleteForever = () => {
+    if (habitToDelete) {
+      setHabits(prev => prev.filter(h => h.id !== habitToDelete.id));
+      setHabitToDelete(null);
+    }
+  };
+
+  // Confirm: Archive
+  const confirmArchive = () => {
+    if (habitToDelete) {
+      setHabits(prev => prev.map(h =>
+        h.id === habitToDelete.id
+          ? { ...h, archivedAt: new Date().toISOString() }
+          : h
+      ));
+      setHabitToDelete(null);
+    }
+  };
 
   // Simplified: All habits are daily, so they all show every day
-  const getTodaysHabits = () => habits;
+  // Filter out archived habits if the current view date is ON or AFTER the archive date
+  const getTodaysHabits = () => {
+    // Determine the relevant date for filtering
+    const viewDateStr = formatDateISO(selectedDate);
+
+    // Filter habits
+    return habits.filter(h => {
+      // If habit is archived...
+      if (h.archivedAt) {
+        // ...hide it if the view date is ON or AFTER the archive date
+        // Example: Archived today (2024-01-01). 
+        // View Today (2024-01-01): Hide.
+        // View Yesterday (2023-12-31): Show.
+        const archiveDateStr = h.archivedAt.split('T')[0]; // Extract YYYY-MM-DD
+        if (viewDateStr >= archiveDateStr) {
+          return false;
+        }
+      }
+      // If habit has an end date...
+      if (h.endDate) {
+        // ...hide it if the view date is AFTER the end date
+        if (viewDateStr > h.endDate) {
+          return false;
+        }
+      }
+      return true;
+    });
+  };
   // All habits appear in the Habits section (can be dragged to timeline)
-  const getUnscheduledTodaysHabits = () => habits;
+  const getUnscheduledTodaysHabits = () => getTodaysHabits();
 
   const getWeekNumber = (d: Date) => {
     const date = new Date(d.getTime());
@@ -3088,6 +3235,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         </div>
       </header >
 
+      {/* Delete Habit Modal */}
+      <DeleteHabitModal
+        isOpen={!!habitToDelete}
+        onClose={() => setHabitToDelete(null)}
+        onDeleteForever={confirmDeleteForever}
+        onArchive={confirmArchive}
+        habitName={habitToDelete?.name || ''}
+      />
+
       {/* Settings Modal */}
       {
         isSettingsOpen && (
@@ -3548,15 +3704,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             </div>
                           </div>
 
-                          <div className="shrink-0 relative">
-                            {/* Glow behind flame */}
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-orange-500/20 rounded-full blur-xl animate-pulse"></div>
-                            <StreakFlame
-                              progressPercentage={globalProgress}
-                              streakCount={0}
-                              size={72}
-                            />
-                          </div>
+
                         </div>
                       );
                     })()}
