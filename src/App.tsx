@@ -1487,7 +1487,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     // Ensure we have a valid access token from backend
     const token = await getValidAccessToken();
     if (!token) {
-
+      if (googleAccount) {
+        setNotification({
+          type: 'error',
+          message: 'Google Calendar sync failed. Please reconnect in Settings.'
+        });
+      }
       return;
     }
     setAccessToken(token);
