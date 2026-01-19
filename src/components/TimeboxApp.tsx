@@ -639,10 +639,38 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
         checkGoogle();
     }, [user]);
 
+    const fetchGoogleEventsForDate = async (date: Date): Promise<ScheduleBlock[]> => {
+        if (!googleAccount) return [];
+        const token = await getValidAccessToken();
+        if (!token) return [];
+        setAccessToken(token);
+        try {
+            const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+            const end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+            const gEvents = await fetchGoogleCalendarEvents(start, end, true, true);
+            return gEvents.map(e => ({
+                id: e.id, title: e.title, tag: (e as any).calendarName || 'google',
+                start: e.start, duration: e.duration, color: '', textColor: 'text-white',
+                isGoogle: true, googleEventId: e.id, completed: false,
+                calendarColor: (e as any).calendarColor, calendarName: (e as any).calendarName,
+                calendarId: (e as any).calendarId, canEdit: (e as any).canEdit ?? false
+            }));
+        } catch (err) {
+            console.error(err);
+            return [];
+        }
+    };
+
     useEffect(() => {
+        let isCurrent = true;
+
         const loadData = async () => {
             if (!user) return;
-            if (!isDataLoaded) setIsDataLoaded(false);
+            // Delay showing loader slightly to avoid flickers on fast loads
+            const loaderTimeout = setTimeout(() => {
+                if (isCurrent && !isDataLoaded) setIsDataLoaded(false);
+            }, 100);
+
             try {
                 const todayISO = formatDateISO(selectedDate);
                 await generateRecurringInstances(selectedDate);
@@ -652,6 +680,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                     loadNote(selectedDate),
                     isToday(selectedDate) ? null : loadAllTasksForDate(new Date())
                 ]);
+
+                if (!isCurrent) {
+                    clearTimeout(loaderTimeout);
+                    return;
+                }
+
                 const { active, later } = allTasksData;
                 setActiveTasks(active);
                 setLaterTasks(later);
@@ -672,37 +706,66 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                     }
                     return b;
                 });
-                setSchedule(synced.filter(b => !b.habitId || habitsRef.current.some(h => String(h.id) === String(b.habitId))));
+
+                let currentSchedule = synced.filter(b => !b.habitId || habitsRef.current.some(h => String(h.id) === String(b.habitId)));
+                const gBlocks = await fetchGoogleEventsForDate(selectedDate);
+
+                if (!isCurrent) {
+                    clearTimeout(loaderTimeout);
+                    return;
+                }
+
+                // Remove ALL existing pure Google events (that aren't linked to tasks/habits)
+                // This ensures we don't keep events from a previous date when switching days
+                const scheduleWithoutOldGoogleEvents = currentSchedule.filter(b =>
+                    !b.isGoogle || b.taskId || b.habitId
+                );
+
+                // Add the new Google events ensuring no duplicates with existing linked events
+                const linkedGoogleIds = new Set(scheduleWithoutOldGoogleEvents.map(b => b.googleEventId).filter(Boolean));
+                const uniqueGBlocks = gBlocks.filter(b => !b.googleEventId || !linkedGoogleIds.has(b.googleEventId));
+
+                setSchedule([...scheduleWithoutOldGoogleEvents, ...uniqueGBlocks]);
                 setNotesContent(noteContent);
                 setIsDataLoaded(true);
-                if (googleAccount) loadGoogleEvents(selectedDate);
-            } catch (err) { setIsDataLoaded(true); }
+                clearTimeout(loaderTimeout);
+            } catch (err) {
+                if (isCurrent) {
+                    setIsDataLoaded(true);
+                }
+                clearTimeout(loaderTimeout);
+            }
         };
+
         loadData();
+
+        return () => {
+            isCurrent = false;
+        };
     }, [user, selectedDate]);
 
-    const loadGoogleEvents = async (date: Date) => {
+    const handleSyncGoogleEvents = async () => {
         if (!googleAccount) return;
-        const token = await getValidAccessToken();
-        if (!token) return;
-        setAccessToken(token);
+        setIsSyncing(true);
         try {
-            const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
-            const end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
-            const gEvents = await fetchGoogleCalendarEvents(start, end, true, true);
-            const gBlocks: ScheduleBlock[] = gEvents.map(e => ({
-                id: e.id, title: e.title, tag: (e as any).calendarName || 'google',
-                start: e.start, duration: e.duration, color: '', textColor: 'text-white',
-                isGoogle: true, googleEventId: e.id, completed: false,
-                calendarColor: (e as any).calendarColor, calendarName: (e as any).calendarName,
-                calendarId: (e as any).calendarId, canEdit: (e as any).canEdit ?? false
-            }));
+            const gBlocks = await fetchGoogleEventsForDate(selectedDate);
             setSchedule(prev => {
-                const ids = new Set(gBlocks.map(b => b.googleEventId));
-                const filtered = prev.filter(b => !b.googleEventId || !ids.has(b.googleEventId) || !b.isGoogle || b.taskId || b.habitId);
-                return [...filtered, ...gBlocks];
+                const scheduleWithoutOldGoogleEvents = prev.filter(b =>
+                    !b.isGoogle || b.taskId || b.habitId
+                );
+
+                const linkedGoogleIds = new Set(scheduleWithoutOldGoogleEvents.map(b => b.googleEventId).filter(Boolean));
+                const uniqueGBlocks = gBlocks.filter(b => !b.googleEventId || !linkedGoogleIds.has(b.googleEventId));
+
+                return [...scheduleWithoutOldGoogleEvents, ...uniqueGBlocks];
             });
-        } catch (err) { console.error(err); }
+            setNotification({ type: 'success', message: 'Calendar synced' });
+        } catch (error) {
+            console.error(error);
+            setNotification({ type: 'error', message: 'Sync failed' });
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     const hourLabels = Array.from({ length: 24 }, (_, i) => i);
@@ -806,7 +869,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                             onRemoveTag={handleRemoveTagFromTask}
                                             onOpenTagModal={handleOpenTagModal}
                                             onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
-                                            onDeleteTag={handleDeleteTagByName}
                                         />
                                     ))}
                                 </div>
@@ -834,7 +896,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                     onRemoveTag={handleRemoveTagFromTask}
                                                     onOpenTagModal={id => handleOpenTagModal(id)}
                                                     onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
-                                                    onDeleteTag={handleDeleteTagByName}
                                                 />
                                             ))}
                                         </div>
@@ -869,7 +930,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                         {isZoomedOut ? <ZoomIn size={18} /> : <ZoomOut size={18} />}
                                     </button>
                                     <button
-                                        onClick={() => { setIsSyncing(true); loadGoogleEvents(selectedDate).finally(() => setIsSyncing(false)); }}
+                                        onClick={() => { handleSyncGoogleEvents(); }}
                                         className={`flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-bold transition-all ${isSyncing ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#6F00FF]/50'}`}
                                         disabled={isSyncing}
                                     >
@@ -1100,7 +1161,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                         onRemoveTag={handleRemoveTagFromTask}
                                                         onOpenTagModal={handleOpenTagModal}
                                                         onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
-                                                        onDeleteTag={handleDeleteTagByName}
                                                     />
                                                 ))}
                                                 {todayTasks.later.map(task => (
@@ -1114,7 +1174,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                         onRemoveTag={handleRemoveTagFromTask}
                                                         onOpenTagModal={handleOpenTagModal}
                                                         onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
-                                                        onDeleteTag={handleDeleteTagByName}
                                                     />
                                                 ))}
                                             </>
