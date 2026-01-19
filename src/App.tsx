@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import LandingPage from './components/LandingPage';
+import { LegalProvider } from './context/LegalContext';
+import LegalModals from './components/LegalModals';
+import CookieBanner from './components/CookieBanner';
 
 import {
   Check,
@@ -43,7 +46,9 @@ import {
   Edit3,
   Repeat,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -65,6 +70,7 @@ import {
 } from './googleCalendar';
 import StreakFlame from './components/StreakFlame';
 import ConsistencyCard from './components/ConsistencyCard';
+import WeightSection from './components/WeightSection';
 import {
   signIn,
   signUp,
@@ -101,6 +107,7 @@ import {
   createRecurringTask,
   getRecurringTemplates,
   deleteRecurringTemplate,
+  updateTagNameAndColor,
 } from './database';
 
 // --- Constants & Utilities ---
@@ -110,6 +117,74 @@ const formatDateISO = (date: Date) => {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+};
+
+// Check if a date is on or after the habit's start date
+const isDateEligibleForHabit = (date: Date | string, habitStartDate: string): boolean => {
+  const dateStr = typeof date === 'string' ? date : formatDateISO(date);
+  return dateStr >= habitStartDate;
+};
+
+// Calculate weekly progress percentage for a habit
+const calculateWeeklyProgress = (habit: { startDate: string; completedDates: string[] }, weekDates: Date[]): number => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Filter week dates to only include eligible days (>= start date AND <= today)
+  const eligibleDays = weekDates.filter(date => {
+    const dateStr = formatDateISO(date);
+    return dateStr >= habit.startDate && date <= today;
+  });
+
+  if (eligibleDays.length === 0) return 0;
+
+  // Count how many eligible days were completed
+  const completedCount = eligibleDays.filter(date => {
+    const dateStr = formatDateISO(date);
+    return habit.completedDates.includes(dateStr);
+  }).length;
+
+  return Math.round((completedCount / eligibleDays.length) * 100);
+};
+
+// Get the dates for a specific week (Sunday to Saturday)
+const getWeekDates = (weekOffset: number = 0): Date[] => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Find the Sunday of the current week
+  const currentDayOfWeek = today.getDay();
+  const sunday = new Date(today);
+  sunday.setDate(today.getDate() - currentDayOfWeek + (weekOffset * 7));
+
+  // Generate all 7 days of the week
+  const weekDates: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(sunday);
+    date.setDate(sunday.getDate() + i);
+    weekDates.push(date);
+  }
+
+  return weekDates;
+};
+
+// Check if a date is today
+const isToday = (date: Date): boolean => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const checkDate = new Date(date);
+  checkDate.setHours(0, 0, 0, 0);
+  return checkDate.getTime() === today.getTime();
+};
+
+// Get the first day of the month (0 = Sunday, 6 = Saturday)
+const getFirstDayOfMonth = (year: number, month: number): number => {
+  return new Date(year, month, 1).getDay();
+};
+
+// Get the number of days in a month
+const getDaysInMonth = (year: number, month: number): number => {
+  return new Date(year, month + 1, 0).getDate();
 };
 
 // --- Context ---
@@ -192,6 +267,20 @@ const GOOGLE_COLORS = [
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// --- SVG Icons Gradient Definition ---
+// This component should be rendered once at the top of the app to define the gradient
+// This component should be rendered once at the top of the app to define the gradient
+const IconsGradientDef = () => (
+  <svg width="0" height="0" style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
+    <defs>
+      <linearGradient id="active-tab-gradient-def" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stopColor="#6F00FF" />
+        <stop offset="100%" stopColor="#9333ea" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
 // --- Data Models for Demo ---
 
 const TIME_BLOCKS: ScheduleBlock[] = [];
@@ -212,6 +301,7 @@ interface TaskItemProps {
   onRemoveTag: (taskId: string | number) => void;
   onOpenTagModal: (taskId: string | number) => void;
   onEditTag: (tag: { name: string; color: string }) => void;
+  onDeleteTag: (tagName: string) => void;
 }
 
 const TaskItem = ({
@@ -225,7 +315,8 @@ const TaskItem = ({
   onAddTag,
   onRemoveTag,
   onOpenTagModal,
-  onEditTag
+  onEditTag,
+  onDeleteTag
 }: TaskItemProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isTagSubmenuOpen, setIsTagSubmenuOpen] = useState(false);
@@ -252,7 +343,7 @@ const TaskItem = ({
     >
       <div
         onClick={() => onToggleComplete(task.id)}
-        className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${task.completed ? 'bg-[#6F00FF] border-[#6F00FF]' : 'border-slate-300 dark:border-slate-600 hover:border-[#6F00FF]'}`}
+        className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${task.completed ? 'bg-[#6F00FF] border-[#6F00FF]' : 'border-slate-300 dark:border-slate-700 hover:border-[#6F00FF]'}`}
       >
         {task.completed && <Check size={14} className="text-white" />}
       </div>
@@ -261,14 +352,16 @@ const TaskItem = ({
       </span>
       {task.tag && (
         <span
-          className="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide text-white"
+          onClick={(e) => { e.stopPropagation(); if (onEditTag) onEditTag({ name: task.tag!, color: task.tagColor! }); }}
+          className="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide text-white cursor-pointer hover:ring-2 hover:ring-white/50 transition-all shrink-0"
           style={{ backgroundColor: task.tagColor || '#6F00FF' }}
+          title="Klicka för att redigera tagg"
         >
           {task.tag}
         </span>
       )}
       {task.time && (
-        <span className="text-[10px] opacity-70 text-slate-600 dark:text-slate-400">
+        <span className="text-[10px] opacity-70 text-slate-600 dark:text-slate-300">
           {task.time}
         </span>
       )}
@@ -293,35 +386,52 @@ const TaskItem = ({
               {listType === 'active' ? 'Move to Later' : 'Move to Active'}
             </button>
             <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-            <button onClick={() => { onOpenTagModal(task.id); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200">
-              <Plus size={14} /> Create Tag
-            </button>
+            {(!task.tag || task.tag.trim() === "") && (
+              <button onClick={() => { onOpenTagModal(task.id); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                <Plus size={14} /> Create Tag
+              </button>
+            )}
             {task.tag && task.tagColor && onEditTag && (
               <button onClick={() => { onEditTag({ name: task.tag!, color: task.tagColor! }); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200">
                 <Edit3 size={14} /> Edit Tag
               </button>
             )}
-            <div className="relative">
-              <button onClick={() => setIsTagSubmenuOpen(!isTagSubmenuOpen)} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200 justify-between">
-                <span className="flex items-center gap-2"><Tag size={14} /> Add Tag</span>
-                {isTagSubmenuOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </button>
-              {isTagSubmenuOpen && userTags.length > 0 && (
-                <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-                  {userTags.map((tag, idx) => (
-                    <button key={idx} onClick={() => { onAddTag(task.id, tag.name, tag.color); setIsMenuOpen(false); setIsTagSubmenuOpen(false); }} className="w-full px-4 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
-                      <span className="text-slate-600 dark:text-slate-300 text-sm">{tag.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {isTagSubmenuOpen && userTags.length === 0 && (
-                <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 py-2 px-4 text-xs text-slate-400">No tags yet</div>
-              )}
-            </div>
-            {task.tag && (
-              <button onClick={() => { onRemoveTag(task.id); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200">
+
+            {(!task.tag || task.tag.trim() === "") && (
+              <div className="relative">
+                <button onClick={() => setIsTagSubmenuOpen(!isTagSubmenuOpen)} className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200 justify-between">
+                  <span className="flex items-center gap-2"><Tag size={14} /> Add Tag</span>
+                  {isTagSubmenuOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+                {isTagSubmenuOpen && userTags.length > 0 && (
+                  <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                    {userTags.map((tag, idx) => (
+                      <div key={idx} className="flex items-center group/tag">
+                        <button
+                          onClick={() => { onAddTag(task.id, tag.name, tag.color); setIsMenuOpen(false); setIsTagSubmenuOpen(false); }}
+                          className="flex-1 px-4 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                        >
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                          <span className="text-slate-600 dark:text-slate-300 text-sm">{tag.name}</span>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onEditTag(tag); setIsMenuOpen(false); }}
+                          className="px-3 py-2 text-slate-400 hover:stroke-gradient hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                          title="Redigera tagg"
+                        >
+                          <Edit3 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {isTagSubmenuOpen && userTags.length === 0 && (
+                  <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 py-2 px-4 text-xs text-slate-400">No tags yet</div>
+                )}
+              </div>
+            )}
+            {task.tag && task.tag.trim() !== "" && (
+              <button onClick={() => { onRemoveTag(task.id); setIsMenuOpen(false); }} className="w-full px-3 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-1.5 text-red-600 dark:text-red-400 font-medium">
                 <X size={14} /> Remove Tag
               </button>
             )}
@@ -332,7 +442,7 @@ const TaskItem = ({
           </div>
         )}
       </div>
-    </div>
+    </div >
   );
 };
 
@@ -378,7 +488,7 @@ const TagModal = ({ isOpen, onClose, onSave, editTag, onDelete }: TagModalProps)
         <div className="p-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Tag size={20} className="text-[#6F00FF]" /> {isEditMode ? 'Edit Tag' : 'Create Tag'}
+              <Tag size={20} className="stroke-gradient" /> {isEditMode ? 'Edit Tag' : 'Create Tag'}
             </h3>
             <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
               <X size={20} />
@@ -410,7 +520,7 @@ const TagModal = ({ isOpen, onClose, onSave, editTag, onDelete }: TagModalProps)
             <button onClick={() => { onDelete(); onClose(); }} className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">Delete Tag</button>
           )}
           <div className={`flex gap-2 ${!isEditMode ? 'ml-auto' : ''}`}>
-            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">Cancel</button>
+            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">Cancel</button>
             <button onClick={handleSave} disabled={!tagName.trim()} className="px-4 py-2 text-sm font-medium bg-[#6F00FF] text-white rounded-lg hover:bg-[#5800cc] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">{isEditMode ? 'Save' : 'Create Tag'}</button>
           </div>
         </div>
@@ -432,6 +542,8 @@ const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: {
   const [tag, setTag] = useState<string | null>(initialHabit?.tag || null);
   const [tagColor, setTagColor] = useState<string | null>(initialHabit?.tagColor || null);
   const [startDate, setStartDate] = useState(initialHabit?.startDate || formatDateISO(new Date()));
+  const [isStartDateCalendarOpen, setIsStartDateCalendarOpen] = useState(false);
+  const [startDateCalendarView, setStartDateCalendarView] = useState(new Date(initialHabit?.startDate || new Date()));
 
   // Auto-select newly created tags
   const [prevTagsLength, setPrevTagsLength] = useState(userTags.length);
@@ -479,25 +591,99 @@ const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: {
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Start Date</label>
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]"
-        />
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsStartDateCalendarOpen(!isStartDateCalendarOpen)}
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6F00FF] text-left flex items-center justify-between"
+          >
+            <span>{new Date(startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+            <Calendar size={16} className="text-slate-400" />
+          </button>
+          {isStartDateCalendarOpen && (
+            <div className="relative mt-4 left-0 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-4 z-10">
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  type="button"
+                  onClick={() => setStartDateCalendarView(new Date(startDateCalendarView.getFullYear(), startDateCalendarView.getMonth() - 1))}
+                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                >
+                  <ChevronLeft size={18} className="text-slate-500" />
+                </button>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {startDateCalendarView.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setStartDateCalendarView(new Date(startDateCalendarView.getFullYear(), startDateCalendarView.getMonth() + 1))}
+                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                >
+                  <ChevronRight size={18} className="text-slate-500" />
+                </button>
+              </div>
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                  <div key={day} className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 py-1">{day}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {Array.from({ length: getFirstDayOfMonth(startDateCalendarView.getFullYear(), startDateCalendarView.getMonth()) }).map((_, i) => (
+                  <div key={`empty-${i}`} className="w-8 h-8" />
+                ))}
+                {Array.from({ length: getDaysInMonth(startDateCalendarView.getFullYear(), startDateCalendarView.getMonth()) }).map((_, i) => {
+                  const day = i + 1;
+                  const date = new Date(startDateCalendarView.getFullYear(), startDateCalendarView.getMonth(), day);
+                  const dateStr = formatDateISO(date);
+                  const isSelected = dateStr === startDate;
+                  const isTodayDate = isToday(date);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => {
+                        setStartDate(dateStr);
+                        setIsStartDateCalendarOpen(false);
+                      }}
+                      className={`w-8 h-8 rounded-full text-sm font-semibold transition-all flex items-center justify-center ${isSelected
+                        ? 'bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white shadow-lg shadow-purple-500/30'
+                        : isTodayDate
+                          ? 'bg-purple-50 dark:bg-purple-500/10 stroke-gradient dark:text-purple-400 border border-purple-200 dark:border-purple-500/30'
+                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'
+                        }`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const today = new Date();
+                  setStartDate(formatDateISO(today));
+                  setStartDateCalendarView(today);
+                  setIsStartDateCalendarOpen(false);
+                }}
+                className="mt-3 w-full py-2 text-sm font-medium stroke-gradient dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg"
+              >
+                Today
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
         <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-          <Repeat size={16} className="text-emerald-500" />
+          <Repeat size={16} className="stroke-gradient" />
           <span>Habits appear <strong>every day</strong> in the Habits section</span>
         </div>
         <p className="text-xs text-slate-500 mt-2">Drag habits to the timeline to schedule them for a specific time. Your streak builds as you complete them each day!</p>
       </div>
       <div className="flex gap-3 pt-4">
         <button type="button" onClick={onCancel} className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 hover:bg-slate-200">Cancel</button>
-        <button type="submit" disabled={!name.trim()} className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-[#6F00FF] text-white hover:bg-[#5800cc] disabled:opacity-50">{initialHabit ? 'Update Habit' : 'Create Habit'}</button>
+        <button type="submit" disabled={!name.trim()} className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30 transition-all disabled:opacity-50">{initialHabit ? 'Update Habit' : 'Create Habit'}</button>
       </div>
-    </form>
+    </form >
   );
 };
 
@@ -596,7 +782,7 @@ const SettingsModal = ({
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-slate-900 dark:text-white">Settings</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage your account, billing, customisations, and integrations here.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-300 mt-0.5">Manage your account, billing, customisations, and integrations here.</p>
             </div>
             <div className="flex items-center gap-2">
               {/* Theme Toggle */}
@@ -630,8 +816,8 @@ const SettingsModal = ({
                 key={tab.id}
                 onClick={() => setActiveSettingsTab(tab.id)}
                 className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${activeSettingsTab === tab.id
-                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border-l-2 border-emerald-500'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border-l-2 border-[#6F00FF]'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                   }`}
               >
                 {tab.label}
@@ -653,7 +839,7 @@ const SettingsModal = ({
                       </div>
                       <div>
                         <p className="text-sm font-medium text-slate-900 dark:text-white">Logged in as</p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">{user.email}</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300">{user.email}</p>
                       </div>
                     </div>
                   </div>
@@ -662,10 +848,10 @@ const SettingsModal = ({
                 {/* Sign Out */}
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Sign Out</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Sign out of your account on all devices.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-300 mb-3">Sign out of your account on all devices.</p>
                   <button
                     onClick={onLogout}
-                    className="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                   >
                     <LogOut size={16} />
                     Sign Out
@@ -675,7 +861,7 @@ const SettingsModal = ({
                 {/* Unsubscribe from emails */}
                 <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Unsubscribe from emails</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">You will not receive any emails from Ascend.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-300 mb-3">You will not receive any emails from Ascend.</p>
                   <label className="flex items-center gap-3 cursor-pointer">
                     <button
                       onClick={() => setEmailUnsubscribed(!emailUnsubscribed)}
@@ -683,7 +869,7 @@ const SettingsModal = ({
                     >
                       <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${emailUnsubscribed ? 'left-6' : 'left-1'}`} />
                     </button>
-                    <span className="text-sm text-slate-600 dark:text-slate-400">
+                    <span className="text-sm text-slate-600 dark:text-slate-300">
                       Unsubscribe from emails: {emailUnsubscribed ? 'Yes' : 'No'}
                     </span>
                   </label>
@@ -692,7 +878,7 @@ const SettingsModal = ({
                 {/* Delete Account */}
                 <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Delete Account</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Deleting your account will remove all of your data from our servers.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-300 mb-3">Deleting your account will remove all of your data from our servers.</p>
                   <button className="text-sm text-red-500 hover:text-red-600 font-medium hover:underline">
                     Click here to delete your account
                   </button>
@@ -707,11 +893,11 @@ const SettingsModal = ({
                   <button className="px-5 py-2.5 bg-gradient-to-r from-[#6F00FF] to-purple-600 hover:from-[#5800cc] hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40">
                     Upgrade to Lifetime
                   </button>
-                  <button className="px-5 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  <button className="px-5 py-2.5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     Orders Portal
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-slate-500 dark:text-slate-300">
                   You are currently on the Free plan. Upgrade to unlock all features.
                 </p>
               </div>
@@ -723,7 +909,7 @@ const SettingsModal = ({
                 {/* Time Format */}
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Time Format</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Choose how times are displayed in your calendar.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-300 mb-3">Choose how times are displayed in your calendar.</p>
                   <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
                     <button
                       onClick={() => setLocalSettings({ ...localSettings, timeFormat: '12h' })}
@@ -743,7 +929,7 @@ const SettingsModal = ({
                 {/* Timezone */}
                 <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Timezone</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Your calendar events will be displayed in this timezone.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-300 mb-3">Your calendar events will be displayed in this timezone.</p>
                   <div className="relative w-full max-w-xs">
                     <select
                       value={localSettings.timezone}
@@ -769,18 +955,18 @@ const SettingsModal = ({
                 {/* Google Calendar */}
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Google Calendar</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Sync your schedule with Google Calendar for two-way sync.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-300 mb-3">Sync your schedule with Google Calendar for two-way sync.</p>
 
                   {/* Status indicator */}
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Status:</span>
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-300">Status:</span>
                     {googleAccount ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 dark:text-purple-400">
+                        <div className="w-2 h-2 rounded-full bg-[#6F00FF]"></div>
                         Synced
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-300">
                         <div className="w-2 h-2 rounded-full bg-slate-400"></div>
                         Not Connected
                       </span>
@@ -788,41 +974,52 @@ const SettingsModal = ({
                   </div>
 
                   {googleAccount ? (
-                    <div className="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                    <div className="flex flex-col p-4 gap-3 bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-200/50 dark:border-purple-800/30">
                       <div className="flex items-center gap-3">
                         {googleAccount.picture ? (
                           <img
                             src={googleAccount.picture}
                             alt={googleAccount.name || googleAccount.email}
-                            className="w-10 h-10 rounded-full"
+                            className="w-10 h-10 rounded-full ring-2 ring-purple-200 dark:ring-purple-800/50 shrink-0"
                             onError={(e) => {
-                              // Fallback if image fails to load
                               e.currentTarget.style.display = 'none';
                               e.currentTarget.nextElementSibling?.classList.remove('hidden');
                             }}
                           />
                         ) : null}
-                        <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-semibold ${googleAccount.picture ? 'hidden' : ''}`}>
+                        <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-semibold ring-2 ring-purple-200 dark:ring-purple-800/50 shrink-0 ${googleAccount.picture ? 'hidden' : ''}`}>
                           <User size={20} />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">{googleAccount.name}</p>
-                          <p className="text-xs text-emerald-600 dark:text-emerald-400">{googleAccount.email}</p>
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <p className="text-sm font-semibold text-purple-900 dark:text-purple-100 truncate">{googleAccount.name}</p>
+                          <p className="text-xs stroke-gradient dark:text-purple-400 truncate">{googleAccount.email}</p>
                         </div>
                       </div>
-                      <button
-                        onClick={handleDisconnectGoogle}
-                        className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-sm font-medium"
-                      >
-                        <Unlink size={16} />
-                        Disconnect
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href="https://calendar.google.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-purple-500/10 stroke-gradient dark:text-purple-300 border border-purple-200 dark:border-purple-800/50 hover:bg-purple-50 dark:hover:bg-purple-500/20 rounded-lg transition-all text-sm font-semibold whitespace-nowrap shadow-sm active:scale-95"
+                        >
+                          <Calendar size={16} />
+                          Open Calendar
+                        </a>
+                        <button
+                          onClick={handleDisconnectGoogle}
+                          className="flex items-center justify-center gap-2 px-3 py-2 text-slate-500 hover:text-red-600 dark:text-slate-300 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all text-sm font-medium whitespace-nowrap"
+                          title="Disconnect account"
+                        >
+                          <Unlink size={16} />
+                          Disconnect
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <button
                       onClick={handleConnectGoogle}
                       disabled={isGoogleConnecting || !googleApiReady}
-                      className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                      className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
                     >
                       {isGoogleConnecting ? (
                         <>
@@ -846,10 +1043,10 @@ const SettingsModal = ({
               </div>
             )}
           </div>
-        </div>
+        </div >
 
         {/* Footer with Save button and unsaved changes warning */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+        < div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50" >
           <div className="flex items-center justify-between">
             <div>
               {hasUnsavedChanges && (
@@ -862,7 +1059,7 @@ const SettingsModal = ({
             <div className="flex items-center gap-3">
               <button
                 onClick={handleClose}
-                className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+                className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
               >
                 Cancel
               </button>
@@ -878,9 +1075,9 @@ const SettingsModal = ({
               </button>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+        </div >
+      </div >
+    </div >
   );
 };
 
@@ -952,6 +1149,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [newWeight, setNewWeight] = useState('');
   const [weightDate, setWeightDate] = useState(formatDateISO(new Date()));
   const [isWeightCalendarOpen, setIsWeightCalendarOpen] = useState(false);
+  const [isWeightListOpen, setIsWeightListOpen] = useState(false);
   const [weightCalendarViewDate, setWeightCalendarViewDate] = useState(new Date());
   const weightCalendarRef = useRef<HTMLDivElement>(null);
 
@@ -1191,7 +1389,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               || laterData.find(t => String(t.id) === taskIdStr);
 
             if (linkedTask && linkedTask.completed !== block.completed) {
-              console.log(`🔄 Syncing block "${block.title}": ${block.completed} → ${linkedTask.completed}`);
+
               return { ...block, completed: linkedTask.completed };
             }
           }
@@ -1333,7 +1531,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         const localBlocks = prev.filter(b => {
           // If this block has a googleEventId that's in the incoming events, remove it
           if (b.googleEventId && incomingGoogleEventIds.has(b.googleEventId)) {
-            console.log('🗑️ Removing old version of:', b.title, 'at', b.start);
+
             return false;
           }
           // Keep non-Google blocks or user-created blocks
@@ -1351,7 +1549,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         eventsToReplace.forEach(old => {
           const newEvent = googleBlocks.find(g => g.googleEventId === old.googleEventId);
           if (newEvent && old.start !== newEvent.start) {
-            console.log(`🔄 Moving "${old.title}" from ${old.start}:00 to ${newEvent.start}:00`);
+
           }
         });
 
@@ -1370,7 +1568,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           const oldBlock = oldBlocksByGoogleId.get(g.googleEventId as string) as ScheduleBlock | undefined;
           if (oldBlock) {
             // Merge: keep taskId, habitId, and other important properties from old block
-            console.log('✨ Preserving properties for:', g.title, '- taskId:', oldBlock.taskId, 'habitId:', oldBlock.habitId);
+
             return {
               ...g,
               taskId: oldBlock.taskId,
@@ -1387,15 +1585,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         const uniqueGoogleBlocks = processedGoogleBlocks.filter(g => {
           const signature = `${g.start}-${g.title}`;
           if (localBlockSignatures.has(signature)) {
-            console.log('🚫 Skipping Google event (Signature match):', g.title, 'at', g.start);
+
             return false;
           }
           return true;
         });
 
-        console.log('✅ Adding/Updating', uniqueGoogleBlocks.length, 'Google events');
-        console.log('📦 Keeping', localBlocks.length, 'local blocks');
-        console.log('📦 Keeping', existingGoogleBlocks.length, 'unchanged Google events');
+
 
         // Merge all blocks and remove any duplicates by ID
         const mergedBlocks = [...localBlocks, ...existingGoogleBlocks, ...uniqueGoogleBlocks];
@@ -1404,7 +1600,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         );
 
         if (dedupedBlocks.length < mergedBlocks.length) {
-          console.log(`🔧 Removed ${mergedBlocks.length - dedupedBlocks.length} duplicate blocks`);
+
         }
 
         return dedupedBlocks;
@@ -1447,11 +1643,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   useEffect(() => {
     const autoSync = async () => {
       if (googleAccount && isDataLoaded && !isCalendarSynced) {
-        console.log('Auto-syncing Google Calendar...');
+
         try {
           await loadGoogleEventsForDate(selectedDate);
           setIsCalendarSynced(true);
-          console.log('Auto-sync complete');
+
         } catch (error) {
           console.error('Auto-sync failed:', error);
         }
@@ -1552,12 +1748,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const getTodayString = () => formatDateISO(new Date());
 
   const isHabitScheduledForDay = (habit: Habit, date: Date) => {
-    // Habits appear every day from the creation date
-    const createdDate = new Date(habit.createdAt);
-    createdDate.setHours(0, 0, 0, 0);
+    // Habits appear every day from the start date (or creation date as fallback)
+    const startDateStr = habit.startDate || habit.createdAt;
+    const startDate = new Date(startDateStr);
+    startDate.setHours(0, 0, 0, 0);
     const checkDate = new Date(date);
     checkDate.setHours(0, 0, 0, 0);
-    return checkDate >= createdDate;
+    return checkDate >= startDate;
   };
   const isHabitCompletedOnDate = (habit: Habit, dateString: string) => habit.completedDates.includes(dateString);
 
@@ -1623,6 +1820,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     // Find current habit to determine new completion state
     const currentHabit = habits.find(h => h.id === habitId);
     if (!currentHabit) return;
+
+    // Validate that the date is on or after the habit's start date
+    if (!isDateEligibleForHabit(dateString, currentHabit.startDate)) {
+      setNotification({
+        type: 'info',
+        message: `Cannot mark habit before start date (${new Date(currentHabit.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})`
+      });
+      return;
+    }
 
     const isCurrentlyCompleted = currentHabit.completedDates.includes(dateString);
     const newCompleted = !isCurrentlyCompleted;
@@ -1722,7 +1928,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   };
 
   // Tag handlers
-  const handleCreateTag = (tagName: string, tagColor: string) => {
+  const handleCreateTag = async (tagName: string, tagColor: string) => {
     if (editingTag) {
       // Editing existing tag - update all tasks/habits that use this tag
       const oldTagName = editingTag.name;
@@ -1730,12 +1936,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       setUserTags(updatedTags);
       localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
 
-      // Update all tasks with the old tag
+      // Update all tasks with the old tag in UI
       setActiveTasks(prev => prev.map(t => t.tag === oldTagName ? { ...t, tag: tagName, tagColor: tagColor } : t));
       setLaterTasks(prev => prev.map(t => t.tag === oldTagName ? { ...t, tag: tagName, tagColor: tagColor } : t));
 
-      // Update all habits with the old tag
+      // Update all habits with the old tag in UI
       setHabits(prev => prev.map(h => h.tag === oldTagName ? { ...h, tag: tagName, tagColor: tagColor } : h));
+
+      // Persist cascading update to database
+      await updateTagNameAndColor(oldTagName, tagName, tagColor);
 
       setEditingTag(null);
     } else {
@@ -1771,8 +1980,24 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     setEditingTag(null);
   };
 
-  const handleOpenEditTagModal = (tag: { name: string; color: string }) => {
+  const handleDeleteTagByName = (tagName: string) => {
+    const updatedTags = userTags.filter(t => t.name !== tagName);
+    setUserTags(updatedTags);
+    localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
+
+    // Remove tag from all tasks
+    setActiveTasks(prev => prev.map(t => t.tag === tagName ? { ...t, tag: null, tagColor: null } : t));
+    setLaterTasks(prev => prev.map(t => t.tag === tagName ? { ...t, tag: null, tagColor: null } : t));
+
+    // Remove tag from all habits
+    setHabits(prev => prev.map(h => h.tag === tagName ? { ...h, tag: undefined, tagColor: undefined } : h));
+  };
+
+
+  const handleOpenEditTagModal = (tag: { name: string; color: string }, contextId?: { taskId?: number | string, habitId?: string }) => {
     setEditingTag(tag);
+    if (contextId?.taskId) setTagModalTaskId(contextId.taskId);
+    if (contextId?.habitId) setTagModalHabitId(contextId.habitId);
     setIsTagModalOpen(true);
   };
 
@@ -1846,7 +2071,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         await updateScheduleBlock(String(block.id), { completed: newCompleted });
       }
 
-      console.log(`✅ Task ${id} and associated blocks synced to completed: ${newCompleted}`);
+
     } catch (err) {
       console.error('Failed to sync completion to database:', err);
     }
@@ -1942,6 +2167,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     setNotification({ type: 'success', message: `Weight logged: ${weight} kg` });
   };
 
+  const handleDeleteWeightEntry = (index: number) => {
+    const updatedEntries = weightEntries.filter((_, i) => i !== index);
+    setWeightEntries(updatedEntries);
+    localStorage.setItem('ascend_weight_entries', JSON.stringify(updatedEntries));
+    setNotification({ type: 'success', message: 'Weight entry deleted' });
+  };
+
   // Calendar date selection
   const handleDateSelect = async (day: number) => {
     const newDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
@@ -2019,22 +2251,22 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       const uniqueGoogleBlocks = googleBlocks.filter(g => {
         // 1. Exact ID Match
         if (g.googleEventId && dbBlockGoogleIds.has(g.googleEventId)) {
-          console.log('❌ FILTERED (ID match):', g.title, 'Google ID:', g.googleEventId);
+
           return false;
         }
 
         // 2. Signature Match
         const signature = `${g.start}-${g.title}`;
         if (dbBlockSignatures.has(signature)) {
-          console.log('❌ FILTERED (Signature match):', g.title, 'at', g.start, 'Signature:', signature);
+
           return false;
         }
 
-        console.log('✅ KEEPING Google event:', g.title, 'at', g.start, 'Signature:', signature);
+
         return true;
       });
 
-      console.log('📊 Final schedule: DB blocks:', blocksData.length, 'Unique Google blocks:', uniqueGoogleBlocks.length, 'Habit blocks:', habitBlocks.length);
+
       setSchedule([...blocksData, ...uniqueGoogleBlocks, ...habitBlocks]);
     } catch (error) {
       console.error('Failed to load schedule for date:', error);
@@ -2453,7 +2685,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     }
 
     // Save to database
-    await moveTask(String(task.id), targetListId);
+    await moveTask(String(task.id), targetListId as 'active' | 'later');
 
     setDraggedItem(null);
   };
@@ -2737,7 +2969,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 dark:bg-[#0B1121] text-slate-900 dark:text-slate-100 overflow-hidden">
+    <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden">
+      <IconsGradientDef />
       {/* Toast Notification */}
       {notification && (
         <div
@@ -2764,8 +2997,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       {/* DEBUGGER UI */}
       {/* DEBUGGER UI REMOVED */}
 
+
+
       {/* App Header */}
-      <header className="relative h-14 bg-white dark:bg-[#0B1121] border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 z-20 shrink-0">
+      <header className="relative h-14 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 z-20 shrink-0">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="flex items-center gap-2 group cursor-pointer">
             <div className="w-8 h-8 rounded-lg overflow-hidden shadow-md shadow-violet-600/20">
@@ -2774,67 +3009,88 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 <path d="M 65.148438 215.859375 L 81.007812 225.375 L 150.804688 136.546875 L 184.117188 176.992188 L 311.011719 0.136719 L 385.5625 84.199219 L 415.699219 66.785156 L 517.222656 177.023438 L 571.117188 155.582031 L 713.113281 288.820312 L 567.582031 187.308594 L 511.699219 214.703125 C 511.699219 214.703125 510.898438 308.683594 510.898438 312.648438 C 510.898438 316.613281 414.082031 179.410156 414.082031 179.410156 L 414.082031 278.542969 L 315.398438 49.339844 L 124.363281 332.972656 L 166.761719 225.765625 L 133.746094 252.339844 L 146.972656 192.921875 L 85.773438 259.898438 L 64.351562 245.617188 L 0.910156 288.839844 Z" fill="white" transform="translate(20, 120) scale(0.65)" />
               </svg>
             </div>
-            <span className="font-bold text-lg tracking-tight dark:text-slate-100">Ascend<span className="text-[#6F00FF]">.</span></span>
+            <span className="font-bold text-lg tracking-tight dark:text-slate-100">Ascend<span className="stroke-gradient text-transparent bg-clip-text bg-gradient-to-r from-[#6F00FF] to-purple-600">.</span></span>
           </button>
         </div>
 
         {/* Center Navigation Tabs */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center bg-slate-100 dark:bg-white/5 rounded-full p-1 border border-transparent dark:border-white/5">
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center bg-slate-100 dark:bg-white/5 rounded-full p-1 border border-transparent dark:border-slate-800">
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'dashboard' ? 'bg-white dark:bg-white/10 text-[#6F00FF] dark:text-violet-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTab === 'dashboard' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
           >
-            <LayoutDashboard size={16} /> Dashboard
+            <LayoutDashboard size={18} style={activeTab === 'dashboard' ? { stroke: 'url(#active-tab-gradient-def)' } : undefined} />
+            <span>Dashboard</span>
           </button>
           <button
             onClick={() => setActiveTab('timebox')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'timebox' ? 'bg-white dark:bg-white/10 text-[#6F00FF] dark:text-violet-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTab === 'timebox' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
           >
-            <Clock size={16} /> Timebox
+            <Clock size={18} style={activeTab === 'timebox' ? { stroke: 'url(#active-tab-gradient-def)' } : undefined} />
+            <span>Timebox</span>
           </button>
           <button
             onClick={() => setActiveTab('habittracker')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'habittracker' ? 'bg-white dark:bg-white/10 text-[#6F00FF] dark:text-violet-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTab === 'habittracker' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
           >
-            <Flame size={16} /> Habits
+            <Flame size={18} style={activeTab === 'habittracker' ? { stroke: 'url(#active-tab-gradient-def)' } : undefined} />
+            <span>Habits</span>
           </button>
 
 
         </div>
 
         <div className="flex items-center gap-3">
-          <button onClick={toggleTheme} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-            {isDark ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
+          <motion.button
+            onClick={toggleTheme}
+            whileHover={{ scale: 1.1, rotate: 15 }}
+            whileTap={{ scale: 0.9, rotate: -30 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
+            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={isDark ? 'dark' : 'light'}
+                initial={{ y: -20, opacity: 0, rotate: -90 }}
+                animate={{ y: 0, opacity: 1, rotate: 0 }}
+                exit={{ y: 20, opacity: 0, rotate: 90 }}
+                transition={{ duration: 0.2 }}
+              >
+                {isDark ? <Sun size={20} className="stroke-gradient" /> : <Moon size={20} className="stroke-gradient" />}
+              </motion.div>
+            </AnimatePresence>
+          </motion.button>
 
           <button onClick={() => {
             setSettingsInitialTab('account');
             setIsSettingsOpen(true);
           }} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors" title="Settings">
-            <Settings size={18} />
+            <Settings size={18} className="stroke-gradient" />
           </button>
         </div>
-      </header>
+      </header >
 
       {/* Settings Modal */}
-      {isSettingsOpen && (
-        <SettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          settings={settings}
-          setSettings={setSettings}
-          googleAccount={googleAccount}
-          isGoogleConnecting={isGoogleConnecting}
-          googleApiReady={googleApiReady}
-          handleConnectGoogle={handleConnectGoogle}
-          handleDisconnectGoogle={handleDisconnectGoogle}
-          isDark={isDark}
-          toggleTheme={toggleTheme}
-          user={user}
-          onLogout={onLogout}
-          initialTab={settingsInitialTab}
-        />
-      )}
+      {
+        isSettingsOpen && (
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            settings={settings}
+            setSettings={setSettings}
+            googleAccount={googleAccount}
+            isGoogleConnecting={isGoogleConnecting}
+            googleApiReady={googleApiReady}
+            handleConnectGoogle={handleConnectGoogle}
+            handleDisconnectGoogle={handleDisconnectGoogle}
+            isDark={isDark}
+            toggleTheme={toggleTheme}
+            user={user}
+            onLogout={onLogout}
+            initialTab={settingsInitialTab}
+          />
+        )
+      }
 
       {/* Tag Modal */}
       <TagModal
@@ -2846,711 +3102,799 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       />
 
       {/* Main Content Area */}
-      {activeTab === 'dashboard' && (
-        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#0B1121] animate-fade-in-up">
-          <div className="max-w-7xl mx-auto p-6 space-y-6">
+      {
+        activeTab === 'dashboard' && (
+          <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 animate-fade-in-up">
+            <div className="max-w-7xl mx-auto p-6 space-y-6">
 
 
 
-            {/* Row 1: Tasks & Weight */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-              {/* Today's Tasks */}
-              <div className="bg-white dark:bg-[#151e32] rounded-3xl p-6 shadow-sm dark:shadow-lg dark:shadow-black/20 border border-slate-200 dark:border-white/5 hover:shadow-md transition-shadow flex flex-col h-full">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-violet-100 dark:bg-violet-500/10 p-2 rounded-xl">
-                      <ListTodo className="text-[#6F00FF] dark:text-violet-400" size={20} />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Tasks</h2>
-                      <p className="text-slate-500 dark:text-slate-400 text-sm hidden sm:block">Focus on today</p>
-                    </div>
-                  </div>
-                  <span className="bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 px-3 py-1 rounded-full text-xs font-bold">
-                    {activeTasks.filter(t => t.completed).length}/{activeTasks.length}
-                  </span>
-                </div>
 
-                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar mb-6 flex-1">
-                  <AnimatePresence mode="popLayout">
-                    {activeTasks.length === 0 ? (
-                      <motion.div
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                        className="text-center py-10"
-                      >
-                        <div className="w-12 h-12 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <Check size={20} className="text-slate-300 dark:text-slate-600" />
-                        </div>
-                        <p className="text-slate-400 dark:text-slate-500 text-sm">All cleared! Time to relax.</p>
-                      </motion.div>
-                    ) : (
-                      activeTasks.map(task => (
-                        <motion.div
-                          key={task.id}
-                          layout
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.95 }}
-                          whileHover={{ scale: 1.02, backgroundColor: 'rgba(255, 255, 255, 0.03)' }}
-                          onClick={() => handleToggleComplete(task.id)}
-                          className="flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer"
-                        >
-                          {/* Custom Checkbox */}
-                          <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all duration-300 flex-shrink-0 ${task.completed
-                            ? 'bg-[#6F00FF] border-[#6F00FF] shadow-lg shadow-violet-500/20 scale-110'
-                            : 'border-slate-300 dark:border-slate-600 group-hover:border-[#6F00FF] dark:group-hover:border-violet-400'
-                            }`}>
-                            {task.completed && <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}><Check size={12} className="text-white" strokeWidth={3} /></motion.div>}
-                          </div>
 
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-semibold truncate transition-all ${task.completed ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200'
-                              }`}>
-                              {task.title}
-                            </p>
-                            {(task.tag || task.time) && (
-                              <div className="flex items-center gap-2 mt-0.5">
-                                {task.time && <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium flex items-center gap-1"><Clock size={10} /> {task.time}</span>}
-                                {task.tag && <span className="text-[10px] px-1.5 rounded-full font-bold text-white relative h-4 flex items-center" style={{ backgroundColor: task.tagColor || '#6F00FF' }}>{task.tag}</span>}
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      ))
-                    )}
-                  </AnimatePresence>
-                </div>
+              {/* Row 1: Tasks & Weight */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-              </div>
-
-              {/* Weight Tracker */}
-              <div className="lg:col-span-2">
-                <div className="bg-white dark:bg-[#151e32] rounded-3xl shadow-sm dark:shadow-lg dark:shadow-black/20 border border-slate-200 dark:border-white/5 h-full overflow-hidden hover:shadow-md transition-shadow">
-                  {/* Header */}
-                  <div className="p-6 pb-2">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-fuchsia-100 dark:bg-fuchsia-500/10 p-2 rounded-xl">
-                          <Activity className="text-fuchsia-600 dark:text-fuchsia-400" size={20} />
-                        </div>
-                        <div>
-                          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Weight Tracker</h2>
-                          <p className="text-slate-500 dark:text-slate-400 text-sm">Track your progress</p>
-                        </div>
-                      </div>
-                      {weightEntries.length > 0 && (
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <div className="text-xs text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider">Current</div>
-                            <div className="text-2xl font-bold text-slate-800 dark:text-white">{weightEntries[weightEntries.length - 1]?.weight} <span className="text-lg text-slate-400 dark:text-slate-500">kg</span></div>
-                          </div>
-                          {weightEntries.length > 1 && (
-                            <div className={`px-3 py-1.5 rounded-lg font-bold text-sm ${weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight
-                              ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
-                              : 'bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400'
-                              }`}>
-                              {weightEntries[weightEntries.length - 1].weight < weightEntries[0].weight ? '↓' : '↑'} {Math.abs(weightEntries[weightEntries.length - 1].weight - weightEntries[0].weight).toFixed(1)} kg
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="h-[220px] relative">
-                      <WeightTrendChart entries={weightEntries} height={220} />
-                    </div>
-                  </div>
-
-                  {/* Footer Input */}
-                  <div className="p-4 bg-slate-50 dark:bg-[#0B1121]/50 border-t border-slate-100 dark:border-white/5 flex gap-3">
-                    {/* Custom Calendar Button */}
-                    <div ref={weightCalendarRef} className="relative">
-                      <button
-                        onClick={() => setIsWeightCalendarOpen(!isWeightCalendarOpen)}
-                        className="px-4 py-2.5 bg-white dark:bg-[#0B1121] border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:ring-2 focus:ring-fuchsia-500 outline-none w-40 dark:text-slate-200 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                      >
-                        <span>{new Date(weightDate).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })}</span>
-                        <Calendar size={16} className="text-slate-400" />
-                      </button>
-
-                      {/* Calendar Popup */}
-                      {isWeightCalendarOpen && (
-                        <div className="absolute bottom-full mb-2 left-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 z-50 min-w-[280px]">
-                          <div className="flex items-center justify-between mb-4">
-                            <button
-                              onClick={() => {
-                                const newDate = new Date(weightCalendarViewDate);
-                                newDate.setMonth(newDate.getMonth() - 1);
-                                setWeightCalendarViewDate(newDate);
-                              }}
-                              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                            >
-                              <ChevronLeft size={18} className="text-slate-500" />
-                            </button>
-                            <span className="font-semibold text-slate-800 dark:text-slate-200">
-                              {weightCalendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                            </span>
-                            <button
-                              onClick={() => {
-                                const newDate = new Date(weightCalendarViewDate);
-                                newDate.setMonth(newDate.getMonth() + 1);
-                                setWeightCalendarViewDate(newDate);
-                              }}
-                              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                            >
-                              <ChevronRight size={18} className="text-slate-500" />
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-7 gap-1 mb-2">
-                            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                              <div key={day} className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 py-1">{day}</div>
-                            ))}
-                          </div>
-                          <div className="grid grid-cols-7 gap-1">
-                            {Array.from({ length: getFirstDayOfMonth(weightCalendarViewDate.getFullYear(), weightCalendarViewDate.getMonth()) }).map((_, i) => (
-                              <div key={`empty-${i}`} className="w-8 h-8" />
-                            ))}
-                            {Array.from({ length: getDaysInMonth(weightCalendarViewDate.getFullYear(), weightCalendarViewDate.getMonth()) }).map((_, i) => {
-                              const day = i + 1;
-                              const date = new Date(weightCalendarViewDate.getFullYear(), weightCalendarViewDate.getMonth(), day);
-                              const dateStr = formatDateISO(date);
-                              const isSelected = dateStr === weightDate;
-                              const isTodayDate = isToday(date);
-                              return (
-                                <button
-                                  key={day}
-                                  onClick={() => {
-                                    setWeightDate(dateStr);
-                                    setIsWeightCalendarOpen(false);
-                                  }}
-                                  className={`w-8 h-8 rounded-full text-sm font-semibold transition-all flex items-center justify-center ${isSelected
-                                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                                    : isTodayDate
-                                      ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
-                                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'
-                                    }`}
-                                >
-                                  {day}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <button
-                            onClick={() => {
-                              const today = formatDateISO(new Date());
-                              setWeightDate(today);
-                              setWeightCalendarViewDate(new Date());
-                              setIsWeightCalendarOpen(false);
-                            }}
-                            className="mt-3 w-full py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg"
-                          >
-                            Today
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 flex gap-2">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={newWeight}
-                        onChange={(e) => setNewWeight(e.target.value)}
-                        placeholder="Weight (kg)"
-                        className="flex-1 px-4 py-2.5 bg-white dark:bg-[#0B1121] border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:ring-2 focus:ring-fuchsia-500 outline-none dark:text-slate-200"
-                      />
-                      <motion.button
-                        onClick={handleAddWeight}
-                        className="px-6 py-2.5 bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white font-bold rounded-2xl transition-all shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30"
-                        whileHover={{ scale: 1.05, y: -1 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        Log
-                      </motion.button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Row 2: Habit Progress & Interactive Habits */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-              {/* Today's Habits Interactive List */}
-              <div className="bg-white dark:bg-[#151e32] rounded-3xl p-6 shadow-sm dark:shadow-lg dark:shadow-black/20 border border-slate-200 dark:border-white/5 lg:col-span-2 flex flex-col hover:shadow-md transition-shadow">
-                {/* Decorative background element */}
-                <div className="absolute -top-10 -right-10 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl group-hover:bg-purple-500/10 transition-colors"></div>
-
-                <div className="relative z-10 h-full flex flex-col">
-                  <div className="flex items-center justify-between mb-4">
+                {/* Today's Tasks */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm dark:shadow-lg dark:shadow-black/20 border border-slate-200 dark:border-slate-800 hover:shadow-md transition-shadow flex flex-col h-full">
+                  <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
-                      <div className="bg-emerald-100 dark:bg-emerald-500/10 p-2 rounded-xl">
-                        <Flame className="text-emerald-600 dark:text-emerald-400" size={20} />
+                      <div className="bg-slate-50 dark:bg-slate-900 p-2 rounded-xl">
+                        <ListTodo className="text-purple-600 dark:text-violet-400" size={20} />
                       </div>
                       <div>
-                        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Today's Habits</h2>
-                        <p className="text-slate-500 dark:text-slate-400 text-sm">{getTodaysHabits().filter(h => isHabitCompletedOnDate(h, getTodayString())).length} / {getTodaysHabits().length} completed</p>
+                        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Todays Tasks</h2>
+                        <p className="text-slate-500 dark:text-slate-300 text-sm hidden sm:block">
+                          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                        </p>
                       </div>
                     </div>
-                  </div>
-
-                  {getTodaysHabits().length > 0 ? (
-                    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-                      <AnimatePresence>
-                        {getTodaysHabits().map(habit => {
-                          const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
-                          return (
-                            <motion.button
-                              key={habit.id}
-                              layout
-                              onClick={() => toggleHabitCompletion(habit.id)}
-                              whileHover={{ scale: 1.05, y: -2 }}
-                              whileTap={{ scale: 0.95 }}
-                              className={`flex-shrink-0 w-32 p-4 rounded-[20px] border transition-all text-left relative overflow-hidden group shadow-sm ${isCompleted
-                                ? 'bg-emerald-50/80 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30'
-                                : 'bg-white dark:bg-white/5 border-slate-100 dark:border-white/5 hover:border-purple-300 dark:hover:border-purple-500/30 hover:shadow-xl hover:shadow-purple-500/10'
-                                }`}
-                            >
-                              {/* Glow effect on hover */}
-                              <div className="absolute inset-0 bg-gradient-to-br from-[#6F00FF]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                              <div className="flex justify-between items-start mb-2 relative z-10">
-                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-500 ${isCompleted
-                                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/40 rotate-0'
-                                  : 'bg-slate-100 dark:bg-white/10 text-slate-400 dark:text-slate-500 rotate-[-10deg] group-hover:rotate-0 group-hover:bg-purple-50 dark:group-hover:bg-purple-500/20 group-hover:text-purple-600'
-                                  }`}>
-                                  <Check size={16} strokeWidth={3} className={isCompleted ? 'scale-110' : 'scale-100'} />
-                                </div>
-                                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1 bg-slate-100/50 dark:bg-black/30 px-1.5 py-0.5 rounded-lg backdrop-blur-sm">
-                                  <Flame size={11} className={isCompleted ? 'text-orange-500 animate-pulse' : 'text-slate-400'} fill={isCompleted ? 'currentColor' : 'none'} />
-                                  {habit.currentStreak}
-                                </div>
-                              </div>
-                              <h3 className={`font-bold text-sm leading-tight transition-colors relative z-10 ${isCompleted ? 'text-emerald-800 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-200 group-hover:text-purple-600'}`}>
-                                {habit.name}
-                              </h3>
-
-                              <div className="mt-1 relative z-10 flex items-center gap-1">
-                                <span className={`text-[9px] uppercase tracking-wider font-semibold ${isCompleted ? 'text-emerald-600/70 dark:text-emerald-400/70' : 'text-slate-400 dark:text-slate-500'}`}>
-                                  {isCompleted ? 'Done' : 'Pending'}
-                                </span>
-                              </div>
-
-                              {/* Progress bar effect for completed */}
-                              {isCompleted && (
-                                <motion.div
-                                  initial={{ width: 0 }}
-                                  animate={{ width: '100%' }}
-                                  className="absolute bottom-0 left-0 h-1.5 bg-emerald-500/50"
-                                />
-                              )}
-                            </motion.button>
-                          );
-                        })}
-                      </AnimatePresence>
-                    </div>
-                  ) : (
-                    <div className="flex-1 flex items-center justify-center text-slate-400 dark:text-slate-500 text-sm bg-slate-50 dark:bg-white/5 rounded-2xl border border-dashed border-slate-200 dark:border-white/10 py-6">
-                      No habits scheduled for today
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Weekly Progress Card */}
-              <div className="bg-white dark:bg-[#151e32] rounded-3xl p-6 shadow-sm dark:shadow-xl dark:shadow-black/20 border border-slate-200 dark:border-white/5 hover:shadow-md transition-all group overflow-hidden relative">
-                {/* Decorative background element */}
-                <div className="absolute -top-10 -right-10 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl group-hover:bg-purple-500/10 transition-colors"></div>
-
-                <div className="relative z-10 h-full flex flex-col">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="bg-violet-100 dark:bg-violet-500/10 p-2 rounded-xl">
-                      <TrendingUp className="text-[#6F00FF] dark:text-violet-400" size={20} />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Weekly Progress</h2>
-                      <p className="text-slate-500 dark:text-slate-400 text-sm">Consistency across habits</p>
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const globalStats = habits.reduce((acc, h) => {
-                      const weekData = getWeeklyData(h);
-                      acc.scheduled += weekData.filter(d => d.isScheduled).length;
-                      acc.completed += weekData.filter(d => d.isScheduled && d.isCompleted).length;
-                      return acc;
-                    }, { scheduled: 0, completed: 0 });
-                    const globalProgress = globalStats.scheduled > 0 ? (globalStats.completed / globalStats.scheduled) * 100 : 0;
-
-                    return (
-                      <div className="flex-1 flex items-center gap-4">
-                        <div className="flex-1 space-y-4">
-                          <div>
-                            <div className="flex items-end gap-1 mb-1">
-                              <span className="text-3xl font-black text-slate-800 dark:text-white leading-none">{Math.round(globalProgress)}%</span>
-                              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pb-0.5">Goal Reach</span>
-                            </div>
-                            {/* Progress bar */}
-                            <div className="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-gradient-to-r from-[#6F00FF] to-fuchsia-500 rounded-full transition-all duration-1000"
-                                style={{ width: `${globalProgress}%` }}
-                              ></div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <div className="px-2 py-1 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
-                              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">{globalStats.completed}/{globalStats.scheduled} Done</span>
-                            </div>
-                            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 italic">this week</span>
-                          </div>
-                        </div>
-
-                        <div className="shrink-0 relative">
-                          {/* Glow behind flame */}
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-orange-500/20 rounded-full blur-xl animate-pulse"></div>
-                          <StreakFlame
-                            progressPercentage={globalProgress}
-                            streakCount={0}
-                            size={72}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-
-            {/* Consistency/Streak View */}
-            <div className="pt-6">
-              <ConsistencyCard habits={habits} />
-            </div>
-          </div>
-        </div>
-      )}{activeTab === 'habittracker' && (<>
-        <div className="flex-1 overflow-hidden bg-gradient-to-br from-slate-50 via-purple-50/20 to-slate-50 dark:from-[#0B1121] dark:via-purple-950/10 dark:to-[#0B1121] animate-fade-in-up">
-          <div className="h-full overflow-y-auto">
-            <div className="max-w-5xl mx-auto p-8 space-y-8">
-
-              {/* Header with FAB */}
-              <div className="flex items-start justify-between">
-                <div>
-                  <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-2">
-                    Habit Tracker
-                  </h1>
-                  <p className="text-slate-500 dark:text-slate-400 text-base">Build consistency, one day at a time</p>
-                </div>
-                {/* Floating Action Button */}
-                <motion.button
-                  onClick={() => setIsAddHabitOpen(true)}
-                  className="flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white rounded-2xl font-bold hover:shadow-2xl hover:shadow-purple-500/40 transition-all"
-                  whileHover={{ scale: 1.05, y: -2 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Plus size={20} strokeWidth={2.5} /> New Habit
-                </motion.button>
-              </div>
-
-
-
-
-
-              {/* Today's Habits */}
-              <div>
-                <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
-                      <Zap size={18} className="text-white" />
-                    </div>
-                    Habits
-                    <span className="text-sm font-normal text-slate-400 ml-2">
-                      {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                    <span className="bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 px-3 py-1 rounded-full text-xs font-bold">
+                      {activeTasks.filter(t => t.completed).length}/{activeTasks.length}
                     </span>
-                  </h2>
+                  </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setHabitWeekOffset(p => p - 1)}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-purple-600 transition-colors"
-                    >
-                      <ChevronLeft size={18} />
-                    </button>
-                    <div className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-lg font-bold min-w-[80px] text-center">
-                      Week {(() => {
-                        const d = new Date();
-                        d.setDate(d.getDate() + habitWeekOffset * 7);
-                        return getWeekNumber(d);
-                      })()}
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar mb-6 flex-1">
+                    <AnimatePresence mode="popLayout">
+                      {activeTasks.length === 0 ? (
+                        <motion.div
+                          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                          className="text-center py-10"
+                        >
+                          <div className="w-12 h-12 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <Check size={20} className="text-slate-300 dark:text-slate-600" />
+                          </div>
+                          <p className="text-slate-400 dark:text-slate-500 text-sm">All cleared! Time to relax.</p>
+                        </motion.div>
+                      ) : (
+                        activeTasks.map(task => (
+                          <motion.div
+                            key={task.id}
+                            layout
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            whileHover={{ scale: 1.02, backgroundColor: 'rgba(255, 255, 255, 0.03)' }}
+                            onClick={() => handleToggleComplete(task.id)}
+                            className="flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer"
+                          >
+                            {/* Custom Checkbox */}
+                            <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all duration-300 flex-shrink-0 ${task.completed
+                              ? 'bg-[#6F00FF] border-[#6F00FF] shadow-lg shadow-violet-500/20 scale-110'
+                              : 'border-slate-300 dark:border-slate-700 group-hover:border-[#6F00FF] dark:group-hover:border-violet-400'
+                              }`}>
+                              {task.completed && <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}><Check size={12} className="text-white" strokeWidth={3} /></motion.div>}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm font-semibold truncate transition-all ${task.completed ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200'
+                                }`}>
+                                {task.title}
+                              </p>
+                              {(task.tag || task.time) && (
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  {task.time && <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium flex items-center gap-1"><Clock size={10} /> {task.time}</span>}
+                                  {task.tag && <span className="text-[10px] px-1.5 rounded-full font-bold text-white relative h-4 flex items-center" style={{ backgroundColor: task.tagColor || '#6F00FF' }}>{task.tag}</span>}
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        ))
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                </div>
+
+                {/* Weight Tracker */}
+                <div className="lg:col-span-2">
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm dark:shadow-lg dark:shadow-black/20 border border-slate-200 dark:border-slate-800 h-full hover:shadow-md transition-shadow overflow-hidden">
+                    {/* Header */}
+                    <div className="p-6 pb-2">
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl">
+                            <Activity className="text-purple-600 dark:text-violet-400" size={20} />
+                          </div>
+                          <div>
+                            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Weight Tracker</h2>
+                            <p className="text-slate-500 dark:text-slate-300 text-sm">Track your progress</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          {weightEntries.length > 0 && (
+                            <div className="flex items-center gap-3">
+                              <div className="text-right flex flex-col justify-center">
+
+                                <div className="text-2xl font-bold text-slate-800 dark:text-white leading-none">{weightEntries[weightEntries.length - 1]?.weight} <span className="text-lg text-slate-400 dark:text-slate-500">kg</span></div>
+                              </div>
+                              {weightEntries.length > 1 && (
+                                <div className="h-full flex items-center">
+                                  {(() => {
+                                    const latest = weightEntries[weightEntries.length - 1];
+                                    const prev = weightEntries[weightEntries.length - 2];
+                                    const diff = latest.weight - prev.weight;
+                                    return (
+                                      <div className="px-2.5 py-1.5 rounded-lg font-bold text-sm bg-[#6F00FF]/10 text-purple-600 dark:bg-[#6F00FF]/20 dark:stroke-gradient flex items-center gap-0.5">
+                                        {diff < 0 ? '↓' : '↑'} {Math.abs(diff).toFixed(1)} kg
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          <button
+                            onClick={() => setIsWeightListOpen(!isWeightListOpen)}
+                            className={`p-2.5 rounded-xl transition-colors ${isWeightListOpen
+                              ? 'bg-[#6F00FF] text-white shadow-lg shadow-purple-500/20'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:stroke-gradient hover:bg-purple-50 dark:hover:bg-purple-900/20'
+                              }`}
+                            title={isWeightListOpen ? "Show Chart" : "Edit List"}
+                          >
+                            <List size={20} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="h-[220px] relative">
+                        {isWeightListOpen ? (
+                          <div className="absolute inset-0 bg-white dark:bg-slate-900 z-10 overflow-y-auto pr-1 custom-scrollbar">
+                            {(() => {
+                              const sortedEntries = [...weightEntries].sort((a, b) => b.date.localeCompare(a.date));
+                              return (
+                                <div className="space-y-1 p-1">
+                                  {sortedEntries.map((entry) => {
+                                    const originalIndex = weightEntries.findIndex(e => e.date === entry.date && e.weight === entry.weight);
+                                    return (
+                                      <div key={entry.date} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-purple-200 dark:hover:border-purple-500/30 transition-colors group">
+                                        <div className="flex items-center gap-3">
+                                          <div className="bg-slate-200 dark:bg-slate-700/50 p-2 rounded-lg text-slate-500 dark:text-slate-300">
+                                            <Calendar size={14} className="stroke-gradient" />
+                                          </div>
+                                          <div>
+                                            <div className="font-medium text-slate-700 dark:text-slate-200 text-sm">
+                                              {new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                          <span className="font-bold text-slate-800 dark:text-white">{entry.weight} kg</span>
+                                          <button
+                                            onClick={() => handleDeleteWeightEntry(originalIndex)}
+                                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                            title="Delete entry"
+                                          >
+                                            <Trash2 size={16} className="stroke-gradient" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  {sortedEntries.length === 0 && (
+                                    <div className="flex flex-col items-center justify-center h-full text-slate-400 pt-10">
+                                      <p>No entries yet</p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        ) : (
+                          <WeightTrendChart entries={weightEntries} height={220} />
+                        )}
+                      </div>
                     </div>
-                    <button
-                      onClick={() => setHabitWeekOffset(p => p + 1)}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-purple-600 transition-colors"
-                    >
-                      <ChevronRight size={18} />
-                    </button>
-                    {habitWeekOffset !== 0 && (
-                      <button
-                        onClick={() => setHabitWeekOffset(0)}
-                        className="text-[10px] ml-2 font-bold text-purple-500 hover:text-purple-600 uppercase tracking-tighter"
-                      >
-                        Today
-                      </button>
+
+                    {/* Footer Input */}
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950/50 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+                      {/* Custom Calendar Button */}
+                      <div ref={weightCalendarRef} className="relative">
+                        <button
+                          onClick={() => setIsWeightCalendarOpen(!isWeightCalendarOpen)}
+                          className="px-4 py-2.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:ring-2 focus:ring-fuchsia-500 outline-none w-40 dark:text-slate-200 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                        >
+                          <span>{new Date(weightDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                          <Calendar size={16} className="stroke-gradient" />
+                        </button>
+
+                        {/* Calendar Popup */}
+                        {isWeightCalendarOpen && (
+                          <div className="absolute bottom-full mb-2 left-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 z-50 min-w-[280px]">
+                            <div className="flex items-center justify-between mb-4">
+                              <button
+                                onClick={() => {
+                                  const newDate = new Date(weightCalendarViewDate);
+                                  newDate.setMonth(newDate.getMonth() - 1);
+                                  setWeightCalendarViewDate(newDate);
+                                }}
+                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                              >
+                                <ChevronLeft size={18} className="stroke-gradient" />
+                              </button>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                                {weightCalendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  const newDate = new Date(weightCalendarViewDate);
+                                  newDate.setMonth(newDate.getMonth() + 1);
+                                  setWeightCalendarViewDate(newDate);
+                                }}
+                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                              >
+                                <ChevronRight size={18} className="stroke-gradient" />
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-7 gap-1 mb-2">
+                              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                                <div key={day} className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 py-1">{day}</div>
+                              ))}
+                            </div>
+                            <div className="grid grid-cols-7 gap-1">
+                              {Array.from({ length: getFirstDayOfMonth(weightCalendarViewDate.getFullYear(), weightCalendarViewDate.getMonth()) }).map((_, i) => (
+                                <div key={`empty-${i}`} className="w-8 h-8" />
+                              ))}
+                              {Array.from({ length: getDaysInMonth(weightCalendarViewDate.getFullYear(), weightCalendarViewDate.getMonth()) }).map((_, i) => {
+                                const day = i + 1;
+                                const date = new Date(weightCalendarViewDate.getFullYear(), weightCalendarViewDate.getMonth(), day);
+                                const dateStr = formatDateISO(date);
+                                const isSelected = dateStr === weightDate;
+                                const isTodayDate = isToday(date);
+                                return (
+                                  <button
+                                    key={day}
+                                    onClick={() => {
+                                      setWeightDate(dateStr);
+                                      setIsWeightCalendarOpen(false);
+                                    }}
+                                    className={`w-8 h-8 rounded-full text-sm font-semibold transition-all flex items-center justify-center ${isSelected
+                                      ? 'bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white shadow-lg shadow-purple-500/30'
+                                      : isTodayDate
+                                        ? 'bg-purple-50 dark:bg-purple-500/10 stroke-gradient dark:text-purple-400 border border-purple-200 dark:border-purple-500/30'
+                                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'
+                                      }`}
+                                  >
+                                    {day}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <button
+                              onClick={() => {
+                                const today = formatDateISO(new Date());
+                                setWeightDate(today);
+                                setWeightCalendarViewDate(new Date());
+                                setIsWeightCalendarOpen(false);
+                              }}
+                              className="mt-3 w-full py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg"
+                            >
+                              Today
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 flex gap-2">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={newWeight}
+                          onChange={(e) => setNewWeight(e.target.value)}
+                          placeholder="Weight (kg)"
+                          className="flex-1 px-4 py-2.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:ring-2 focus:ring-fuchsia-500 outline-none dark:text-slate-200"
+                        />
+                        <motion.button
+                          onClick={handleAddWeight}
+                          className="px-6 py-2.5 bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white font-bold rounded-2xl transition-all shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30"
+                          whileHover={{ scale: 1.05, y: -1 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          Log
+                        </motion.button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 2: Habit Progress & Interactive Habits */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                {/* Today's Habits Interactive List */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm dark:shadow-lg dark:shadow-black/20 border border-slate-200 dark:border-slate-800 lg:col-span-2 flex flex-col hover:shadow-md transition-shadow">
+                  {/* Decorative background element */}
+                  <div className="absolute -top-10 -right-10 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl group-hover:bg-purple-500/10 transition-colors"></div>
+
+                  <div className="relative z-10 h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl">
+                          <Flame className="text-purple-600 dark:text-violet-400" size={20} />
+                        </div>
+                        <div>
+                          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Today's Habits</h2>
+                          <p className="text-slate-500 dark:text-slate-300 text-sm">{getTodaysHabits().filter(h => isHabitCompletedOnDate(h, getTodayString())).length} / {getTodaysHabits().length} completed</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {getTodaysHabits().length > 0 ? (
+                      <div className="flex gap-4 overflow-x-auto pb-2 pt-2 px-2 scrollbar-hide">
+                        <AnimatePresence>
+                          {getTodaysHabits().map(habit => {
+                            const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
+                            return (
+                              <motion.button
+                                key={habit.id}
+                                layout
+                                onClick={() => toggleHabitCompletion(habit.id, new Date())}
+                                whileHover={{ scale: 1.05, y: -2 }}
+                                whileTap={{ scale: 0.95 }}
+                                className={`flex-shrink-0 w-32 p-4 rounded-[20px] border transition-all text-left relative overflow-hidden group shadow-sm ${isCompleted
+                                  ? 'bg-[#6F00FF]/5 dark:bg-[#6F00FF]/10 border-[#6F00FF]/20 dark:border-[#6F00FF]/30'
+                                  : 'bg-white dark:bg-white/5 border-slate-100 dark:border-slate-800 hover:border-purple-300 dark:hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 hover:bg-purple-50/50 dark:hover:bg-purple-900/10'
+                                  }`}
+                              >
+                                {/* Glow effect on hover */}
+                                <div className="absolute inset-0 bg-gradient-to-br from-[#6F00FF]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <div className="flex justify-between items-start mb-2 relative z-10">
+                                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-500 ${isCompleted
+                                    ? 'bg-[#6F00FF] text-white shadow-lg shadow-[#6F00FF]/40 rotate-0'
+                                    : 'bg-slate-100 dark:bg-white/10 text-slate-400 dark:text-slate-500 group-hover:bg-purple-50 dark:group-hover:bg-purple-500/20 group-hover:text-purple-600'
+                                    }`}>
+                                    <Check size={16} strokeWidth={3} className={isCompleted ? 'text-white' : 'stroke-gradient'} />
+                                  </div>
+                                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-300 flex items-center gap-1 bg-slate-100/50 dark:bg-black/30 px-1.5 py-0.5 rounded-lg backdrop-blur-sm">
+                                    <Flame size={11} className={isCompleted ? 'text-orange-500 animate-pulse' : 'text-slate-400'} fill={isCompleted ? 'currentColor' : 'none'} />
+                                    {habit.currentStreak}
+                                  </div>
+                                </div>
+                                <h3 className={`font-bold text-sm leading-tight transition-colors relative z-10 ${isCompleted ? 'stroke-gradient dark:text-purple-300' : 'text-slate-700 dark:text-slate-200 group-hover:text-purple-600'}`}>
+                                  {habit.name}
+                                </h3>
+
+                                <div className="mt-1 relative z-10 flex items-center gap-1">
+                                  <span className={`text-[9px] uppercase tracking-wider font-semibold ${isCompleted ? 'stroke-gradient/70 dark:text-purple-400/70' : 'text-slate-400 dark:text-slate-500'}`}>
+                                    {isCompleted ? 'Done' : 'Pending'}
+                                  </span>
+                                </div>
+
+                                {/* Progress bar effect for completed */}
+                                {isCompleted && (
+                                  <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: '100%' }}
+                                    className="absolute bottom-0 left-0 h-1.5 bg-[#6F00FF]/50"
+                                  />
+                                )}
+                              </motion.button>
+                            );
+                          })}
+                        </AnimatePresence>
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center text-slate-400 dark:text-slate-500 text-sm bg-slate-50 dark:bg-white/5 rounded-2xl border border-dashed border-slate-200 dark:border-white/10 py-6">
+                        No habits scheduled for today
+                      </div>
                     )}
                   </div>
                 </div>
 
-                {getTodaysHabits().length === 0 ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-800/50 dark:to-slate-900/30 rounded-2xl p-6 text-center border-2 border-dashed border-slate-300 dark:border-slate-700"
-                  >
-                    <Activity size={40} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
-                    <p className="text-slate-600 dark:text-slate-400 text-base font-medium">No habits scheduled for today</p>
-                    <p className="text-slate-400 text-sm mt-1">Create a new habit to get started!</p>
-                  </motion.div>
-                ) : (
-                  <AnimatePresence mode="popLayout">
-                    <div className="space-y-4">
-                      {getTodaysHabits().map((habit, index) => {
-                        const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
-                        const weekData = getWeeklyData(habit);
+                {/* Weekly Progress Card */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm dark:shadow-xl dark:shadow-black/20 border border-slate-200 dark:border-slate-800 hover:shadow-md transition-all group overflow-hidden relative">
+                  {/* Decorative background element */}
+                  <div className="absolute -top-10 -right-10 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl group-hover:bg-purple-500/10 transition-colors"></div>
 
-                        return (
-                          <motion.div
-                            key={habit.id}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 20, transition: { duration: 0.2 } }}
-                            transition={{ delay: index * 0.05 }}
-                            layout
-                            className={`group relative bg-white dark:bg-slate-800/40 backdrop-blur-sm rounded-2xl p-6 border transition-all hover:shadow-xl hover:scale-[1.02] ${isCompleted
-                              ? 'border-emerald-300/50 dark:border-emerald-500/30 bg-gradient-to-br from-emerald-50/80 to-white dark:from-emerald-900/20 dark:to-slate-800/40'
-                              : 'border-slate-200 dark:border-slate-700/50 hover:border-purple-300 dark:hover:border-purple-500/30'
-                              }`}
-                          >
-                            <div className="flex items-center gap-5">
-                              {/* Custom Checkbox with Spring Animation */}
-                              <motion.button
-                                onClick={() => toggleHabitCompletion(habit.id)}
-                                className={`relative w-16 h-16 rounded-2xl flex items-center justify-center transition-all shrink-0 ${isCompleted
-                                  ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/40'
-                                  : 'bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 hover:shadow-lg'
-                                  }`}
-                                style={!isCompleted && habit.tagColor ? {
-                                  background: `linear-gradient(135deg, ${habit.tagColor}, ${habit.tagColor}dd)`
-                                } : undefined}
-                                whileTap={{ scale: 0.85 }}
-                                whileHover={{ scale: 1.05 }}
-                              >
-                                <motion.div
-                                  initial={false}
-                                  animate={{
-                                    scale: isCompleted ? 1 : 0.8,
-                                    rotate: isCompleted ? 0 : -10
-                                  }}
-                                  transition={{ type: "spring", stiffness: 500, damping: 15 }}
-                                >
-                                  {isCompleted ? (
-                                    <Check size={32} strokeWidth={3} className="text-white" />
-                                  ) : (
-                                    <Target size={28} className="text-white opacity-60" />
-                                  )}
-                                </motion.div>
-                              </motion.button>
+                  <div className="relative z-10 h-full flex flex-col">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl">
+                        <TrendingUp className="text-purple-600 dark:text-violet-400" size={20} />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Weekly Progress</h2>
+                        <p className="text-slate-500 dark:text-slate-300 text-sm">Consistency across habits</p>
+                      </div>
+                    </div>
 
-                              {/* Habit Info */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <h3 className={`text-lg font-bold text-slate-800 dark:text-slate-100 ${isCompleted ? 'line-through opacity-50' : ''}`}>
-                                    {habit.name}
-                                  </h3>
-                                  {habit.scheduledStartTime && (
-                                    <span className="text-xs px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center gap-1.5 font-medium">
-                                      <Clock size={12} />
-                                      {habit.scheduledStartTime}{habit.scheduledEndTime ? ` - ${habit.scheduledEndTime}` : ''}
-                                    </span>
-                                  )}
-                                  {habit.tag && (
-                                    <span
-                                      className="text-xs px-3 py-1 rounded-full text-white font-semibold shadow-sm"
-                                      style={{ backgroundColor: habit.tagColor || '#6F00FF' }}
-                                    >
-                                      {habit.tag}
-                                    </span>
-                                  )}
-                                </div>
+                    {(() => {
+                      const globalStats = habits.reduce((acc, h) => {
+                        const weekData = getWeeklyData(h);
+                        acc.scheduled += weekData.filter(d => d.isScheduled).length;
+                        acc.completed += weekData.filter(d => d.isScheduled && d.isCompleted).length;
+                        return acc;
+                      }, { scheduled: 0, completed: 0 });
+                      const globalProgress = globalStats.scheduled > 0 ? (globalStats.completed / globalStats.scheduled) * 100 : 0;
 
-                                {/* Weekly History Dots - Modern Design */}
-                                <div className="flex items-center gap-2">
-                                  {weekData.map((day, idx) => (
-                                    <motion.button
-                                      key={idx}
-                                      initial={{ scale: 0 }}
-                                      animate={{ scale: 1 }}
-                                      transition={{ delay: index * 0.05 + idx * 0.03 }}
-                                      onClick={() => toggleHabitCompletion(habit.id, day.date)}
-                                      className={`relative w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold transition-all hover:scale-110 active:scale-90 ${day.isToday
-                                        ? 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-slate-800 shadow-lg'
-                                        : ''
-                                        } ${!day.isScheduled
-                                          ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-300 dark:text-slate-600'
-                                          : day.isCompleted
-                                            ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-md'
-                                            : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-300'
-                                        }`}
-                                    >
-                                      {day.dayName.charAt(0)}
-                                    </motion.button>
-                                  ))}
-                                </div>
+                      return (
+                        <div className="flex-1 flex items-center gap-4">
+                          <div className="flex-1 space-y-4">
+                            <div>
+                              <div className="flex items-end gap-1 mb-1">
+                                <span className="text-3xl font-black text-slate-800 dark:text-white leading-none">{Math.round(globalProgress)}%</span>
+                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pb-0.5">Goal Reach</span>
                               </div>
-
-                              {/* Streak Flame */}
-                              <div className="hidden lg:flex items-center px-3">
-                                {(() => {
-                                  const scheduledCount = weekData.filter(d => d.isScheduled).length;
-                                  const completedCount = weekData.filter(d => d.isScheduled && d.isCompleted).length;
-                                  const weeklyProgress = scheduledCount > 0 ? (completedCount / scheduledCount) * 100 : 0;
-                                  return (
-                                    <StreakFlame
-                                      progressPercentage={weeklyProgress}
-                                      streakCount={habit.currentStreak}
-                                      size={44}
-                                    />
-                                  );
-                                })()}
-                              </div>
-
-                              {/* Action Buttons */}
-                              <div className="flex items-center gap-2">
-                                <motion.button
-                                  onClick={() => setEditingHabit(habit)}
-                                  className="p-2.5 text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-all"
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                >
-                                  <Edit3 size={18} />
-                                </motion.button>
-                                <motion.button
-                                  onClick={() => deleteHabit(habit.id)}
-                                  className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                >
-                                  <Trash2 size={18} />
-                                </motion.button>
+                              {/* Progress bar */}
+                              <div className="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-[#6F00FF] to-fuchsia-500 rounded-full transition-all duration-1000"
+                                  style={{ width: `${globalProgress}%` }}
+                                ></div>
                               </div>
                             </div>
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                  </AnimatePresence>
-                )}
-              </div>
 
-              {/* Empty State */}
-              {habits.length === 0 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-gradient-to-br from-slate-50 via-purple-50/30 to-slate-100 dark:from-slate-800/50 dark:via-purple-900/10 dark:to-slate-900/50 rounded-3xl p-16 text-center backdrop-blur-sm border border-slate-200 dark:border-slate-700"
-                >
-                  <motion.div
-                    className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center shadow-2xl shadow-purple-500/40"
-                    animate={{
-                      rotate: [0, 5, -5, 0],
-                      scale: [1, 1.05, 1]
-                    }}
-                    transition={{
-                      duration: 3,
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    }}
-                  >
-                    <Flame size={48} className="text-white" />
-                  </motion.div>
-                  <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-3">Start Building Better Habits</h3>
-                  <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-8 text-base">
-                    Create your first habit and start tracking your progress. Build consistency and achieve your goals!
-                  </p>
+                            <div className="flex items-center gap-3">
+                              <div className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                                <span className="text-[10px] font-bold stroke-gradient dark:stroke-gradient uppercase">{globalStats.completed}/{globalStats.scheduled} Done</span>
+                              </div>
+                              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 italic">this week</span>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 relative">
+                            {/* Glow behind flame */}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-orange-500/20 rounded-full blur-xl animate-pulse"></div>
+                            <StreakFlame
+                              progressPercentage={globalProgress}
+                              streakCount={0}
+                              size={72}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div >
+
+              {/* Consistency/Streak View */}
+              < div className="pt-0" >
+                <ConsistencyCard habits={habits} />
+              </div >
+            </div >
+          </div >
+        )
+      } {
+        activeTab === 'habittracker' && (<>
+          <div className="flex-1 overflow-hidden bg-gradient-to-br from-slate-50 via-purple-50/20 to-slate-50 dark:from-[#0B1121] dark:via-purple-950/10 dark:to-[#0B1121] animate-fade-in-up">
+            <div className="h-full overflow-y-auto">
+              <div className="max-w-5xl mx-auto p-8 space-y-8">
+
+                {/* Header with FAB */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+                        <Flame className="text-purple-600 dark:text-violet-400" size={24} />
+                      </div>
+                      <div>
+                        <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">
+                          Habit Tracker
+                        </h1>
+                        <p className="text-slate-500 dark:text-slate-300 text-base">Build consistency, one day at a time</p>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Floating Action Button */}
                   <motion.button
                     onClick={() => setIsAddHabitOpen(true)}
-                    className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white rounded-2xl font-bold shadow-xl shadow-purple-500/30 hover:shadow-2xl hover:shadow-purple-500/40"
+                    className="flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white rounded-2xl font-bold hover:shadow-2xl hover:shadow-purple-500/40 transition-all"
                     whileHover={{ scale: 1.05, y: -2 }}
                     whileTap={{ scale: 0.95 }}
                   >
-                    <Plus size={20} strokeWidth={2.5} /> Create First Habit
+                    <Plus size={20} strokeWidth={2.5} /> New Habit
                   </motion.button>
-                </motion.div>
-              )}
+                </div>
+
+
+
+
+
+                {/* Today's Habits */}
+                <div>
+                  <div className="flex items-center justify-between mb-5">
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+
+                      Habits
+                      <span className="text-sm font-normal text-slate-400">
+                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                      </span>
+                    </h2>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setHabitWeekOffset(p => p - 1)}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-purple-600 transition-colors"
+                      >
+                        <ChevronLeft size={18} className="stroke-gradient" />
+                      </button>
+                      <div className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-lg font-bold min-w-[80px] text-center">
+                        Week {(() => {
+                          const d = new Date();
+                          d.setDate(d.getDate() + habitWeekOffset * 7);
+                          return getWeekNumber(d);
+                        })()}
+                      </div>
+                      <button
+                        onClick={() => setHabitWeekOffset(p => p + 1)}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-purple-600 transition-colors"
+                      >
+                        <ChevronRight size={18} className="stroke-gradient" />
+                      </button>
+                      {habitWeekOffset !== 0 && (
+                        <button
+                          onClick={() => setHabitWeekOffset(0)}
+                          className="text-[10px] ml-2 font-bold text-purple-500 hover:text-purple-600 uppercase tracking-tighter"
+                        >
+                          Today
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {getTodaysHabits().length === 0 ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-800/50 dark:to-slate-900/30 rounded-2xl p-6 text-center border-2 border-dashed border-slate-300 dark:border-slate-700"
+                    >
+                      <Activity size={40} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+                      <p className="text-slate-600 dark:text-slate-300 text-base font-medium">No habits scheduled for today</p>
+                      <p className="text-slate-400 text-sm mt-1">Create a new habit to get started!</p>
+                    </motion.div>
+                  ) : (
+                    <AnimatePresence mode="popLayout">
+                      <div className="space-y-4">
+                        {getTodaysHabits().map((habit, index) => {
+                          const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
+                          const weekData = getWeeklyData(habit);
+
+                          return (
+                            <motion.div
+                              key={habit.id}
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: 20, transition: { duration: 0.2 } }}
+                              transition={{ delay: index * 0.05 }}
+                              layout
+                              className={`group relative bg-white dark:bg-slate-800/40 backdrop-blur-sm rounded-2xl p-6 border transition-all hover:shadow-xl hover:scale-[1.02] ${isCompleted
+                                ? 'border-purple-300/50 dark:border-purple-500/30 bg-gradient-to-br from-purple-50/80 to-white dark:from-purple-900/20 dark:to-slate-800/40'
+                                : 'border-slate-200 dark:border-slate-700/50 hover:border-purple-300 dark:hover:border-purple-500/30'
+                                }`}
+                            >
+                              <div className="flex items-center gap-5">
+                                {/* Custom Checkbox with Spring Animation */}
+                                <motion.button
+                                  onClick={() => toggleHabitCompletion(habit.id)}
+                                  className={`relative w-16 h-16 rounded-2xl flex items-center justify-center transition-all shrink-0 ${isCompleted
+                                    ? 'bg-gradient-to-br from-[#6F00FF] to-purple-600 shadow-lg shadow-purple-500/40'
+                                    : 'bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 hover:shadow-lg'
+                                    }`}
+                                  style={!isCompleted && habit.tagColor ? {
+                                    background: `linear-gradient(135deg, ${habit.tagColor}, ${habit.tagColor}dd)`
+                                  } : undefined}
+                                  whileTap={{ scale: 0.85 }}
+                                  whileHover={{ scale: 1.05 }}
+                                >
+                                  <motion.div
+                                    initial={false}
+                                    animate={{
+                                      scale: isCompleted ? 1 : 0.8,
+                                      rotate: isCompleted ? 0 : -10
+                                    }}
+                                    transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                                  >
+                                    {isCompleted ? (
+                                      <Check size={32} strokeWidth={3} className="text-white" />
+                                    ) : (
+                                      <Target size={28} className="stroke-gradient opacity-60" />
+                                    )}
+                                  </motion.div>
+                                </motion.button>
+
+                                {/* Habit Info */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <h3 className={`text-lg font-bold text-slate-800 dark:text-slate-100 ${isCompleted ? 'line-through opacity-50' : ''}`}>
+                                      {habit.name}
+                                    </h3>
+                                    {habit.scheduledStartTime && (
+                                      <span className="text-xs px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center gap-1.5 font-medium">
+                                        <Clock size={12} className="stroke-gradient" />
+                                        {habit.scheduledStartTime}{habit.scheduledEndTime ? ` - ${habit.scheduledEndTime}` : ''}
+                                      </span>
+                                    )}
+                                    {habit.tag && (
+                                      <span
+                                        onClick={(e) => { e.stopPropagation(); handleOpenEditTagModal({ name: habit.tag!, color: habit.tagColor! || '#6F00FF' }, { habitId: habit.id }); }}
+                                        className="text-xs px-3 py-1 rounded-full text-white font-semibold shadow-sm cursor-pointer hover:ring-2 hover:ring-white/50 transition-all"
+                                        style={{ backgroundColor: habit.tagColor || '#6F00FF' }}
+                                        title="Klicka för att redigera tagg"
+                                      >
+                                        {habit.tag}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Weekly History Dots - Modern Design */}
+                                  <div className="flex items-center gap-2">
+                                    {weekData.map((day, idx) => (
+                                      <motion.button
+                                        key={idx}
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        transition={{ delay: index * 0.05 + idx * 0.03 }}
+                                        onClick={() => toggleHabitCompletion(habit.id, day.date)}
+                                        className={`relative w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold transition-all hover:scale-110 active:scale-90 ${day.isToday
+                                          ? 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-slate-800 shadow-lg'
+                                          : ''
+                                          } ${!day.isScheduled
+                                            ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-300 dark:text-slate-600'
+                                            : day.isCompleted
+                                              ? 'bg-gradient-to-br from-[#6F00FF] to-purple-600 text-white shadow-md'
+                                              : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-300 hover:bg-slate-300'
+                                          }`}
+                                      >
+                                        {day.dayName.charAt(0)}
+                                      </motion.button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Streak Flame */}
+                                <div className="hidden lg:flex items-center px-3">
+                                  {(() => {
+                                    // Use the new calculateWeeklyProgress function that respects start dates
+                                    const weekDates = weekData.map(d => d.date);
+                                    const weeklyProgress = calculateWeeklyProgress(habit, weekDates);
+                                    return (
+                                      <div className="flex items-center gap-4">
+                                        <div className="flex flex-col items-center">
+                                          <div className="text-2xl font-bold text-slate-700 dark:text-slate-200 leading-none">
+                                            {Math.round(weeklyProgress)}%
+                                          </div>
+                                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider leading-none mt-1">
+                                            Weekly
+                                          </span>
+                                        </div>
+                                        <div className="h-8 w-px bg-slate-200 dark:bg-slate-700 mx-2"></div>
+                                        <StreakFlame
+                                          progressPercentage={weeklyProgress}
+                                          streakCount={habit.currentStreak}
+                                          size={44}
+                                        />
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex items-center gap-2">
+                                  <motion.button
+                                    onClick={() => setEditingHabit(habit)}
+                                    className="p-2.5 text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-all"
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                  >
+                                    <Edit3 size={18} className="stroke-gradient" />
+                                  </motion.button>
+                                  <motion.button
+                                    onClick={() => deleteHabit(habit.id)}
+                                    className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                  >
+                                    <Trash2 size={18} className="stroke-gradient" />
+                                  </motion.button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </AnimatePresence>
+                  )}
+                </div>
+
+                {/* Empty State */}
+                {habits.length === 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-gradient-to-br from-slate-50 via-purple-50/30 to-slate-100 dark:from-slate-800/50 dark:via-purple-900/10 dark:to-slate-900/50 rounded-3xl p-16 text-center backdrop-blur-sm border border-slate-200 dark:border-slate-700"
+                  >
+                    <motion.div
+                      className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-[#6F00FF] to-purple-600 flex items-center justify-center shadow-2xl shadow-purple-500/40"
+                      animate={{
+                        rotate: [0, 5, -5, 0],
+                        scale: [1, 1.05, 1]
+                      }}
+                      transition={{
+                        duration: 3,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      }}
+                    >
+                      <Flame size={48} className="text-white" />
+                    </motion.div>
+                    <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-3">Start Building Better Habits</h3>
+                    <p className="text-slate-500 dark:text-slate-300 max-w-md mx-auto mb-8 text-base">
+                      Create your first habit and start tracking your progress. Build consistency and achieve your goals!
+                    </p>
+                    <motion.button
+                      onClick={() => setIsAddHabitOpen(true)}
+                      className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white rounded-2xl font-bold shadow-xl shadow-purple-500/30 hover:shadow-2xl hover:shadow-purple-500/40"
+                      whileHover={{ scale: 1.05, y: -2 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <Plus size={20} strokeWidth={2.5} /> Create First Habit
+                    </motion.button>
+                  </motion.div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Add/Edit Habit Modal */}
-        <AnimatePresence>
-          {(isAddHabitOpen || editingHabit) && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4"
-              onClick={() => { setIsAddHabitOpen(false); setEditingHabit(null); }}
-            >
+          {/* Add/Edit Habit Modal */}
+          <AnimatePresence>
+            {(isAddHabitOpen || editingHabit) && (
               <motion.div
-                initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700"
-                onClick={(e) => e.stopPropagation()}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4"
+                onClick={() => { setIsAddHabitOpen(false); setEditingHabit(null); }}
               >
-                <div className="p-8">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-                      {editingHabit ? 'Edit Habit' : 'Create New Habit'}
-                    </h2>
-                    <motion.button
-                      onClick={() => { setIsAddHabitOpen(false); setEditingHabit(null); }}
-                      className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
-                      whileHover={{ scale: 1.1, rotate: 90 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <X size={20} />
-                    </motion.button>
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                  transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                  className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-xl max-h-[95vh] overflow-y-auto border border-slate-200 dark:border-slate-700"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="p-8">
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+                        {editingHabit ? 'Edit Habit' : 'Create New Habit'}
+                      </h2>
+                      <motion.button
+                        onClick={() => { setIsAddHabitOpen(false); setEditingHabit(null); }}
+                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                        whileHover={{ scale: 1.1, rotate: 90 }}
+                        whileTap={{ scale: 0.9 }}
+                      >
+                        <X size={20} />
+                      </motion.button>
+                    </div>
+                    <HabitForm
+                      initialHabit={editingHabit}
+                      userTags={userTags}
+                      onSave={(data) => { if (editingHabit) updateHabit(editingHabit.id, data); else addHabit(data); }}
+                      onCancel={() => { setIsAddHabitOpen(false); setEditingHabit(null); }}
+                      onCreateTag={() => { setTagModalTaskId(null); setIsTagModalOpen(true); }}
+                    />
                   </div>
-                  <HabitForm
-                    initialHabit={editingHabit}
-                    userTags={userTags}
-                    onSave={(data) => { if (editingHabit) updateHabit(editingHabit.id, data); else addHabit(data); }}
-                    onCancel={() => { setIsAddHabitOpen(false); setEditingHabit(null); }}
-                    onCreateTag={() => { setTagModalTaskId(null); setIsTagModalOpen(true); }}
-                  />
-                </div>
+                </motion.div>
               </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </>
-      )
+            )}
+          </AnimatePresence>
+        </>
+        )
       }
 
       {
         activeTab === 'timebox' && (
-          <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-white/5 animate-fade-in-up">
+          <div className="flex-1 overflow-y-auto md:overflow-hidden grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-white/5 animate-fade-in-up pb-24 md:pb-0">
 
             {/* Left Column: Habits & To-Do List */}
-            <div className="md:col-span-3 flex flex-col bg-white dark:bg-[#151e32] overflow-y-auto">
+            <div className="md:col-span-3 flex flex-col bg-white dark:bg-slate-900 overflow-visible md:overflow-y-auto min-h-screen md:min-h-0">
               <div className="p-4 space-y-6">
 
                 {/* Habits Section */}
                 {getUnscheduledTodaysHabits().length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 mb-3 text-slate-800 dark:text-slate-100">
-                      <Repeat size={20} className="text-emerald-500" />
+                      <Flame size={20} className="text-purple-600 dark:text-violet-400" />
                       <h2 className="font-bold text-lg">Habits</h2>
                       <span className="text-xs text-slate-400 ml-auto">
                         {getUnscheduledTodaysHabits().filter(h => isHabitCompletedOnDate(h, formatDateISO(selectedDate))).length}/{getUnscheduledTodaysHabits().length}
@@ -3561,18 +3905,31 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                         const dateStr = formatDateISO(selectedDate);
                         const isCompleted = isHabitCompletedOnDate(habit, dateStr);
                         return (
-                          <div key={`habit-${habit.id}`} className={`relative flex items-center gap-3 p-2.5 bg-white dark:bg-slate-800 rounded-lg border transition-all hover:shadow-sm ${isCompleted ? 'border-emerald-200 dark:border-emerald-800 opacity-60' : 'border-slate-200 dark:border-slate-700 hover:border-emerald-500/30'}`}>
+                          <div
+                            key={`habit-${habit.id}`}
+                            style={{ zIndex: habitTagMenuOpen === habit.id ? 50 : 1 }}
+                            className={`relative flex items-center gap-3 p-2.5 bg-white dark:bg-slate-800 rounded-lg border transition-all hover:shadow-sm ${isCompleted ? 'border-[#6F00FF]/20 dark:border-[#6F00FF]/20 opacity-60' : 'border-slate-200 dark:border-slate-700 hover:border-[#6F00FF]/30'}`}
+                          >
                             <div
                               draggable
                               onDragStart={(e) => { e.dataTransfer.setData('habitId', habit.id); e.dataTransfer.setData('habitName', habit.name); e.dataTransfer.setData('habitTag', habit.tag || ''); e.dataTransfer.setData('habitTagColor', habit.tagColor || ''); }}
                               className="flex items-center gap-3 flex-1 cursor-grab active:cursor-grabbing"
                             >
-                              <button onClick={(e) => { e.stopPropagation(); toggleHabitCompletion(habit.id, selectedDate); }} className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${isCompleted ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600 hover:border-emerald-500'}`}>
+                              <button onClick={(e) => { e.stopPropagation(); toggleHabitCompletion(habit.id, selectedDate); }} className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${isCompleted ? 'bg-[#6F00FF] border-[#6F00FF]' : 'border-slate-300 dark:border-slate-700 hover:border-[#6F00FF]'}`}>
                                 {isCompleted && <Check size={12} className="text-white" strokeWidth={3} />}
                               </button>
                               <div className="flex-1 min-w-0">
                                 <span className={`text-sm font-medium text-slate-700 dark:text-slate-200 ${isCompleted ? 'line-through opacity-60' : ''}`}>{habit.name}</span>
-                                {habit.tag && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded text-white font-medium" style={{ backgroundColor: habit.tagColor || '#6F00FF' }}>{habit.tag}</span>}
+                                {habit.tag && (
+                                  <span
+                                    onClick={(e) => { e.stopPropagation(); handleOpenEditTagModal({ name: habit.tag!, color: habit.tagColor! || '#6F00FF' }, { habitId: habit.id }); }}
+                                    className="ml-2 text-[10px] px-1.5 py-0.5 rounded text-white font-medium cursor-pointer hover:ring-2 hover:ring-white/50 transition-all"
+                                    style={{ backgroundColor: habit.tagColor || '#6F00FF' }}
+                                    title="Klicka för att redigera tagg"
+                                  >
+                                    {habit.tag}
+                                  </span>
+                                )}
                               </div>
 
                               {/* Time and Streak */}
@@ -3582,7 +3939,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                   const habitBlock = schedule.find(b => b.habitId === habit.id);
                                   if (habitBlock) {
                                     return (
-                                      <span className="text-[10px] opacity-70 text-slate-600 dark:text-slate-400">
+                                      <span className="text-[10px] opacity-70 text-slate-600 dark:text-slate-300">
                                         {formatTime(habitBlock.start)}
                                       </span>
                                     );
@@ -3641,12 +3998,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                 onMouseDown={(e) => e.stopPropagation()}
                               >
                                 {/* Create Tag */}
-                                <button
-                                  onClick={() => { setTagModalHabitId(null); setIsTagModalOpen(true); setHabitTagMenuOpen(null); }}
-                                  className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
-                                >
-                                  <Plus size={14} /> Create Tag
-                                </button>
+                                {!habit.tag && (
+                                  <button
+                                    onClick={() => { setTagModalHabitId(null); setIsTagModalOpen(true); setHabitTagMenuOpen(null); }}
+                                    className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-200"
+                                  >
+                                    <Plus size={14} /> Create Tag
+                                  </button>
+                                )}
 
                                 {/* Edit Tag (only if habit has a tag) */}
                                 {habit.tag && habit.tagColor && (
@@ -3658,28 +4017,34 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                   </button>
                                 )}
 
-                                <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-                                <div className="px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">Add Tag</div>
-                                {userTags.length > 0 ? (
-                                  userTags.map((tag, idx) => (
-                                    <button
-                                      key={idx}
-                                      onClick={() => { handleAddTagToHabit(habit.id, tag.name, tag.color); setHabitTagMenuOpen(null); }}
-                                      className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
-                                    >
-                                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
-                                      <span className="text-slate-600 dark:text-slate-300 text-sm">{tag.name}</span>
-                                    </button>
-                                  ))
-                                ) : (
-                                  <div className="px-3 py-2 text-sm text-slate-400">No tags yet</div>
+
+
+                                {!habit.tag && (
+                                  <>
+                                    <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                                    <div className="px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-300">Add Tag</div>
+                                    {userTags.length > 0 ? (
+                                      userTags.map((tag, idx) => (
+                                        <button
+                                          key={idx}
+                                          onClick={() => { handleAddTagToHabit(habit.id, tag.name, tag.color); setHabitTagMenuOpen(null); }}
+                                          className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                                        >
+                                          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                                          <span className="text-slate-600 dark:text-slate-300 text-sm">{tag.name}</span>
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <div className="px-3 py-2 text-sm text-slate-400">No tags yet</div>
+                                    )}
+                                  </>
                                 )}
                                 {habit.tag && (
                                   <>
                                     <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
                                     <button
                                       onClick={() => { handleRemoveTagFromHabit(habit.id); setHabitTagMenuOpen(null); }}
-                                      className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-red-500"
+                                      className="w-full px-3 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 text-red-600 dark:text-red-400 font-medium"
                                     >
                                       <X size={14} /> Remove Tag
                                     </button>
@@ -3697,7 +4062,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 {/* To-do Header & Input */}
                 <div>
                   <div className="flex items-center gap-2 mb-3 text-slate-800 dark:text-slate-100">
-                    <ListTodo size={20} className="text-[#6F00FF]" />
+                    <ListTodo size={20} className="text-purple-600 dark:text-violet-400" />
                     <h2 className="font-bold text-lg">To-do</h2>
                   </div>
                   <div className="relative">
@@ -3707,9 +4072,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       onChange={(e) => setNewTaskInput(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Type task & press Enter"
-                      className="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-[#0B1121] border border-slate-200 dark:border-white/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/20 focus:border-[#6F00FF] transition-all dark:text-slate-100 placeholder:text-slate-400"
+                      className="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/20 focus:border-[#6F00FF] transition-all dark:text-slate-100 placeholder:text-slate-400"
                     />
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center bg-white dark:bg-white/10 border border-slate-200 dark:border-white/5 rounded text-xs text-slate-400 font-mono shadow-sm">
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center bg-white dark:bg-white/10 border border-slate-200 dark:border-slate-800 rounded text-xs text-slate-400 font-mono shadow-sm">
                       ↵
                     </div>
                   </div>
@@ -3723,15 +4088,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   onDragLeave={() => setDragOverList(null)}
                 >
                   {activeTasks.length === 0 && (
-                    <div className="bg-gradient-to-br from-violet-50/50 to-purple-50/50 dark:from-violet-900/10 dark:to-purple-900/10 border-2 border-dashed border-violet-300 dark:border-violet-700/50 rounded-xl p-6 text-center">
+                    <div className="bg-slate-50/50 dark:bg-slate-800/10 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-6 text-center">
                       <div className="inline-block mb-3">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" className="text-violet-500 dark:text-violet-400">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" className="text-slate-300 dark:text-slate-600">
                           <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                           <path d="M9 12h6M9 16h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       </div>
-                      <p className="text-sm font-semibold text-violet-700 dark:text-violet-300 mb-1">Type task & press Enter</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Use the input field above to add your first task</p>
+                      <p className="text-sm font-semibold text-slate-400 dark:text-slate-500 mb-1">Type task & press Enter</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-600">Use the input field above to add your first task</p>
                     </div>
                   )}
 
@@ -3748,7 +4113,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       onAddTag={handleAddTagToTask}
                       onRemoveTag={handleRemoveTagFromTask}
                       onOpenTagModal={handleOpenTagModal}
-                      onEditTag={handleOpenEditTagModal}
+                      onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
+                      onDeleteTag={handleDeleteTagByName}
                     />
                   ))}
                 </div>
@@ -3757,9 +4123,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-800/50">
                   <button
                     onClick={() => setIsLaterOpen(!isLaterOpen)}
-                    className="flex items-center gap-2 text-slate-600 dark:text-slate-400 font-semibold mb-3 hover:text-[#6F00FF] transition-colors w-full"
+                    className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-semibold mb-3 hover:stroke-gradient transition-colors w-full"
                   >
-                    <Calendar size={18} className={isLaterOpen ? "text-[#6F00FF]" : ""} />
+                    <Calendar size={18} className="text-purple-600 dark:text-violet-400" />
                     To-do Later
                     {isLaterOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   </button>
@@ -3772,16 +4138,16 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       onDragLeave={() => setDragOverList(null)}
                     >
                       {laterTasks.length === 0 && (
-                        <div className="bg-gradient-to-br from-violet-50/50 to-purple-50/50 dark:from-violet-900/10 dark:to-purple-900/10 border-2 border-dashed border-violet-300 dark:border-violet-700/50 rounded-xl p-6 text-center">
+                        <div className="bg-slate-50/50 dark:bg-slate-800/10 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-6 text-center">
                           <div className="inline-block mb-3">
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" className="text-violet-500 dark:text-violet-400">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" className="text-slate-300 dark:text-slate-600">
                               <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                               <path d="M12 3V14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                               <path d="M3 17V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                           </div>
-                          <p className="text-sm font-semibold text-violet-700 dark:text-violet-300 mb-1">Drag tasks here</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Move to-dos that need to be done later</p>
+                          <p className="text-sm font-semibold text-slate-400 dark:text-slate-500 mb-1">Drag tasks here</p>
+                          <p className="text-xs text-slate-400 dark:text-slate-600">Move to-dos that need to be done later</p>
                         </div>
                       )}
                       {laterTasks.map(task => (
@@ -3797,7 +4163,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             onAddTag={handleAddTagToTask}
                             onRemoveTag={handleRemoveTagFromTask}
                             onOpenTagModal={handleOpenTagModal}
-                            onEditTag={handleOpenEditTagModal}
+                            onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
+                            onDeleteTag={handleDeleteTagByName}
                           />
                         </div>
                       ))}
@@ -3809,17 +4176,17 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
             </div>
 
             {/* Middle Column: Calendar/Timeline */}
-            <div className="md:col-span-6 bg-white dark:bg-[#0B1121] flex flex-col relative overflow-hidden">
-              {/* Date Selector Header */}
-              <div className="h-14 border-b border-slate-200 dark:border-white/5 bg-white dark:bg-[#0B1121] flex items-center justify-center shrink-0 relative">
+            <div className="md:col-span-6 bg-white dark:bg-slate-950 flex flex-col relative overflow-visible md:overflow-hidden h-[1500px] md:h-auto">
+              {/* Date Selector Header - Floating Style */}
+              <div className="h-14 flex items-center justify-center shrink-0 relative z-10">
                 <div ref={calendarRef} className="relative flex items-center">
-                  <div className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 dark:bg-white/5 rounded-full text-sm font-medium text-slate-700 dark:text-slate-200">
+                  <div className="flex items-center gap-2 px-4 py-1.5 bg-white dark:bg-slate-900 rounded-full text-sm font-medium text-slate-700 dark:text-slate-200 shadow-md shadow-slate-200/50 dark:shadow-black/40 border border-slate-100 dark:border-slate-800">
                     <div
                       onClick={() => setIsCalendarOpen(!isCalendarOpen)}
                       className="flex items-center gap-2 cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
                     >
-                      <div className={`w-2 h-2 rounded-full ${isToday(selectedDate) ? 'bg-emerald-500' : 'bg-slate-400'}`}></div>
-                      {selectedDate.toLocaleDateString('sv-SE', { month: 'long', day: 'numeric' })}
+                      <div className={`w-2 h-2 rounded-full ${isToday(selectedDate) ? 'bg-gradient-to-r from-[#6F00FF] to-purple-600' : 'bg-slate-400'}`}></div>
+                      {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
                     </div>
                     {/* Calendar Integration Button */}
                     <button
@@ -3828,7 +4195,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                         setIsSettingsOpen(true);
                       }}
                       className={`p-1 rounded-full transition-all ${googleAccount
-                        ? 'text-emerald-500 hover:text-emerald-600'
+                        ? 'text-purple-600 dark:text-violet-400'
                         : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                         }`}
                       title={googleAccount ? 'Calendar synced' : 'Connect Google Calendar'}
@@ -3844,7 +4211,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                     <button
                       onClick={handleZoomToggle}
                       className={`p-1 rounded-full transition-all ${isZoomedOut
-                        ? 'text-[#6F00FF] hover:text-[#5800cc]'
+                        ? 'stroke-gradient hover:text-[#5800cc]'
                         : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                         }`}
                       title={isZoomedOut ? 'Zoom in & center on now' : 'Zoom out & center on now'}
@@ -3876,9 +4243,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                               key={day}
                               onClick={() => handleDateSelect(day)}
                               className={`w-8 h-8 rounded-full text-sm font-semibold transition-all flex items-center justify-center ${isSelected
-                                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                                ? 'bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white shadow-lg shadow-purple-500/30'
                                 : isTodayDate
-                                  ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
+                                  ? 'bg-purple-50 dark:bg-purple-500/10 stroke-gradient dark:text-purple-400 border border-purple-200 dark:border-purple-500/30'
                                   : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'
                                 }`}
                             >
@@ -3887,7 +4254,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           );
                         })}
                       </div>
-                      <button onClick={async () => { const today = new Date(); setSelectedDate(today); setCalendarViewDate(today); setIsCalendarOpen(false); await loadScheduleForDate(today); }} className="mt-3 w-full py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg">Today</button>
+                      <button onClick={async () => { const today = new Date(); setSelectedDate(today); setCalendarViewDate(today); setIsCalendarOpen(false); await loadScheduleForDate(today); }} className="mt-3 w-full py-2 text-sm font-medium stroke-gradient dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg">Today</button>
                     </div>
                   )}
                 </div>
@@ -3906,14 +4273,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                     {/* Time label - h-0 ensures exact vertical centering with the line */}
                     {/* Time label matched with hour labels */}
                     <div className="w-14 shrink-0 text-right pr-3 text-xs font-medium relative h-0">
-                      <span className="absolute right-3 top-0 -translate-y-2 text-[#6F00FF] dark:text-violet-400 whitespace-nowrap font-bold" style={{ textShadow: '0 0 8px rgba(139, 92, 246, 0.3)' }}>
+                      <span className="absolute right-3 top-0 -translate-y-2 stroke-gradient dark:text-violet-400 whitespace-nowrap font-bold" style={{ textShadow: '0 0 8px rgba(139, 92, 246, 0.3)' }}>
                         {formatTime(currentTimeDecimal)}
                       </span>
                     </div>
                     {/* Gradient line container - dot is outside to avoid clipping */}
                     <div className="flex-1 relative flex items-center h-full">
                       {/* Fixed dot at the start */}
-                      <div className="absolute -left-1.5 z-20 w-3 h-3 rounded-full bg-[#6F00FF] shadow-lg shadow-purple-500/40 border-2 border-white dark:border-slate-900"></div>
+                      <div className="absolute -left-1.5 z-20 w-3 h-3 rounded-full bg-gradient-to-r from-[#6F00FF] to-purple-600 shadow-lg shadow-purple-500/40 border-2 border-white dark:border-slate-900"></div>
 
                       {/* Gradient line with subtle stream animation */}
                       <div className="h-[3px] bg-gradient-to-r from-[#6F00FF] to-purple-600 flex-1 relative shadow-sm overflow-hidden rounded-full">
@@ -3954,144 +4321,148 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
                         {/* Ghost Block Preview when dragging over */}
                         {dragOverHour === hour && (
-                          <div className="absolute top-0 left-2 right-4 border-2 border-dashed border-[#6F00FF] bg-[#6F00FF]/10 rounded-lg z-0 pointer-events-none flex items-center justify-center text-[#6F00FF] font-medium text-sm" style={{ height: `${hourHeight - 4}px` }}>
+                          <div className="absolute top-0 left-2 right-4 border-2 border-dashed border-[#6F00FF] bg-[#6F00FF]/10 rounded-lg z-0 pointer-events-none flex items-center justify-center stroke-gradient font-medium text-sm" style={{ height: `${hourHeight - 4}px` }}>
                             {!isZoomedOut && 'Drop to schedule'}
                           </div>
                         )}
                       </div>
                     </div>
-                  ))}
+                  ))
+                  }
 
                   {/* Render Time Blocks */}
-                  {schedule.map((block) => {
-                    // Calculate position based on midnight (0:00) using hourHeight for zoom support
-                    const topOffset = block.start * hourHeight;
-                    const height = block.duration * hourHeight;
-                    const endTime = block.start + block.duration;
+                  {
+                    schedule.map((block) => {
+                      // Calculate position based on midnight (0:00) using hourHeight for zoom support
+                      const topOffset = block.start * hourHeight;
+                      const height = block.duration * hourHeight;
+                      const endTime = block.start + block.duration;
 
-                    // Determine block color:
-                    // 1. If completed, use gray
-                    // 2. If has tag color from task/habit, use that
-                    // 3. If Google event with calendar color, use that
-                    // 4. Default to Google Calendar blue (#4285f4)
-                    const DEFAULT_BLUE = '#4285f4';
+                      // Determine block color:
+                      // 1. If completed, use gray
+                      // 2. If has tag color from task/habit, use that
+                      // 3. If Google event with calendar color, use that
+                      // 4. Default to Google Calendar blue (#4285f4)
+                      const DEFAULT_BLUE = '#4285f4';
 
-                    // Find the associated task or habit tag color
-                    const linkedTask = block.taskId ? [...activeTasks, ...laterTasks].find(t => String(t.id) === String(block.taskId)) : null;
-                    const linkedHabit = block.habitId ? habits.find(h => h.id === block.habitId) : null;
-                    const tagColor = linkedTask?.tagColor || linkedHabit?.tagColor || null;
+                      // Find the associated task or habit tag color
+                      const linkedTask = block.taskId ? [...activeTasks, ...laterTasks].find(t => String(t.id) === String(block.taskId)) : null;
+                      const linkedHabit = block.habitId ? habits.find(h => h.id === block.habitId) : null;
+                      const tagColor = linkedTask?.tagColor || linkedHabit?.tagColor || null;
 
-                    // Determine the final background color
-                    // Priority: 1. linked task/habit tagColor, 2. calendarColor, 3. saved color, 4. default
-                    let bgColor = DEFAULT_BLUE;
+                      // Determine the final background color
+                      // Priority: 1. linked task/habit tagColor, 2. calendarColor, 3. saved color, 4. default
+                      let bgColor = DEFAULT_BLUE;
 
-                    if (tagColor) {
-                      bgColor = tagColor;
-                    } else if (block.calendarColor) {
-                      bgColor = block.calendarColor;
-                    } else if (block.color) {
-                      // Handle both hex colors (#FF5733) and old Tailwind format (bg-[#FF5733])
-                      if (block.color.startsWith('#')) {
-                        bgColor = block.color;
-                      } else {
-                        const hexMatch = block.color.match(/#[0-9A-Fa-f]{6}/);
-                        if (hexMatch) {
-                          bgColor = hexMatch[0];
+                      if (tagColor) {
+                        bgColor = tagColor;
+                      } else if (block.calendarColor) {
+                        bgColor = block.calendarColor;
+                      } else if (block.color) {
+                        // Handle both hex colors (#FF5733) and old Tailwind format (bg-[#FF5733])
+                        if (block.color.startsWith('#')) {
+                          bgColor = block.color;
+                        } else {
+                          const hexMatch = block.color.match(/#[0-9A-Fa-f]{6}/);
+                          if (hexMatch) {
+                            bgColor = hexMatch[0];
+                          }
                         }
                       }
-                    }
 
-                    const blockStyle = {
-                      top: `${topOffset}px`,
-                      height: `${height}px`,
-                      backgroundColor: block.completed ? undefined : bgColor,
-                      borderColor: block.completed ? undefined : bgColor
-                    };
+                      const blockStyle = {
+                        top: `${topOffset}px`,
+                        height: `${height}px`,
+                        backgroundColor: block.completed ? undefined : bgColor,
+                        borderColor: block.completed ? undefined : bgColor
+                      };
 
-                    // Determine if this is a compact event (less than 1 hour)
-                    const isCompact = block.duration < 1;
-                    const isVeryCompact = block.duration <= 0.5;
+                      // Determine if this is a compact event (less than 1 hour)
+                      const isCompact = block.duration < 1;
+                      const isVeryCompact = block.duration <= 0.5;
 
-                    return (
-                      <div
-                        key={block.id}
-                        style={blockStyle}
-                        className={`absolute left-16 right-4 rounded-lg border shadow-sm cursor-move hover:brightness-95 transition-all z-10 group text-white overflow-hidden ${isVeryCompact ? 'p-1.5 pr-6' : isCompact ? 'p-2 pr-8' : 'p-3 pr-10'} ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 !text-slate-500' : ''} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
-                        onMouseDown={(e) => {
-                          if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.cursor-ns-resize')) return;
-                          e.preventDefault();
-                          setDraggingBlockId(block.id);
-                          setDragStartY(e.clientY);
-                          setDragStartTime(block.start);
-                        }}
-                      >
-                        {/* Top right corner: Tag + Close button grouped together */}
-                        <div className={`absolute ${isVeryCompact ? 'top-1 right-1' : isCompact ? 'top-1.5 right-1.5' : 'top-2 right-2'} flex flex-row items-center gap-1.5`}>
-                          {/* Category tag - prioritize actual tag over calendar name, skip "Ascend" as it's not a real tag */}
-                          {(block.tag || (block.calendarName && block.calendarName !== 'Ascend')) && (
-                            <span className={`uppercase font-bold bg-black/10 dark:bg-white/15 px-1.5 py-0.5 rounded pointer-events-none ${isVeryCompact ? 'text-[8px]' : 'text-[10px]'}`}>
-                              {block.tag || block.calendarName}
-                            </span>
-                          )}
-                          {/* Close button - always visible on hover */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-300 bg-black/20 hover:bg-black/30 rounded p-0.5 pointer-events-auto"
-                          >
-                            <X size={isVeryCompact ? 10 : 12} />
-                          </button>
-                        </div>
-
-                        {/* Content: Title first, then time below */}
-                        <div className="flex flex-col min-w-0 overflow-hidden">
-                          {/* Title row with checkbox */}
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            {/* Completion checkbox */}
-                            <div
-                              onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleToggleBlockComplete(block.id); }}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              className={`shrink-0 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${isVeryCompact ? 'w-3.5 h-3.5' : isCompact ? 'w-4 h-4' : 'w-5 h-5'} ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-white/50 hover:border-emerald-400 bg-white/20'}`}
-                            >
-                              {block.completed && <Check size={isVeryCompact ? 8 : isCompact ? 10 : 14} className="text-white" strokeWidth={3} />}
-                            </div>
-                            <h3 className={`font-bold pointer-events-none truncate ${isVeryCompact ? 'text-[11px]' : isCompact ? 'text-xs' : 'text-sm'} ${block.completed ? 'line-through opacity-70' : ''}`}>{block.title}</h3>
-                          </div>
-
-                          {/* Time row - below title */}
-                          {!isVeryCompact && (
-                            <div className={`flex items-center gap-1 ${isCompact ? 'mt-0.5' : 'mt-1'} pointer-events-none`}>
-                              {block.isGoogle && <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" className="w-3 h-3 opacity-80" alt="GCal" />}
-                              <span className={`opacity-70 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>
-                                {formatTime(block.start)} – {formatTime(endTime)}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Resize Handle */}
+                      return (
                         <div
-                          className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-end justify-center pb-1 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity z-20"
+                          key={block.id}
+                          style={blockStyle}
+                          className={`absolute left-16 right-4 rounded-lg border shadow-sm cursor-move hover:brightness-95 transition-all z-10 group text-white overflow-hidden ${isVeryCompact ? 'p-1.5 pr-6' : isCompact ? 'p-2 pr-8' : 'p-3 pr-10'} ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 !text-slate-500' : ''} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
                           onMouseDown={(e) => {
-                            e.stopPropagation();
+                            if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.cursor-ns-resize')) return;
                             e.preventDefault();
-                            setResizingBlockId(block.id);
-                            setResizeStartY(e.clientY);
-                            setResizeStartDuration(block.duration);
+                            setDraggingBlockId(block.id);
+                            setDragStartY(e.clientY);
+                            setDragStartTime(block.start);
                           }}
                         >
-                          <div className="w-8 h-1 rounded-full bg-slate-400/50 dark:bg-slate-500/50 backdrop-blur-sm"></div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                          {/* Top right corner: Tag + Close button grouped together */}
+                          <div className={`absolute ${isVeryCompact ? 'top-1 right-1' : isCompact ? 'top-1.5 right-1.5' : 'top-2 right-2'} flex flex-row items-center gap-1.5`}>
+                            {/* Category tag - prioritize actual tag over calendar name, skip "Ascend" as it's not a real tag */}
+                            {(block.tag || (block.calendarName && block.calendarName !== 'Ascend')) && (
+                              <span className={`uppercase font-bold bg-black/10 dark:bg-white/15 px-1.5 py-0.5 rounded pointer-events-none ${isVeryCompact ? 'text-[8px]' : 'text-[10px]'}`}>
+                                {block.tag || block.calendarName}
+                              </span>
+                            )}
+                            {/* Close button - always visible on hover */}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-300 bg-black/20 hover:bg-black/30 rounded p-0.5 pointer-events-auto"
+                            >
+                              <X size={isVeryCompact ? 10 : 12} />
+                            </button>
+                          </div>
 
-                </div>
-              </div>
-            </div>
+                          {/* Content: Title first, then time below */}
+                          <div className="flex flex-col min-w-0 overflow-hidden">
+                            {/* Title row with checkbox */}
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {/* Completion checkbox */}
+                              <div
+                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleToggleBlockComplete(block.id); }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className={`shrink-0 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${isVeryCompact ? 'w-3.5 h-3.5' : isCompact ? 'w-4 h-4' : 'w-5 h-5'} ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-white/50 hover:border-emerald-400 bg-white/20'}`}
+                              >
+                                {block.completed && <Check size={isVeryCompact ? 8 : isCompact ? 10 : 14} className="text-white" strokeWidth={3} />}
+                              </div>
+                              <h3 className={`font-bold pointer-events-none truncate ${isVeryCompact ? 'text-[11px]' : isCompact ? 'text-xs' : 'text-sm'} ${block.completed ? 'line-through opacity-70' : ''}`}>{block.title}</h3>
+                            </div>
+
+                            {/* Time row - below title */}
+                            {!isVeryCompact && (
+                              <div className={`flex items-center gap-1 ${isCompact ? 'mt-0.5' : 'mt-1'} pointer-events-none`}>
+                                {block.isGoogle && <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" className="w-3 h-3 opacity-80" alt="GCal" />}
+                                <span className={`opacity-70 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>
+                                  {formatTime(block.start)} – {formatTime(endTime)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Resize Handle */}
+                          <div
+                            className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-end justify-center pb-1 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity z-20"
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              setResizingBlockId(block.id);
+                              setResizeStartY(e.clientY);
+                              setResizeStartDuration(block.duration);
+                            }}
+                          >
+                            <div className="w-8 h-1 rounded-full bg-slate-400/50 dark:bg-slate-500/50 backdrop-blur-sm"></div>
+                          </div>
+                        </div>
+                      )
+                    })
+                  }
+
+                </div >
+              </div >
+            </div >
 
             {/* Right Column: Notes & Extras */}
-            <div className="md:col-span-3 bg-slate-50/50 dark:bg-[#151e32] flex flex-col overflow-y-auto">
+            {/* Right Column: Notes & Extras */}
+            <div className="md:col-span-3 bg-slate-50/50 dark:bg-slate-900 flex flex-col overflow-visible md:overflow-y-auto min-h-screen md:min-h-0">
               <div className="p-4 space-y-8">
 
                 {/* Inline formatting helper */}
@@ -4143,8 +4514,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100">
-                      <div className="text-[#6F00FF]">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z" /><path d="M15 3v6h6" /></svg>
+                      <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-600 dark:text-violet-400"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z" /><path d="M15 3v6h6" /></svg>
                       </div>
                       <h2 className="font-bold text-lg">Notes</h2>
                     </div>
@@ -4154,7 +4525,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                     </div>
                   </div>
 
-                  <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-lg shadow-sm overflow-hidden">
+                  <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm overflow-hidden">
                     {/* Formatting Toolbar */}
                     <div className="flex items-center gap-1 p-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
                       {/* Text Formatting */}
@@ -4197,7 +4568,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors group"
                           title="Bold"
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">
                             <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
                             <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
                           </svg>
@@ -4238,7 +4609,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors group"
                           title="Italic"
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">
                             <line x1="19" y1="4" x2="10" y2="4"></line>
                             <line x1="14" y1="20" x2="5" y2="20"></line>
                             <line x1="15" y1="4" x2="9" y2="20"></line>
@@ -4280,7 +4651,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors group"
                           title="Strikethrough"
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">
                             <path d="M17.5 5H9a4 4 0 0 0 0 8h6a4 4 0 0 1 0 8H5"></path>
                             <line x1="3" y1="12" x2="21" y2="12"></line>
                           </svg>
@@ -4294,7 +4665,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             const newText = notesContent + (notesContent && !notesContent.endsWith('\n') ? '\n' : '') + '# Heading 1';
                             handleNotesChange(newText);
                           }}
-                          className="px-2 py-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                          className="px-2 py-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
                           title="Heading 1"
                         >
                           H1
@@ -4304,7 +4675,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             const newText = notesContent + (notesContent && !notesContent.endsWith('\n') ? '\n' : '') + '## Heading 2';
                             handleNotesChange(newText);
                           }}
-                          className="px-2 py-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                          className="px-2 py-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
                           title="Heading 2"
                         >
                           H2
@@ -4314,7 +4685,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             const newText = notesContent + (notesContent && !notesContent.endsWith('\n') ? '\n' : '') + '### Heading 3';
                             handleNotesChange(newText);
                           }}
-                          className="px-2 py-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                          className="px-2 py-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
                           title="Heading 3"
                         >
                           H3
@@ -4331,7 +4702,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors group"
                           title="Numbered List"
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">
                             <line x1="10" y1="6" x2="21" y2="6"></line>
                             <line x1="10" y1="12" x2="21" y2="12"></line>
                             <line x1="10" y1="18" x2="21" y2="18"></line>
@@ -4348,7 +4719,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors group"
                           title="Bullet List"
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">
                             <line x1="8" y1="6" x2="21" y2="6"></line>
                             <line x1="8" y1="12" x2="21" y2="12"></line>
                             <line x1="8" y1="18" x2="21" y2="18"></line>
@@ -4372,7 +4743,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors group"
                           title="Add Checkbox"
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">
                             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                           </svg>
                         </button>
@@ -4420,7 +4791,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                     lines[lineIndex] = `[${e.target.checked ? 'x' : ' '}] ${text}`;
                                     handleNotesChange(lines.join('\n'));
                                   }}
-                                  className="mt-0.5 w-4 h-4 rounded border-2 border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                                  className="mt-0.5 w-4 h-4 rounded border-2 border-slate-300 dark:border-slate-700 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
                                 />
                                 <input
                                   type="text"
@@ -4518,7 +4889,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             const content = isNumbered ? line.replace(/^\d+\.\s/, '') : line.substring(2);
                             return (
                               <div key={lineIndex} className="flex items-start gap-2 my-0.5">
-                                <span className="text-slate-500 dark:text-slate-400 mt-0.5">•</span>
+                                <span className="text-slate-500 dark:text-slate-300 mt-0.5">•</span>
                                 <input
                                   type="text"
                                   value={content}
@@ -4561,7 +4932,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                 }
                               }}
                               className="w-full bg-transparent border-none outline-none text-slate-700 dark:text-slate-300 my-0.5"
-                              placeholder={lineIndex === 0 && !notesContent ? `Write your notes for ${selectedDate.toLocaleDateString('sv-SE', { month: 'long', day: 'numeric' })}...` : ''}
+                              placeholder={lineIndex === 0 && !notesContent ? `Write your notes for ${selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}...` : ''}
                               disabled={notesLoading}
                             />
                           );
@@ -4573,101 +4944,52 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
                 {/* Weight Tracking Section */}
                 <div>
-                  <div className="bg-white dark:bg-white/5 rounded-xl shadow-sm border border-slate-200 dark:border-white/5 p-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Activity size={20} className="text-[#6F00FF]" />
-                      <h2 className="font-bold text-lg text-slate-800 dark:text-white">Weight Tracker</h2>
-                    </div>
-
-                    {/* Stats */}
-                    <div className="space-y-2 mb-4">
-                      {(() => {
-                        const todayString = formatDateISO(new Date());
-                        const todayEntry = weightEntries.find(e => e.date === todayString);
-
-                        // Get previous weight (last entry before today, or last entry if no today entry)
-                        const previousEntry = todayEntry
-                          ? weightEntries.filter(e => e.date !== todayString).slice(-1)[0]
-                          : weightEntries.slice(-1)[0];
-
-                        const hasEntries = weightEntries.length > 0;
-                        const change = todayEntry && previousEntry ? todayEntry.weight - previousEntry.weight : null;
-
-                        return (
-                          <>
-                            {/* Previous weight */}
-                            {previousEntry && (
-                              <div className="flex items-center justify-between py-2 px-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
-                                <div>
-                                  <div className="text-sm text-slate-600 dark:text-slate-400">Previous weight:</div>
-                                  <div className="text-xs text-slate-500">({new Date(previousEntry.date).toLocaleDateString('sv-SE')})</div>
-                                </div>
-                                <span className="text-lg font-bold text-slate-800 dark:text-white">{previousEntry.weight} kg</span>
-                              </div>
-                            )}
-
-                            {/* Today's weight */}
-                            {todayEntry && (
-                              <div className="flex items-center justify-between py-2 px-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                                <div className="text-sm text-emerald-700 dark:text-emerald-400">Today's weight:</div>
-                                <span className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
-                                  {todayEntry.weight} kg
-                                </span>
-                              </div>
-                            )}
-
-                            {/* Change */}
-                            {change !== null && (
-                              <div className="flex items-center justify-between py-2 px-3 bg-violet-50 dark:bg-violet-900/20 rounded-lg border border-violet-200 dark:border-violet-800">
-                                <div className="text-sm text-[#6F00FF] dark:text-violet-400">Change:</div>
-                                <div className="flex items-center gap-1 font-bold text-[#6F00FF] dark:text-violet-400">
-                                  <span className="text-lg">{change < 0 ? '↓' : '↑'}</span>
-                                  <span className="text-lg">{Math.abs(change).toFixed(1)} kg</span>
-                                </div>
-                              </div>
-                            )}
-
-                            {!hasEntries && (
-                              <div className="text-center py-4 text-slate-400 text-sm">
-                                No weight entries yet
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-
-                    {/* Input */}
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={newWeight}
-                        onChange={(e) => setNewWeight(e.target.value)}
-                        placeholder="Enter weight (kg)"
-                        className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg bg-white dark:bg-[#0B1121] text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/50"
-                        onKeyDown={(e) => { if (e.key === 'Enter') { setWeightDate(formatDateISO(new Date())); handleAddWeight(); } }}
-                      />
-                      <motion.button
-                        onClick={() => { setWeightDate(formatDateISO(new Date())); handleAddWeight(); }}
-                        className="px-6 py-2 bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30"
-                        whileHover={{ scale: 1.05, y: -1 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        Log
-                      </motion.button>
-                    </div>
-                  </div>
-                </div>
+                  <WeightSection
+                    weightEntries={weightEntries}
+                    newWeight={newWeight}
+                    setNewWeight={setNewWeight}
+                    onAddWeight={() => { setWeightDate(formatDateISO(new Date())); handleAddWeight(); }}
+                  />
+                </div >
 
 
-              </div>
-            </div>
+              </div >
+            </div >
 
-          </div>
+          </div >
         )
       }
-    </div>
+
+      {/* Mobile Navigation Bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pb-safe z-50">
+        <div className="flex justify-around items-center h-16">
+          <button
+            onClick={() => setActiveTab('timebox')}
+            className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${activeTab === 'timebox' ? 'stroke-gradient dark:text-violet-400' : 'text-slate-400 dark:text-slate-500'}`}
+          >
+            <Clock size={24} strokeWidth={activeTab === 'timebox' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Timebox</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('habittracker')}
+            className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${activeTab === 'habittracker' ? 'stroke-gradient dark:text-violet-400' : 'text-slate-400 dark:text-slate-500'}`}
+          >
+            <Flame size={24} strokeWidth={activeTab === 'habittracker' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Habits</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${activeTab === 'dashboard' ? 'stroke-gradient dark:text-violet-400' : 'text-slate-400 dark:text-slate-500'}`}
+          >
+            <LayoutDashboard size={24} strokeWidth={activeTab === 'dashboard' ? 2.5 : 2} />
+            <span className="text-[10px] font-medium">Dashboard</span>
+          </button>
+        </div>
+      </div>
+    </div >
+
   )
 };
 
@@ -4751,7 +5073,7 @@ const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
             Welcome to Ascend
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-2">
+          <p className="text-slate-500 dark:text-slate-300 mt-2">
             Your personal productivity companion
           </p>
         </div>
@@ -4807,7 +5129,7 @@ const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
             <button
               onClick={handleGoogleSignIn}
               disabled={googleLoading || loading}
-              className="w-full py-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 font-medium rounded-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 font-medium rounded-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {googleLoading ? (
                 <Loader2 size={20} className="animate-spin text-slate-500" />
@@ -4901,7 +5223,7 @@ const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
             </form>
 
             {/* Footer */}
-            <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-6">
+            <p className="text-center text-sm text-slate-500 dark:text-slate-300 mt-6">
               {activeTab === 'signin' ? "Don't have an account?" : 'Already have an account?'}{' '}
               <button
                 onClick={() => handleTabChange(activeTab === 'signin' ? 'signup' : 'signin')}
@@ -4926,6 +5248,7 @@ const AuthPage = ({ onSuccess }: { onSuccess: () => void }) => {
 };
 
 const App = () => {
+  console.log('App component rendering');
   const [isDark, setIsDark] = useState(false);
   const [user, setUser] = useState<{ id: string; name: string; avatar: string; email: string } | null>(null);
   const [view, setView] = useState<'landing' | 'auth' | 'app'>('landing');
@@ -5017,22 +5340,28 @@ const App = () => {
   }
 
   return (
-    <ThemeContext.Provider value={{ isDark, toggleTheme }}>
-      {view === 'landing' && (
-        <LandingPage onGetStarted={() => setView('auth')} />
-      )}
-      {view === 'auth' && (
-        <AuthPage onSuccess={() => { }} />
-      )}
-      {view === 'app' && user && (
-        <TimeboxApp
-          user={user}
-          onLogin={() => setView('auth')}
-          onLogout={handleLogout}
-          onBack={() => setView('landing')}
-        />
-      )}
-    </ThemeContext.Provider>
+    <LegalProvider>
+      <ThemeContext.Provider value={{ isDark, toggleTheme }}>
+        <IconsGradientDef />
+        <LegalModals />
+        {view === 'landing' && <CookieBanner />}
+
+        {view === 'landing' && (
+          <LandingPage onGetStarted={() => setView('auth')} />
+        )}
+        {view === 'auth' && (
+          <AuthPage onSuccess={() => { }} />
+        )}
+        {view === 'app' && user && (
+          <TimeboxApp
+            user={user}
+            onLogin={() => setView('auth')}
+            onLogout={handleLogout}
+            onBack={() => setView('landing')}
+          />
+        )}
+      </ThemeContext.Provider>
+    </LegalProvider>
   );
 };
 

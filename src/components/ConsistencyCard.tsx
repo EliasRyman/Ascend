@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Target, Clock, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Target, Clock, Calendar, ChevronLeft, ChevronRight, Flame } from 'lucide-react';
 
 interface Habit {
     id: string;
@@ -41,8 +41,9 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits }) => {
         let total = 0;
 
         // Populate frequency map
-        habits.forEach(habit => {
-            habit.completedDates.forEach(date => {
+        (habits || []).forEach(habit => {
+            if (!habit) return;
+            (habit.completedDates || []).forEach(date => {
                 const count = map.get(date) || 0;
                 map.set(date, count + 1);
                 total++;
@@ -277,8 +278,8 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits }) => {
         <div className="bg-white dark:bg-[#151e32] rounded-3xl p-6 shadow-sm dark:shadow-lg dark:shadow-black/20 border border-slate-200 dark:border-white/5 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                    <div className="bg-purple-100 dark:bg-purple-500/10 p-2 rounded-xl">
-                        <Flame className="text-[#6F00FF] dark:text-purple-400" size={20} />
+                    <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl">
+                        <Flame className="text-purple-600 dark:text-violet-400" size={20} />
                     </div>
                     <div>
                         <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Habit Consistency</h2>

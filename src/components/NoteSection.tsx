@@ -21,7 +21,9 @@ const NoteSection = ({
         <div className="bg-white dark:bg-white/5 rounded-xl shadow-sm border border-slate-200 dark:border-white/5 p-4 flex flex-col h-full min-h-[400px]">
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                    <Edit3 size={20} className="text-[#6F00FF]" />
+                    <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl">
+                        <Edit3 size={20} className="text-purple-600 dark:text-violet-400" />
+                    </div>
                     <h2 className="font-bold text-lg text-slate-800 dark:text-white">Daily Notes</h2>
                 </div>
                 <div className="flex items-center gap-2">

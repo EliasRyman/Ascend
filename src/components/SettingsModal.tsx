@@ -106,10 +106,10 @@ const SettingsModal = ({
                                 className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-full"
                             >
                                 <div className={`p-1.5 rounded-full transition-all ${!isDark ? 'bg-white shadow-sm' : ''}`}>
-                                    <Sun size={14} className={`${!isDark ? 'text-amber-500' : 'text-slate-400'}`} />
+                                    <Sun size={14} className={`${!isDark ? 'stroke-gradient' : 'text-slate-400'}`} />
                                 </div>
                                 <div className={`p-1.5 rounded-full transition-all ${isDark ? 'bg-slate-700 shadow-sm' : ''}`}>
-                                    <Moon size={14} className={`${isDark ? 'text-slate-200' : 'text-slate-400'}`} />
+                                    <Moon size={14} className={`${isDark ? 'stroke-gradient' : 'text-slate-400'}`} />
                                 </div>
                             </button>
                             <button

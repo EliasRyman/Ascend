@@ -34,11 +34,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
                     {/* Headlines */}
                     <h1 className="text-5xl md:text-7xl font-extrabold mb-8 tracking-tight max-w-4xl leading-[1.1]">
-                        Få kontroll på din dag – <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#6F00FF] to-fuchsia-600">visuellt.</span>
+                        Take control of your day – <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#6F00FF] to-fuchsia-600">visually.</span>
                     </h1>
 
                     <p className="text-xl md:text-2xl text-slate-500 dark:text-slate-400 mb-10 max-w-2xl leading-relaxed">
-                        Timeboxing, uppgifter och kalender i perfekt synk. Byggd för dig som vill jobba djupt och distraktionsfritt.
+                        Timeboxing, tasks, and calendar in perfect sync. Built for those who want to work deep and distraction-free.
                     </p>
 
                     {/* CTAs */}
@@ -47,14 +47,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                             onClick={onGetStarted}
                             className="group w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-4 bg-[#6F00FF] text-white rounded-full font-bold text-lg hover:bg-violet-700 hover:shadow-xl hover:shadow-violet-600/20 transition-all transform hover:-translate-y-1"
                         >
-                            Starta gratis
+                            Start for free
                             <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                         </button>
                         <button
                             onClick={scrollToFeatures}
                             className="group w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 rounded-full font-bold text-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all"
                         >
-                            Se hur det funkar
+                            See how it works
                             <Play size={18} className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors" />
                         </button>
                     </div>
@@ -62,11 +62,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                     {/* Trust / Social Proof */}
                     <div className="mt-8 flex items-center gap-6 text-sm font-medium text-slate-500 dark:text-slate-400">
                         <span className="flex items-center gap-1.5">
-                            <Check size={16} className="text-emerald-500" /> Inget kreditkort krävs
+                            <Check size={16} className="text-emerald-500" /> No credit card required
                         </span>
                         <span className="hidden sm:block text-slate-300 dark:text-slate-700">•</span>
                         <span className="flex items-center gap-1.5">
-                            <Check size={16} className="text-emerald-500" /> Kom igång med Google
+                            <Check size={16} className="text-emerald-500" /> Get started with Google
                         </span>
                     </div>
 
@@ -78,9 +78,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 <div className="max-w-6xl mx-auto px-6">
 
                     <div className="text-center mb-16">
-                        <h2 className="text-3xl font-bold mb-4">Ett workspace för allt</h2>
+                        <h2 className="text-3xl font-bold mb-4">One workspace for everything</h2>
                         <p className="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto">
-                            Sluta hoppa mellan to-do listor och kalendrar. Ascend samlar allt på ett ställe.
+                            Stop jumping between to-do lists and calendars. Ascend gathers everything in one place.
                         </p>
                     </div>
 
@@ -91,9 +91,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                             <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <LayoutDashboard className="text-[#6F00FF]" size={28} />
                             </div>
-                            <h3 className="text-xl font-bold mb-3">Planera visuellt</h3>
+                            <h3 className="text-xl font-bold mb-3">Plan visually</h3>
                             <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-                                Dra-och-släpp dina uppgifter direkt i schemat. Se exakt <em className="not-italic text-slate-700 dark:text-slate-300 font-medium">när</em> jobbet blir gjort, inte bara <em className="not-italic text-slate-700 dark:text-slate-300 font-medium">att</em> det ska göras.
+                                Drag-and-drop your tasks directly into the schedule. See exactly <em className="not-italic text-slate-700 dark:text-slate-300 font-medium">when</em> the work gets done, not just <em className="not-italic text-slate-700 dark:text-slate-300 font-medium">that</em> it needs doing.
                             </p>
                         </div>
 
@@ -102,9 +102,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                             <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <RefreshCw className="text-emerald-500" size={28} />
                             </div>
-                            <h3 className="text-xl font-bold mb-3">Allt i din kalender</h3>
+                            <h3 className="text-xl font-bold mb-3">Everything in your calendar</h3>
                             <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-                                Full tvåvägssynk med Google Kalender. Dina tidsblock blir möten, och dina möten blir block. Ersätt dubbelarbete med automatik.
+                                Full two-way sync with Google Calendar. Your timeblocks become meetings, and your meetings become blocks. Replace duplicate work with automation.
                             </p>
                         </div>
 
@@ -113,9 +113,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                             <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <Target className="text-amber-500" size={28} />
                             </div>
-                            <h3 className="text-xl font-bold mb-3">Bygg rutiner för deep work</h3>
+                            <h3 className="text-xl font-bold mb-3">Build routines for deep work</h3>
                             <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-                                Använd fokuslägen och en ren design för att stänga ute distraktioner och hitta ditt flow varje dag.
+                                Use focus modes and a clean design to shut out distractions and find your flow every day.
                             </p>
                         </div>
 
@@ -126,12 +126,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
             {/* Footer / Final CTA */}
             <div className="py-20 border-t border-slate-100 dark:border-slate-800 text-center px-6">
-                <h2 className="text-3xl font-bold mb-8">Redo att ta kontroll?</h2>
+                <h2 className="text-3xl font-bold mb-8">Ready to take control?</h2>
                 <button
                     onClick={onGetStarted}
                     className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full font-bold text-lg hover:opacity-90 transition-opacity"
                 >
-                    Kom igång nu
+                    Get started now
                 </button>
             </div>
 

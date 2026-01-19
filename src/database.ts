@@ -1128,3 +1128,29 @@ export async function cleanupDuplicateTasks(date: Date): Promise<number> {
 }
 
 
+
+/**
+ * Bulk update tag name and color for all tasks using a specific tag
+ */
+export async function updateTagNameAndColor(oldTagName: string, newTagName: string, newTagColor: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  console.log(`🔄 Updating tag "${oldTagName}" to "${newTagName}" with color ${newTagColor}`);
+
+  const { error } = await supabase
+    .from('tasks')
+    .update({ 
+      tag: newTagName,
+      tag_color: newTagColor 
+    })
+    .eq('user_id', user.id)
+    .eq('tag', oldTagName);
+
+  if (error) {
+    console.error('Error updating tag name and color:', error);
+    return false;
+  }
+
+  return true;
+}

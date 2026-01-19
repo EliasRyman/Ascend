@@ -31,7 +31,9 @@ const WeightSection = ({
     return (
         <div className="bg-white dark:bg-white/5 rounded-xl shadow-sm border border-slate-200 dark:border-white/5 p-4">
             <div className="flex items-center gap-2 mb-4">
-                <Activity size={20} className="text-[#6F00FF]" />
+                <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl">
+                    <Activity size={20} className="text-purple-600 dark:text-violet-400" />
+                </div>
                 <h2 className="font-bold text-lg text-slate-800 dark:text-white">Weight Tracker</h2>
             </div>
 

@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+    .stroke-gradient {
+        stroke: url(#purple-gradient) !important;
+    }
+
+    .hover\:stroke-gradient:hover {
+        stroke: url(#purple-gradient) !important;
+    }
+
+    .group:hover .group-hover\:stroke-gradient {
+        stroke: url(#purple-gradient) !important;
+    }
+}

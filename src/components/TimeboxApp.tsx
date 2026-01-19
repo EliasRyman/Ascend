@@ -40,7 +40,7 @@ import {
     updateTask, loadNote, saveNote, migrateOverdueTasks,
     loadAllTasksForDate, toggleTaskCompletion, setTaskCompletion,
     generateRecurringInstances, createTaskForDate, deleteTask as deleteTaskFromDb,
-    moveTask, moveTaskToList
+    moveTask, moveTaskToList, updateTagNameAndColor
 } from '../database';
 import { supabase } from '../supabase';
 
@@ -334,6 +334,83 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
         setActiveTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, tag: null, tagColor: null } : t));
         setLaterTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, tag: null, tagColor: null } : t));
         await updateTask(String(taskId), { tag: null, tagColor: null });
+    };
+
+    const handleCreateTag = async (tagName: string, tagColor: string) => {
+        const oldTagName = editingTag?.name;
+        const newTag = { name: tagName, color: tagColor };
+
+        if (editingTag) {
+            // CASCADING UPDATE: If editing, update all occurrences in state
+            if (oldTagName) {
+                // Update in database first
+                await updateTagNameAndColor(oldTagName, tagName, tagColor);
+
+                setUserTags(prev => prev.map(t => t.name === oldTagName ? newTag : t));
+                setActiveTasks(prev => prev.map(t => t.tag === oldTagName ? { ...t, tag: tagName, tagColor: tagColor } : t));
+                setLaterTasks(prev => prev.map(t => t.tag === oldTagName ? { ...t, tag: tagName, tagColor: tagColor } : t));
+                setHabits(prev => prev.map(h => h.tag === oldTagName ? { ...h, tag: tagName, tagColor: tagColor } : h));
+
+                // Update schedule blocks
+                setSchedule(prev => prev.map(b => b.tag === oldTagName ? { ...b, tag: tagName, color: tagColor } : b));
+            }
+        } else {
+            setUserTags(prev => [...prev, newTag]);
+        }
+
+        // Apply tag if it was opened from a specific task or habit context
+        if (tagModalTaskId) {
+            await handleAddTagToTask(tagModalTaskId, tagName, tagColor);
+        } else if (tagModalHabitId) {
+            setHabits(prev => prev.map(h => h.id === tagModalHabitId ? { ...h, tag: tagName, tagColor: tagColor } : h));
+        }
+
+        setIsTagModalOpen(false);
+        setEditingTag(null);
+        setTagModalTaskId(null);
+        setTagModalHabitId(null);
+
+        // Persist user tags
+        const updatedTags = editingTag
+            ? userTags.map(t => t.name === oldTagName ? newTag : t)
+            : [...userTags, newTag];
+        localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
+    };
+
+    const handleOpenEditTagModal = (tag: { name: string, color: string }, contextId?: { taskId?: number | string, habitId?: string }) => {
+        setEditingTag(tag);
+        if (contextId?.taskId) {
+            setTagModalTaskId(contextId.taskId);
+            setTagModalHabitId(null);
+        } else if (contextId?.habitId) {
+            setTagModalHabitId(contextId.habitId);
+            setTagModalTaskId(null);
+        } else {
+            setTagModalTaskId(null);
+            setTagModalHabitId(null);
+        }
+        setIsTagModalOpen(true);
+    };
+
+    const handleOpenTagModal = (taskId: string | number) => {
+        setTagModalTaskId(taskId);
+        setTagModalHabitId(null);
+        setIsTagModalOpen(true);
+    };
+
+    const handleDeleteTagByName = async (tagName: string) => {
+        setUserTags(prev => prev.filter(t => t.name !== tagName));
+        setActiveTasks(prev => prev.map(t => t.tag === tagName ? { ...t, tag: null, tagColor: null } : t));
+        setLaterTasks(prev => prev.map(t => t.tag === tagName ? { ...t, tag: null, tagColor: null } : t));
+        setHabits(prev => prev.map(h => h.tag === tagName ? { ...h, tag: null, tagColor: null } : h));
+        setSchedule(prev => prev.map(b => b.tag === tagName ? { ...b, tag: null, color: '#6F00FF' } : b));
+
+        // Persist change
+        const updatedTags = userTags.filter(t => t.name !== tagName);
+        localStorage.setItem('ascend_user_tags', JSON.stringify(updatedTags));
+
+        // Update DB: Replace tag/color with null where it matches
+        await updateTagNameAndColor(tagName, null, null);
     };
 
     const handleToggleHabitCompletion = (habitId: string, date: Date) => toggleHabitCompletion(habitId, date);
@@ -727,8 +804,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                             onMoveToList={handleMoveTaskToList}
                                             onAddTag={handleAddTagToTask}
                                             onRemoveTag={handleRemoveTagFromTask}
-                                            onOpenTagModal={id => { setTagModalTaskId(id); setIsTagModalOpen(true); }}
-                                            onEditTag={tag => { setEditingTag(tag); setIsTagModalOpen(true); }}
+                                            onOpenTagModal={handleOpenTagModal}
+                                            onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
+                                            onDeleteTag={handleDeleteTagByName}
                                         />
                                     ))}
                                 </div>
@@ -754,8 +832,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                     onMoveToList={handleMoveTaskToList}
                                                     onAddTag={handleAddTagToTask}
                                                     onRemoveTag={handleRemoveTagFromTask}
-                                                    onOpenTagModal={id => { setTagModalTaskId(id); setIsTagModalOpen(true); }}
-                                                    onEditTag={tag => { setEditingTag(tag); setIsTagModalOpen(true); }}
+                                                    onOpenTagModal={id => handleOpenTagModal(id)}
+                                                    onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
+                                                    onDeleteTag={handleDeleteTagByName}
                                                 />
                                             ))}
                                         </div>
@@ -954,7 +1033,16 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                             </div>
                                             <div>
                                                 <h3 className="font-bold dark:text-white">{habit.name}</h3>
-                                                <p className="text-xs text-slate-500">{habit.tag}</p>
+                                                {habit.tag && (
+                                                    <span
+                                                        onClick={(e) => { e.stopPropagation(); handleOpenEditTagModal({ name: habit.tag!, color: habit.tagColor! || '#6F00FF' }, { habitId: habit.id }); }}
+                                                        className="text-[10px] px-1.5 py-0.5 rounded font-bold text-white uppercase tracking-wider cursor-pointer hover:ring-2 hover:ring-white/50 transition-all"
+                                                        style={{ backgroundColor: habit.tagColor || '#6F00FF' }}
+                                                        title="Klicka för att redigera tagg"
+                                                    >
+                                                        {habit.tag}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                         <StreakFlame count={habit.currentStreak} />
@@ -1010,8 +1098,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                         onMoveToList={handleMoveTaskToList}
                                                         onAddTag={handleAddTagToTask}
                                                         onRemoveTag={handleRemoveTagFromTask}
-                                                        onOpenTagModal={id => { setTagModalTaskId(id); setIsTagModalOpen(true); }}
-                                                        onEditTag={tag => { setEditingTag(tag); setIsTagModalOpen(true); }}
+                                                        onOpenTagModal={handleOpenTagModal}
+                                                        onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
+                                                        onDeleteTag={handleDeleteTagByName}
                                                     />
                                                 ))}
                                                 {todayTasks.later.map(task => (
@@ -1023,8 +1112,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                         onMoveToList={handleMoveTaskToList}
                                                         onAddTag={handleAddTagToTask}
                                                         onRemoveTag={handleRemoveTagFromTask}
-                                                        onOpenTagModal={id => { setTagModalTaskId(id); setIsTagModalOpen(true); }}
-                                                        onEditTag={tag => { setEditingTag(tag); setIsTagModalOpen(true); }}
+                                                        onOpenTagModal={handleOpenTagModal}
+                                                        onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
+                                                        onDeleteTag={handleDeleteTagByName}
                                                     />
                                                 ))}
                                             </>
@@ -1048,18 +1138,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                 {isTagModalOpen && (
                     <TagModal
                         isOpen={isTagModalOpen}
-                        onClose={() => { setIsTagModalOpen(false); setEditingTag(null); setTagModalTaskId(null); }}
-                        onSave={(name, color) => {
-                            const newTag = { name, color };
-                            setUserTags(prev => editingTag ? prev.map(t => t.name === editingTag.name ? newTag : t) : [...prev, newTag]);
-                            if (tagModalTaskId) handleAddTagToTask(tagModalTaskId, name, color);
-                            setIsTagModalOpen(false);
-                        }}
+                        onClose={() => { setIsTagModalOpen(false); setEditingTag(null); setTagModalTaskId(null); setTagModalHabitId(null); }}
+                        onSave={handleCreateTag}
                         editTag={editingTag || undefined}
-                        onDelete={editingTag ? () => {
-                            setUserTags(prev => prev.filter(t => t.name !== editingTag.name));
-                            setIsTagModalOpen(false);
-                        } : undefined}
+                        onDelete={editingTag ? () => handleDeleteTagByName(editingTag.name) : undefined}
                     />
                 )}
                 {isAddHabitOpen && (

@@ -1,6 +1,7 @@
 import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 export default defineConfig({
   base: '/', // For custom domain via Cloudflare
@@ -8,10 +9,16 @@ export default defineConfig({
     port: 3000,
     host: '0.0.0.0',
   },
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    }
-  }
+  plugins: [
+    react(),
+    nodePolyfills({
+      include: ['buffer', 'process', 'util'],
+      globals: {
+        Buffer: true,
+        global: true,
+        process: true,
+      },
+    }),
+  ],
+}
 });
