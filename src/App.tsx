@@ -113,6 +113,7 @@ import {
 } from './database';
 import DeleteHabitModal from './components/DeleteHabitModal';
 import StreakFlame from './components/StreakFlame';
+import { HISTORICAL_WEIGHTS } from './data/weightData';
 
 // --- Constants & Utilities ---
 
@@ -217,6 +218,7 @@ interface ScheduleBlock {
   calendarName?: string;
   calendarId?: string; // Google Calendar ID for external events
   canEdit?: boolean; // true if user has write access to edit this event
+  colorId?: string; // Google Calendar Color ID for persistence
 }
 // Import our new high-performance chart
 import { WeightTrendChart } from './components/WeightTrendChart';
@@ -1203,6 +1205,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     timezone: 'Local'
   });
 
+  // Hold to Drag State
+  const [isLongPress, setIsLongPress] = useState(false);
+  const dragTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const initialClickPos = useRef<{ x: number, y: number } | null>(null);
+
   // State for Calendar Picker - persist selected date across refreshes
   const [selectedDate, setSelectedDate] = useState(() => {
     // CRITICAL FIX: Always default to TODAY
@@ -1260,6 +1267,54 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [isWeightCalendarOpen, setIsWeightCalendarOpen] = useState(false);
   const [isWeightListOpen, setIsWeightListOpen] = useState(false);
   const [weightCalendarViewDate, setWeightCalendarViewDate] = useState(new Date());
+
+  // One-time migration for historical weight data
+  useEffect(() => {
+    const MIGRATION_KEY = 'ascend_weight_migrated_20260120_v2';
+    const hasMigrated = localStorage.getItem(MIGRATION_KEY);
+
+    if (!hasMigrated) {
+      console.log('🔄 Starting weight data migration...');
+
+      // Transform HISTORICAL_WEIGHTS to match the app's format { date, weight }
+      // distinct from the raw import which might have extra fields
+      const newEntries = HISTORICAL_WEIGHTS.map(entry => ({
+        date: entry.date,
+        weight: entry.weight
+      }));
+
+      // Merge strategy: 
+      // 1. Setup a map of existing entries
+      // 2. Overwrite with new entries (historical data takes precedence as it is the "correction")
+      // 3. Convert back to array and sort
+
+      // Actually, user request implies a full replacement or update. 
+      // Let's take the safe approach: valid new data overwrites old data for same dates, 
+      // keeps old data for dates not in new set.
+
+      const currentEntries = JSON.parse(localStorage.getItem('ascend_weight_entries') || '[]');
+      const entriesMap = new Map();
+
+      // Populate with current
+      currentEntries.forEach((e: any) => entriesMap.set(e.date, e));
+
+      // Overwrite with new
+      newEntries.forEach(e => entriesMap.set(e.date, e));
+
+      // Convert back to array
+      const mergedEntries = Array.from(entriesMap.values())
+        .sort((a: any, b: any) => a.date.localeCompare(b.date));
+
+      // Save
+      localStorage.setItem('ascend_weight_entries', JSON.stringify(mergedEntries));
+      setWeightEntries(mergedEntries);
+
+      // Mark migrated
+      localStorage.setItem(MIGRATION_KEY, 'true');
+      setNotification({ type: 'success', message: 'Weight data imported successfully' });
+      console.log('✅ Weight data migration complete');
+    }
+  }, []);
   const weightCalendarRef = useRef<HTMLDivElement>(null);
 
   // State for Habits
@@ -1461,7 +1516,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       note = notesContent;
     } else {
       try {
-        const { active: fetchedActive, later: fetchedLater } = await loadAllTasksForDate(dateStr);
+        const { active: fetchedActive, later: fetchedLater } = await loadAllTasksForDate(new Date(dateStr));
         active = fetchedActive;
         later = fetchedLater;
         const fetchedNote = await loadNote(dateStr);
@@ -2449,10 +2504,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
             textColor: 'text-white',
             isGoogle: true,
             googleEventId: event.id,
-            completed: false,
             calendarColor: (event as any).calendarColor,
             calendarName: (event as any).calendarName,
+            calendarId: (event as any).calendarId,
+            canEdit: (event as any).canEdit,
+            colorId: (event as any).colorId, // Preserve Google colorId
           }));
+
+          console.log('📅 Fetched Google events with colors:', googleBlocks.map(b => ({ title: b.title, colorId: b.colorId })));
+
         } catch (error) {
           console.error('Failed to fetch Google Calendar events:', error);
         }
@@ -2636,7 +2696,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   movedBlock.duration,
                   selectedDate,
                   movedBlock.calendarId,
-                  movedBlock.color || movedBlock.calendarColor || undefined
+                  movedBlock.colorId || movedBlock.color || movedBlock.calendarColor || undefined
                 );
 
                 setNotification({ type: 'success', message: 'Event time updated' });
@@ -3031,8 +3091,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               newStart,
               existingBlock.duration,
               selectedDate,
-              undefined, // calendarId
-              existingBlock.color || existingBlock.calendarColor || undefined
+              existingBlock.tag || undefined, // calendarId
+              existingBlock.colorId || existingBlock.color || existingBlock.calendarColor || undefined
             );
             setNotification({ type: 'success', message: `Updated "${task.title}" time on Google Calendar` });
           } catch (error) {
@@ -3046,8 +3106,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               newStart,
               existingBlock.duration,
               selectedDate,
-              task.tag || undefined,
-              task.tagColor || undefined
+              existingBlock.tag || undefined,
+              existingBlock.colorId || existingBlock.color || existingBlock.calendarColor || undefined
             );
 
             // Update state with new ID
@@ -3127,8 +3187,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           hour,
           1,
           selectedDate,
-          task.tag || undefined,
-          task.tagColor || undefined
+          existingBlock.tag || undefined,
+          existingBlock.colorId || existingBlock.color || existingBlock.calendarColor || undefined
         );
 
         if (eventId) {
@@ -4608,10 +4668,55 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           className={`absolute left-16 right-4 rounded-lg border shadow-sm cursor-move hover:brightness-95 transition-all z-10 group text-white overflow-hidden ${isVeryCompact ? 'p-1.5 pr-6' : isCompact ? 'p-2 pr-8' : 'p-3 pr-10'} ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 !text-slate-500' : ''} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
                           onMouseDown={(e) => {
                             if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.cursor-ns-resize')) return;
-                            e.preventDefault();
-                            setDraggingBlockId(block.id);
-                            setDragStartY(e.clientY);
-                            setDragStartTime(block.start);
+
+                            // Prevent default behavior
+                            // e.preventDefault(); // Don't prevent default immediately to allow click events if needed
+
+                            // Record initial position
+                            initialClickPos.current = { x: e.clientX, y: e.clientY };
+
+                            // Start timer for drag
+                            dragTimerRef.current = setTimeout(() => {
+                              setIsLongPress(true);
+                              setDraggingBlockId(block.id);
+                              setDragStartY(e.clientY);
+                              setDragStartTime(block.start);
+                              // Trigger haptic feedback if available (mobile)
+                              if (navigator.vibrate) navigator.vibrate(50);
+                            }, 200); // 200ms hold time
+                          }}
+                          onMouseMove={(e) => {
+                            if (initialClickPos.current && !isLongPress) {
+                              const moveX = Math.abs(e.clientX - initialClickPos.current.x);
+                              const moveY = Math.abs(e.clientY - initialClickPos.current.y);
+
+                              // If moved significantly before timer fires, cancel drag (it's scrolling or clicking)
+                              if (moveX > 5 || moveY > 5) {
+                                if (dragTimerRef.current) {
+                                  clearTimeout(dragTimerRef.current);
+                                  dragTimerRef.current = null;
+                                }
+                                initialClickPos.current = null;
+                              }
+                            }
+                          }}
+                          onMouseUp={() => {
+                            // If mouse up before timer, cancel drag
+                            if (dragTimerRef.current) {
+                              clearTimeout(dragTimerRef.current);
+                              dragTimerRef.current = null;
+                            }
+                            initialClickPos.current = null;
+                            setIsLongPress(false);
+                          }}
+                          onMouseLeave={() => {
+                            // If mouse leaves before timer, cancel drag
+                            if (dragTimerRef.current) {
+                              clearTimeout(dragTimerRef.current);
+                              dragTimerRef.current = null;
+                            }
+                            initialClickPos.current = null;
+                            setIsLongPress(false);
                           }}
                         >
                           {/* Top right corner: Tag + Close button grouped together */}

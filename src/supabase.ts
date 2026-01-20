@@ -43,6 +43,7 @@ export interface DbScheduleBlock {
   created_at: string;
   task_id: string | null;
   habit_id: string | null;
+  color_id: string | null;
 }
 
 export interface DbUserSettings {

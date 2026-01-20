@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Calendar, ListTodo, BarChart3, Clock, RefreshCw, Target, Plus,
     MoreVertical, ChevronDown, ChevronRight, ChevronLeft, User,
@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 // Types & Utils
 import { Task, Habit, ScheduleBlock, UserSettings, WeightEntry, WEEKDAYS, GOOGLE_COLORS } from '../types';
 import { formatDateISO, isSameDay, isToday, formatTime, getWeekNumber } from '../utils';
+import { format } from 'date-fns';
 
 // Context
 import { useTheme } from '../context/ThemeContext';
@@ -36,12 +37,12 @@ import {
     updateGoogleCalendarEvent, createGoogleCalendarEvent, clearSavedData as clearGoogleData
 } from '../googleCalendar';
 import {
-    loadScheduleBlocks, createScheduleBlock, deleteScheduleBlock,
     updateScheduleBlock, loadUserSettings, saveUserSettings,
     updateTask, loadNote, saveNote, migrateOverdueTasks,
     loadAllTasksForDate, toggleTaskCompletion, setTaskCompletion,
     generateRecurringInstances, createTaskForDate, deleteTask as deleteTaskFromDb,
-    moveTask, moveTaskToList, updateTagNameAndColor
+    moveTask, moveTaskToList, updateTagNameAndColor,
+    loadScheduleBlocks, deleteScheduleBlock, createScheduleBlock
 } from '../database';
 import { supabase } from '../supabase';
 
@@ -133,9 +134,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
     const [activeTasks, setActiveTasks] = useState<Task[]>([]);
     const [laterTasks, setLaterTasks] = useState<Task[]>([]);
     const [todayTasks, setTodayTasks] = useState<{ active: Task[], later: Task[] }>({ active: [], later: [] });
-    const [schedule, setSchedule] = useState<ScheduleBlock[]>([]);
+
+    // Schedule State
+    const [dbSchedule, setDbSchedule] = useState<ScheduleBlock[]>([]);
     const [newTaskInput, setNewTaskInput] = useState("");
-    const [isDataLoaded, setIsDataLoaded] = useState(false);
+    const [isDataLoaded, setIsDataLoaded] = useState(false); // Initially false, then true forever after first load
+
 
     // UI States
     const [draggedItem, setDraggedItem] = useState<any>(null);
@@ -147,6 +151,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
     const [draggingBlockId, setDraggingBlockId] = useState<number | string | null>(null);
     const [dragStartY, setDragStartY] = useState<number | null>(null);
     const [dragStartTime, setDragStartTime] = useState<number | null>(null);
+
+    // Refs for Drag/Resize (To avoid race conditions in event listeners)
+    const draggingBlockIdRef = useRef<number | string | null>(null);
+    const dragStartYRef = useRef<number | null>(null);
+    const dragStartTimeRef = useRef<number | null>(null);
+    const resizingBlockIdRef = useRef<number | string | null>(null);
+    const resizeStartYRef = useRef<number | null>(null);
+    const resizeStartDurationRef = useRef<number | null>(null);
+
     const [isSyncing, setIsSyncing] = useState(false);
     const [isCalendarSynced, setIsCalendarSynced] = useState(false);
     const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -166,8 +179,144 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
         note: ''
     });
 
-    // Refs for drag/resize
-    const scheduleRef = useRef(schedule);
+    // --- Google Calendar Cache & Sync ---
+    const [googleEventsCache, setGoogleEventsCache] = useState<Record<string, ScheduleBlock[]>>(() => {
+        try {
+            const cached = localStorage.getItem('googleEventsCache_v2');
+            return cached ? JSON.parse(cached) : {};
+        } catch (e) {
+            console.error('Failed to parse googleEventsCache', e);
+            return {};
+        }
+    });
+
+    // Save cache to localStorage whenever it changes
+    useEffect(() => {
+        try {
+            if (Object.keys(googleEventsCache).length > 0) {
+                localStorage.setItem('googleEventsCache_v2', JSON.stringify(googleEventsCache));
+            }
+        } catch (e) {
+            console.error('Failed to save googleEventsCache', e);
+            setNotification({ type: 'error', message: 'Failed to save calendar cache (Storage Full?)' });
+        }
+    }, [googleEventsCache]);
+
+    // --- Synchronous Schedule Derivation ---
+    // 1. Get Google Events from cache instantly
+    const dateKey = formatDateISO(selectedDate);
+    // Explicitly cast to ScheduleBlock[] to avoid type errors
+    const googleSchedule = (googleEventsCache[dateKey] || []) as ScheduleBlock[];
+
+    // 2. Merge with DB schedule
+    const schedule = [...dbSchedule, ...googleSchedule];
+
+    // Helper functions for localStorage data (restoring missing functionality)
+    const getHabits = useCallback(async (): Promise<Habit[]> => {
+        try {
+            const stored = localStorage.getItem('ascend_habits');
+            return stored ? JSON.parse(stored) : [];
+        } catch (e) {
+            console.error('Error loading habits:', e);
+            return [];
+        }
+    }, []);
+
+    const getWeightEntries = useCallback(async (): Promise<WeightEntry[]> => {
+        try {
+            const stored = localStorage.getItem('ascend_weight_entries');
+            return stored ? JSON.parse(stored) : [];
+        } catch (e) {
+            console.error('Error loading weight entries:', e);
+            return [];
+        }
+    }, []);
+
+    // Helper to sync Google Calendar events in background
+    const syncGoogleEvents = useCallback(async () => {
+        if (!googleAccount || !isCalendarSynced) return;
+
+        setIsSyncing(true);
+        try {
+            // Fetch events for a wide range (e.g., +/- 45 days)
+            const now = new Date();
+            const start = new Date(now);
+            start.setDate(now.getDate() - 45);
+            const end = new Date(now);
+            end.setDate(now.getDate() + 45);
+
+            const events = await fetchGoogleCalendarEvents(start, end);
+
+            // Group events by date string (YYYY-MM-DD)
+            const newCache: Record<string, ScheduleBlock[]> = {};
+
+            events.forEach((event: any) => {
+                const eventDate = new Date(event.start.dateTime || event.start.date || new Date().toISOString());
+                const dateKey = formatDateISO(eventDate);
+
+                if (!newCache[dateKey]) {
+                    newCache[dateKey] = [];
+                }
+
+                // Convert Google Event to ScheduleBlock
+                const startHour = eventDate.getHours() + eventDate.getMinutes() / 60;
+                const endD = new Date(event.end.dateTime || event.end.date || new Date().toISOString());
+                const duration = (endD.getTime() - eventDate.getTime()) / (1000 * 60 * 60);
+
+                // Map color
+                let blockColor = 'bg-blue-100';
+                let textColor = 'text-blue-700';
+                if (event.colorId) {
+                    const gColor = GOOGLE_COLORS.find((c: any) => c.id === event.colorId);
+                    if (gColor) {
+                        const parts = gColor.tailwind.split(' ');
+                        blockColor = parts.find((p: string) => p.startsWith('bg-')) || blockColor;
+                        textColor = parts.find((p: string) => p.startsWith('text-')) || textColor;
+                    }
+                }
+
+                newCache[dateKey].push({
+                    id: event.id,
+                    title: event.summary || '(No title)',
+                    tag: null,
+                    start: startHour,
+                    duration: duration,
+                    color: blockColor,
+                    textColor: textColor,
+                    isGoogle: true,
+                    googleEventId: event.id,
+                    colorId: event.colorId,
+                    completed: false
+                });
+
+
+            });
+
+            // Merge with existing cache logic could be complex, but for now we replace the specific days or merge?
+            // To be safe and simple: We update the cache with the fetched range.
+            // But we shouldn't wipe out other days if we only fetched -45/+45.
+            // For now, let's just merge:
+            setGoogleEventsCache(prev => ({
+                ...prev,
+                ...newCache
+            }));
+
+        } catch (error) {
+            console.error('Background sync failed:', error);
+        } finally {
+            setIsSyncing(false);
+        }
+    }, [googleAccount, isCalendarSynced, user]);
+
+    // Background sync interval (every 5 minutes)
+    useEffect(() => {
+        if (!googleAccount || !isCalendarSynced) return;
+
+        syncGoogleEvents(); // Initial sync
+
+        const interval = setInterval(syncGoogleEvents, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, [syncGoogleEvents, googleAccount, isCalendarSynced]); const scheduleRef = useRef(schedule);
     scheduleRef.current = schedule;
     const hourHeightRef = useRef(hourHeight);
     hourHeightRef.current = hourHeight;
@@ -239,7 +388,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
             active: prev.active.map(t => t.id === id ? { ...t, completed: newCompleted, completedAt } : t),
             later: prev.later.map(t => t.id === id ? { ...t, completed: newCompleted, completedAt } : t)
         }));
-        setSchedule(prev => prev.map(block => String(block.taskId) === id ? { ...block, completed: newCompleted } : block));
+        setDbSchedule(prev => prev.map(block => String(block.taskId) === id ? { ...block, completed: newCompleted } : block));
         try {
             await setTaskCompletion(id, newCompleted);
             const associatedBlocks = schedule.filter(b => String(b.taskId) === id);
@@ -256,7 +405,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                 try { await deleteGoogleCalendarEvent(linkedBlock.googleEventId); } catch (error) { console.error('Google delete failed:', error); }
             }
             await deleteScheduleBlock(String(linkedBlock.id));
-            setSchedule(prev => prev.filter(b => String(b.id) !== String(linkedBlock.id)));
+            setDbSchedule(prev => prev.filter(b => String(b.id) !== String(linkedBlock.id)));
         }
         await deleteTaskFromDb(String(taskId));
         if (listType === 'active') {
@@ -272,7 +421,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
         const block = schedule.find(b => String(b.id) === String(blockId));
         if (!block) return;
         const newCompleted = !block.completed;
-        setSchedule(prev => prev.map(b => String(b.id) === String(blockId) ? { ...b, completed: newCompleted } : b));
+        setDbSchedule(prev => prev.map(b => String(b.id) === String(blockId) ? { ...b, completed: newCompleted } : b));
         const now = formatDateISO(new Date());
         if (block.taskId) {
             setActiveTasks(prev => prev.map(t => String(t.id) === String(block.taskId) ? { ...t, completed: newCompleted, completedAt: newCompleted ? now : null } : t));
@@ -293,8 +442,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
         const isReadOnly = block.isGoogle && block.canEdit !== true && !block.taskId && !block.habitId;
         if (isReadOnly) {
             setNotification({ type: 'info', message: 'Read-only calendar event' });
-            setSchedule(prev => prev.filter(b => String(b.id) !== String(blockId)));
-            return;
+            if (isReadOnly) {
+                setNotification({ type: 'info', message: 'Read-only calendar event' });
+                // For read only google events, we effectively hide them if we "delete" them locally? 
+                // Or maybe we can't delete them from view if we can't delete from google.
+                // For now, if we filter them out, we should update cache.
+                // setGoogleEventsCache... (complex, skip for now or alert)
+                return;
+            }
         }
         if (block.googleEventId && googleAccount && (!block.isGoogle || block.canEdit || block.taskId || block.habitId)) {
             try { await deleteGoogleCalendarEvent(block.googleEventId); } catch (error) { console.error('Google delete failed:', error); }
@@ -305,7 +460,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
             await updateTask(String(block.taskId), { time: null });
         }
         await deleteScheduleBlock(String(blockId));
-        setSchedule(prev => prev.filter(b => String(b.id) !== String(blockId)));
+        await deleteScheduleBlock(String(blockId));
+        setDbSchedule(prev => prev.filter(b => String(b.id) !== String(blockId)));
     };
 
     const handleMoveTaskToList = async (taskId: number | string, targetList: 'active' | 'later') => {
@@ -368,7 +524,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                 setHabits(prev => prev.map(h => h.tag === oldTagName ? { ...h, tag: tagName, tagColor: tagColor } : h));
 
                 // Update schedule blocks
-                setSchedule(prev => prev.map(b => b.tag === oldTagName ? { ...b, tag: tagName, color: tagColor } : b));
+                // Update schedule blocks
+                setDbSchedule(prev => prev.map(b => b.tag === oldTagName ? { ...b, tag: tagName, color: tagColor } : b));
             }
         } else {
             setUserTags(prev => [...prev, newTag]);
@@ -419,7 +576,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
         setActiveTasks(prev => prev.map(t => t.tag === tagName ? { ...t, tag: null, tagColor: null } : t));
         setLaterTasks(prev => prev.map(t => t.tag === tagName ? { ...t, tag: null, tagColor: null } : t));
         setHabits(prev => prev.map(h => h.tag === tagName ? { ...h, tag: null, tagColor: null } : h));
-        setSchedule(prev => prev.map(b => b.tag === tagName ? { ...b, tag: null, color: '#6F00FF' } : b));
+        setHabits(prev => prev.map(h => h.tag === tagName ? { ...h, tag: null, tagColor: null } : h));
+        setDbSchedule(prev => prev.map(b => b.tag === tagName ? { ...b, tag: null, color: '#6F00FF' } : b));
 
         // Persist change
         const updatedTags = userTags.filter(t => t.name !== tagName);
@@ -447,7 +605,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
             return { ...updated, currentStreak: streak, longestStreak: Math.max(h.longestStreak, streak) };
         }));
 
-        setSchedule(prev => prev.map(b => b.habitId === habitId ? { ...b, completed: newCompleted } : b));
+        setDbSchedule(prev => prev.map(b => b.habitId === habitId ? { ...b, completed: newCompleted } : b));
         const blocks = schedule.filter(b => b.habitId === habitId);
         for (const b of blocks) updateScheduleBlock(String(b.id), { completed: newCompleted }).catch(err => console.error(err));
     };
@@ -521,126 +679,176 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
 
     // --- Effects ---
 
-    useEffect(() => {
-        const handleMouseMove = (e: MouseEvent) => {
-            const currentHourHeight = hourHeightRef.current;
+    // --- Manual Event Listeners (Refs) ---
+    // Defined outside useEffect to be stable and callable from onMouseDown
 
-            // Handle resize
-            if (resizingBlockId !== null && resizeStartY !== null && resizeStartDuration !== null) {
-                const deltaY = e.clientY - resizeStartY;
-                const deltaHours = deltaY / currentHourHeight;
-                let newDuration = resizeStartDuration + deltaHours;
-                newDuration = Math.round(newDuration * 4) / 4;
-                if (newDuration < 0.25) newDuration = 0.25;
-                setSchedule(prev => prev.map(block => block.id === resizingBlockId ? { ...block, duration: newDuration } : block));
+    const handleWindowMouseMove = useCallback((e: MouseEvent) => {
+        const currentHourHeight = hourHeightRef.current;
+
+        // Handle resize
+        if (resizingBlockIdRef.current !== null && resizeStartYRef.current !== null && resizeStartDurationRef.current !== null) {
+            const deltaY = e.clientY - resizeStartYRef.current;
+            const deltaHours = deltaY / currentHourHeight;
+            let newDuration = resizeStartDurationRef.current + deltaHours;
+            newDuration = Math.round(newDuration * 4) / 4;
+            if (newDuration < 0.25) newDuration = 0.25;
+
+            const rId = resizingBlockIdRef.current;
+            const isResizingGoogle = rId && typeof rId === 'string' && scheduleRef.current.find(b => b.id === rId)?.isGoogle;
+
+            if (isResizingGoogle) {
+                setGoogleEventsCache(prev => {
+                    const dKey = formatDateISO(selectedDate);
+                    const dayEvents = prev[dKey] || [];
+                    return {
+                        ...prev,
+                        [dKey]: dayEvents.map(b => b.id === rId ? { ...b, duration: newDuration } : b)
+                    };
+                });
+            } else {
+                setDbSchedule(prev => prev.map(block => block.id === rId ? { ...block, duration: newDuration } : block));
             }
-
-            // Handle drag/move
-            if (draggingBlockId !== null && dragStartY !== null && dragStartTime !== null) {
-                const deltaY = e.clientY - dragStartY;
-                const deltaHours = deltaY / currentHourHeight;
-                let newStart = dragStartTime + deltaHours;
-                newStart = Math.round(newStart * 4) / 4;
-                const currentSchedule = scheduleRef.current;
-                const block = currentSchedule.find(b => b.id === draggingBlockId);
-                if (block) {
-                    if (newStart < 0) newStart = 0;
-                    if (newStart + block.duration > 24) newStart = 24 - block.duration;
-                }
-                setSchedule(prev => prev.map(block => block.id === draggingBlockId ? { ...block, start: newStart } : block));
-            }
-        };
-
-        const handleMouseUp = async () => {
-            const currentSchedule = scheduleRef.current;
-            const canEditGoogleEvent = (block: ScheduleBlock) => {
-                if (!block.isGoogle) return true;
-                if (block.taskId || block.habitId) return true;
-                return block.canEdit === true;
-            };
-
-            if (resizingBlockId !== null) {
-                const resizedBlock = currentSchedule.find(b => b.id === resizingBlockId);
-                if (resizedBlock) {
-                    if (!resizedBlock.isGoogle) {
-                        await updateScheduleBlock(String(resizedBlock.id), { duration: resizedBlock.duration });
-                    }
-                    if (resizedBlock.googleEventId && googleAccount) {
-                        if (canEditGoogleEvent(resizedBlock)) {
-                            try {
-                                await updateGoogleCalendarEvent(
-                                    resizedBlock.googleEventId,
-                                    resizedBlock.title,
-                                    resizedBlock.start,
-                                    resizedBlock.duration,
-                                    selectedDate,
-                                    resizedBlock.calendarId,
-                                    resizedBlock.color || resizedBlock.calendarColor || undefined
-                                );
-                                setNotification({ type: 'success', message: 'Event updated' });
-                            } catch (error) {
-                                console.error('Failed to update Google Calendar event:', error);
-                                setNotification({ type: 'error', message: 'Failed to update event' });
-                            }
-                        } else {
-                            setNotification({ type: 'info', message: `External calendar events (${resizedBlock.calendarName}) are read-only` });
-                        }
-                    }
-                }
-                setResizingBlockId(null);
-                setResizeStartY(null);
-                setResizeStartDuration(null);
-            }
-
-            if (draggingBlockId !== null) {
-                const movedBlock = currentSchedule.find(b => b.id === draggingBlockId);
-                if (movedBlock) {
-                    if (!movedBlock.isGoogle) {
-                        await updateScheduleBlock(String(movedBlock.id), { start: movedBlock.start });
-                    }
-                    if (movedBlock.googleEventId && googleAccount) {
-                        if (canEditGoogleEvent(movedBlock)) {
-                            try {
-                                await updateGoogleCalendarEvent(
-                                    movedBlock.googleEventId,
-                                    movedBlock.title,
-                                    movedBlock.start,
-                                    movedBlock.duration,
-                                    selectedDate,
-                                    movedBlock.calendarId,
-                                    movedBlock.color || movedBlock.calendarColor || undefined
-                                );
-                                setNotification({ type: 'success', message: 'Event time updated' });
-                            } catch (error) {
-                                console.error('Failed to update Google Calendar event:', error);
-                                setNotification({ type: 'error', message: 'Failed to update event' });
-                            }
-                        } else {
-                            setNotification({ type: 'info', message: `External calendar events (${movedBlock.calendarName}) are read-only` });
-                        }
-                    }
-                    if (movedBlock.taskId) {
-                        const newTimeString = formatTime(movedBlock.start);
-                        setActiveTasks(prev => prev.map(t => String(t.id) === String(movedBlock.taskId) ? { ...t, time: newTimeString } : t));
-                        setLaterTasks(prev => prev.map(t => String(t.id) === String(movedBlock.taskId) ? { ...t, time: newTimeString } : t));
-                        await updateTask(String(movedBlock.taskId), { time: newTimeString });
-                    }
-                }
-                setDraggingBlockId(null);
-                setDragStartY(null);
-                setDragStartTime(null);
-            }
-        };
-
-        if (resizingBlockId !== null || draggingBlockId !== null) {
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
         }
-        return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
+
+        // Handle drag/move
+        if (draggingBlockIdRef.current !== null && dragStartYRef.current !== null && dragStartTimeRef.current !== null) {
+            const deltaY = e.clientY - dragStartYRef.current;
+            const deltaHours = deltaY / currentHourHeight;
+            let newStart = dragStartTimeRef.current + deltaHours;
+            newStart = Math.round(newStart * 4) / 4;
+
+            const currentSchedule = scheduleRef.current;
+            const dId = draggingBlockIdRef.current;
+            const block = currentSchedule.find(b => b.id === dId);
+
+            if (block) {
+                if (newStart < 0) newStart = 0;
+                if (newStart + block.duration > 24) newStart = 24 - block.duration;
+            }
+
+            const isDraggingGoogle = dId && typeof dId === 'string' && currentSchedule.find(b => b.id === dId)?.isGoogle;
+
+            if (isDraggingGoogle) {
+                setGoogleEventsCache(prev => {
+                    const dKey = formatDateISO(selectedDate);
+                    const dayEvents = prev[dKey] || [];
+                    return {
+                        ...prev,
+                        [dKey]: dayEvents.map(b => b.id === dId ? { ...b, start: newStart } : b)
+                    };
+                });
+            } else {
+                setDbSchedule(prev => prev.map(block => block.id === dId ? { ...block, start: newStart } : block));
+            }
+        }
+    }, [selectedDate]); // Dependencies: selectedDate (used in cache key)
+
+    const handleWindowMouseUp = useCallback(async () => {
+        const currentSchedule = scheduleRef.current;
+        const canEditGoogleEvent = (block: ScheduleBlock) => {
+            if (!block.isGoogle) return true;
+            if (block.taskId || block.habitId) return true;
+            return block.canEdit === true;
         };
-    }, [resizingBlockId, resizeStartY, resizeStartDuration, draggingBlockId, dragStartY, dragStartTime, googleAccount, selectedDate]);
+
+        // Resize End
+        if (resizingBlockIdRef.current !== null) {
+            const rId = resizingBlockIdRef.current;
+            const resizedBlock = currentSchedule.find(b => b.id === rId);
+
+            if (resizedBlock) {
+                if (!resizedBlock.isGoogle) {
+                    await updateScheduleBlock(String(resizedBlock.id), { duration: resizedBlock.duration });
+                }
+                if (resizedBlock.googleEventId && googleAccount) {
+                    if (canEditGoogleEvent(resizedBlock)) {
+                        try {
+                            await updateGoogleCalendarEvent(
+                                resizedBlock.googleEventId,
+                                resizedBlock.title,
+                                resizedBlock.start,
+                                resizedBlock.duration,
+                                selectedDate,
+                                resizedBlock.calendarId,
+                                undefined, // Don't pass hexColor to avoid re-mapping logic on time update
+                                resizedBlock.colorId
+                            );
+                            setNotification({ type: 'success', message: 'Event updated' });
+                        } catch (error) {
+                            console.error('Failed to update Google Calendar event:', error);
+                            setNotification({ type: 'error', message: 'Failed to update event' });
+                        }
+                    } else {
+                        setNotification({ type: 'info', message: `Base calendar events cannot be edited here` });
+                    }
+                }
+            }
+            // Clear Ref interaction state
+            resizingBlockIdRef.current = null;
+            resizeStartYRef.current = null;
+            resizeStartDurationRef.current = null;
+
+            // Clear UI state
+            setResizingBlockId(null);
+            setResizeStartY(null);
+            setResizeStartDuration(null);
+        }
+
+        // Drag End
+        if (draggingBlockIdRef.current !== null) {
+            const dId = draggingBlockIdRef.current;
+            const movedBlock = currentSchedule.find(b => b.id === dId);
+
+            if (movedBlock) {
+                if (!movedBlock.isGoogle) {
+                    await updateScheduleBlock(String(movedBlock.id), { start: movedBlock.start });
+                }
+                if (movedBlock.googleEventId && googleAccount) {
+                    if (canEditGoogleEvent(movedBlock)) {
+                        try {
+                            await updateGoogleCalendarEvent(
+                                movedBlock.googleEventId,
+                                movedBlock.title,
+                                movedBlock.start,
+                                movedBlock.duration,
+                                selectedDate,
+                                movedBlock.calendarId,
+                                undefined,
+                                movedBlock.colorId
+                            );
+                            setNotification({ type: 'success', message: 'Event time updated' });
+                        } catch (error) {
+                            console.error('Failed to update Google Calendar event:', error);
+                            setNotification({ type: 'error', message: 'Failed to update event' });
+                        }
+                    } else {
+                        setNotification({ type: 'info', message: `Base calendar events cannot be edited here` });
+                    }
+                }
+                if (movedBlock.taskId) {
+                    const newTimeString = formatTime(movedBlock.start);
+                    setActiveTasks(prev => prev.map(t => String(t.id) === String(movedBlock.taskId) ? { ...t, time: newTimeString } : t));
+                    setLaterTasks(prev => prev.map(t => String(t.id) === String(movedBlock.taskId) ? { ...t, time: newTimeString } : t));
+                    await updateTask(String(movedBlock.taskId), { time: newTimeString });
+                }
+            }
+            // Clear Ref interaction state
+            draggingBlockIdRef.current = null;
+            dragStartYRef.current = null;
+            dragStartTimeRef.current = null;
+
+            // Clear UI state
+            setDraggingBlockId(null);
+            setDragStartY(null);
+            setDragStartTime(null);
+        }
+
+        // Remove listeners
+        window.removeEventListener('mousemove', handleWindowMouseMove);
+        window.removeEventListener('mouseup', handleWindowMouseUp);
+
+    }, [googleAccount, selectedDate, handleWindowMouseMove]);
+
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 60000);
@@ -698,75 +906,109 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
         checkGoogle();
     }, [user]);
 
+    // --- Load Data Effect ---
     useEffect(() => {
+        let isMounted = true;
+
         const loadData = async () => {
             if (!user) return;
-            if (!isDataLoaded) setIsDataLoaded(false);
+
+            // Note: We don't set loading state here to ensure snappy feel,
+            // as we want to immediately show cached data if available.
+
             try {
                 const todayISO = formatDateISO(selectedDate);
+                // Also trigger recurring instances gen if needed (non-blocking if possible, but we await to be safe)
                 await generateRecurringInstances(selectedDate);
-                const [allTasksData, blocksData, noteContent, todayTasksData] = await Promise.all([
+
+                // Parallel fetch of DB data
+                const [tasksData, habitsData, dbScheduleBlocks, noteContent, weightData, todayTasksData] = await Promise.all([
                     loadAllTasksForDate(selectedDate),
+                    getHabits(),
                     loadScheduleBlocks(selectedDate),
                     loadNote(selectedDate),
+                    getWeightEntries(),
                     isToday(selectedDate) ? null : loadAllTasksForDate(new Date())
                 ]);
-                const { active, later } = allTasksData;
+
+                if (!isMounted) return;
+
+                const { active, later } = tasksData;
+
+                // Update State
                 setActiveTasks(active);
                 setLaterTasks(later);
+                setHabits(habitsData);
+                setNotesContent(noteContent || '');
+                setWeightEntries(weightData);
+
                 if (isToday(selectedDate)) {
                     setTodayTasks({ active, later });
                 } else if (todayTasksData) {
                     setTodayTasks(todayTasksData);
                 }
 
-                const synced = (blocksData as ScheduleBlock[]).map(b => {
+                // Update Refs for internal logic using them
+                habitsRef.current = habitsData;
+
+                // --- MERGE DB & GOOGLE EVENTS ---
+                // Note: Google events are now handled synchronously in the render loop using googleSchedule
+                // We only need to process and set the DB blocks here.
+
+                // Process DB Blocks (Sync Habit Status)
+                const syncedDbBlocks = dbScheduleBlocks.map((b: ScheduleBlock) => {
                     if (b.taskId) {
                         const t = active.find(at => String(at.id) === String(b.taskId)) || later.find(lt => String(lt.id) === String(b.taskId));
                         if (t && t.completed !== b.completed) return { ...b, completed: t.completed };
                     }
                     if (b.habitId) {
-                        const h = habitsRef.current.find(hab => String(hab.id) === String(b.habitId));
+                        const h = habitsData.find(hab => String(hab.id) === String(b.habitId));
                         if (h && h.completedDates.includes(todayISO)) return { ...b, completed: true };
                     }
                     return b;
                 });
-                setSchedule(synced.filter(b => !b.habitId || habitsRef.current.some(h => String(h.id) === String(b.habitId))));
-                setNotesContent(noteContent);
-                setIsDataLoaded(true);
-                if (googleAccount) loadGoogleEvents(selectedDate);
-            } catch (err) { setIsDataLoaded(true); }
-        };
-        loadData();
-    }, [user, selectedDate]);
 
-    const loadGoogleEvents = async (date: Date) => {
-        if (!googleAccount) return;
-        const token = await getValidAccessToken();
-        if (!token) return;
-        setAccessToken(token);
-        try {
-            const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
-            const end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
-            const gEvents = await fetchGoogleCalendarEvents(start, end, true, true);
-            const gBlocks: ScheduleBlock[] = gEvents.map(e => ({
-                id: e.id, title: e.title, tag: (e as any).calendarName || 'google',
-                start: e.start, duration: e.duration, color: '', textColor: 'text-white',
-                isGoogle: true, googleEventId: e.id, completed: false,
-                calendarColor: (e as any).calendarColor, calendarName: (e as any).calendarName,
-                calendarId: (e as any).calendarId, canEdit: (e as any).canEdit ?? false
-            }));
-            setSchedule(prev => {
-                const ids = new Set(gBlocks.map(b => b.googleEventId));
-                const filtered = prev.filter(b => !b.googleEventId || !ids.has(b.googleEventId) || !b.isGoogle || b.taskId || b.habitId);
-                return [...filtered, ...gBlocks];
-            });
-        } catch (err) { console.error(err); }
-    };
+                // Filter out DB blocks ensuring we don't show blocks for deleted habits
+                const filteredDbBlocks = syncedDbBlocks.filter(b => !b.habitId || habitsData.some(h => String(h.id) === String(b.habitId)));
+
+                // We also filter out any DB blocks that might erroneously claim to be google blocks (legacy cleanup)
+                const realDbBlocks = filteredDbBlocks.filter(b => !b.isGoogle);
+
+                setDbSchedule(realDbBlocks);
+                setIsDataLoaded(true);
+
+                // Update Day Details Modal Data if open
+                if (isDayDetailsOpen && isSameDay(dayDetailsDate, selectedDate)) {
+                    setDayDetailsData({
+                        habits: habitsData,
+                        tasks: { active, later },
+                        weight: weightData.find(w => w.date === formatDateISO(selectedDate))?.weight || null,
+                        note: noteContent || ''
+                    });
+                }
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                setNotification({ type: 'error', message: 'Failed to load data' });
+                setIsDataLoaded(true);
+            }
+        };
+
+        loadData();
+
+        return () => { isMounted = false; };
+    }, [selectedDate, user, isDayDetailsOpen, dayDetailsDate, getHabits, getWeightEntries]); // Removed googleEventsCache from dependency to avoid re-running loadData just for google updates
+
+    // --- Synchronous Schedule Derivation ---
+    // (Moved to top of component)
 
     const hourLabels = Array.from({ length: 24 }, (_, i) => i);
 
-    if (!isDataLoaded) return (
+    // Prevent "Empty" flash on refresh:
+    // If we have cached Google events or habits, render immediately while fetching fresh data in background.
+    const hasCachedData = googleSchedule.length > 0 || habits.length > 0;
+
+    if (!isDataLoaded && !hasCachedData) return (
         <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
             <Loader2 className="w-12 h-12 animate-spin text-[#6F00FF]" />
         </div>
@@ -866,7 +1108,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                             onRemoveTag={handleRemoveTagFromTask}
                                             onOpenTagModal={handleOpenTagModal}
                                             onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
-                                            onDeleteTag={handleDeleteTagByName}
                                         />
                                     ))}
                                 </div>
@@ -894,7 +1135,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                     onRemoveTag={handleRemoveTagFromTask}
                                                     onOpenTagModal={id => handleOpenTagModal(id)}
                                                     onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
-                                                    onDeleteTag={handleDeleteTagByName}
                                                 />
                                             ))}
                                         </div>
@@ -904,9 +1144,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                         </div>
 
                         <div className="flex-1 flex flex-col bg-white dark:bg-slate-950 relative overflow-hidden">
-                            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
+                            <div className="relative z-30 flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
                                 <div className="flex items-center gap-4">
-                                    <div className="relative">
+                                    <div className="relative z-50">
                                         <button
                                             onClick={() => setIsCalendarOpen(!isCalendarOpen)}
                                             className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:border-[#6F00FF]/50 transition-all font-bold group"
@@ -917,6 +1157,80 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                             </span>
                                             <ChevronDown size={16} className={`text-slate-400 group-hover:text-slate-600 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
                                         </button>
+
+                                        {isCalendarOpen && (
+                                            <div className="absolute top-full left-0 mt-2 p-4 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 z-50 w-[320px]">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <button
+                                                        onClick={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1))}
+                                                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"
+                                                    >
+                                                        <ChevronLeft size={16} />
+                                                    </button>
+                                                    <span className="font-bold dark:text-white">
+                                                        {calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1))}
+                                                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"
+                                                    >
+                                                        <ChevronRight size={16} />
+                                                    </button>
+                                                </div>
+
+                                                <div className="grid grid-cols-7 mb-2">
+                                                    {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                                                        <div key={day} className="h-8 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase">
+                                                            {day}
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                <div className="grid grid-cols-7 gap-1">
+                                                    {Array.from({ length: new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), 1).getDay() }).map((_, i) => (
+                                                        <div key={`empty-${i}`} />
+                                                    ))}
+
+                                                    {Array.from({ length: new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 0).getDate() }).map((_, i) => {
+                                                        const day = i + 1;
+                                                        const date = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
+                                                        const isSelected = isSameDay(date, selectedDate);
+
+                                                        return (
+                                                            <button
+                                                                key={day}
+                                                                onClick={() => {
+                                                                    setSelectedDate(date);
+                                                                    setIsCalendarOpen(false);
+                                                                }}
+                                                                className={`
+                                                                h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium transition-all
+                                                                ${isSelected
+                                                                        ? 'bg-[#6F00FF] text-white shadow-lg shadow-purple-500/30'
+                                                                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-300'
+                                                                    }
+                                                                ${isToday(date) && !isSelected ? 'bg-slate-100 dark:bg-slate-800 font-bold' : ''}
+                                                            `}
+                                                            >
+                                                                {day}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        const now = new Date();
+                                                        setSelectedDate(now);
+                                                        setCalendarViewDate(now);
+                                                        setIsCalendarOpen(false);
+                                                    }}
+                                                    className="w-full mt-4 py-2 text-sm font-bold text-slate-500 hover:text-[#6F00FF] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors"
+                                                >
+                                                    Today
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -929,7 +1243,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                         {isZoomedOut ? <ZoomIn size={18} /> : <ZoomOut size={18} />}
                                     </button>
                                     <button
-                                        onClick={() => { setIsSyncing(true); loadGoogleEvents(selectedDate).finally(() => setIsSyncing(false)); }}
+                                        onClick={() => {
+                                            syncGoogleEvents();
+                                            setNotification({ type: 'info', message: 'Syncing calendar...' });
+                                        }}
                                         className={`flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-bold transition-all ${isSyncing ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#6F00FF]/50'}`}
                                         disabled={isSyncing}
                                     >
@@ -979,11 +1296,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                         };
                                                         const saved = await createScheduleBlock(blockData, selectedDate);
                                                         if (saved) {
-                                                            setSchedule(prev => [...prev, saved]);
+                                                            setDbSchedule(prev => [...prev, saved]);
                                                             handleMoveTaskToList(task.id, 'active');
                                                         }
+                                                        setDragOverHour(null);
                                                     }
-                                                    setDragOverHour(null);
                                                 }}
                                                 className={`border-b border-slate-100 dark:border-slate-900/50 transition-colors ${dragOverHour === hour ? 'bg-[#6F00FF]/5' : ''}`}
                                             />
@@ -1016,9 +1333,19 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                 className={`group rounded-lg p-2 border-l-4 shadow-sm transition-all cursor-move select-none overflow-hidden ${block.isGoogle ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-400' : 'bg-[#6F00FF]/10 dark:bg-[#6F00FF]/20 border-[#6F00FF]'} ${block.completed ? 'opacity-50 grayscale-[0.3]' : ''}`}
                                                 onMouseDown={e => {
                                                     if ((e.target as HTMLElement).classList.contains('resize-handle')) return;
+                                                    // 1. Set Refs (Instant source of truth)
+                                                    draggingBlockIdRef.current = block.id;
+                                                    dragStartYRef.current = e.clientY;
+                                                    dragStartTimeRef.current = block.start;
+
+                                                    // 2. Set State (For UI styling)
                                                     setDraggingBlockId(block.id);
                                                     setDragStartY(e.clientY);
                                                     setDragStartTime(block.start);
+
+                                                    // 3. Attach Listeners Synchronously
+                                                    window.addEventListener('mousemove', handleWindowMouseMove);
+                                                    window.addEventListener('mouseup', handleWindowMouseUp);
                                                 }}
                                             >
                                                 <div className="flex items-start justify-between h-full">
@@ -1045,9 +1372,19 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                     className="resize-handle absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-[#6F00FF]/30 transition-colors"
                                                     onMouseDown={e => {
                                                         e.stopPropagation();
+                                                        // 1. Set Refs
+                                                        resizingBlockIdRef.current = block.id;
+                                                        resizeStartYRef.current = e.clientY;
+                                                        resizeStartDurationRef.current = block.duration;
+
+                                                        // 2. Set State
                                                         setResizingBlockId(block.id);
                                                         setResizeStartY(e.clientY);
                                                         setResizeStartDuration(block.duration);
+
+                                                        // 3. Attach Listeners Synchronously
+                                                        window.addEventListener('mousemove', handleWindowMouseMove);
+                                                        window.addEventListener('mouseup', handleWindowMouseUp);
                                                     }}
                                                 />
                                             </div>
@@ -1160,7 +1497,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                         onRemoveTag={handleRemoveTagFromTask}
                                                         onOpenTagModal={handleOpenTagModal}
                                                         onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
-                                                        onDeleteTag={handleDeleteTagByName}
                                                     />
                                                 ))}
                                                 {todayTasks.later.map(task => (
@@ -1174,7 +1510,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                         onRemoveTag={handleRemoveTagFromTask}
                                                         onOpenTagModal={handleOpenTagModal}
                                                         onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
-                                                        onDeleteTag={handleDeleteTagByName}
                                                     />
                                                 ))}
                                             </>

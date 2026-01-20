@@ -743,7 +743,8 @@ export async function updateGoogleCalendarEvent(
   durationHours: number,
   date: Date = new Date(),
   calendarId?: string,
-  hexColor?: string
+  hexColor?: string,
+  specificColorId?: string
 ): Promise<void> {
   const isValid = await ensureValidToken();
   if (!isValid) {
@@ -758,18 +759,24 @@ export async function updateGoogleCalendarEvent(
   const endDate = new Date(startDate);
   endDate.setTime(startDate.getTime() + durationHours * 60 * 60 * 1000);
 
-  // Always include colorId - use Grape as default if no color provided
-  const colorId = getGoogleColorId(hexColor, null);
+  // Determine colorId logic:
+  // 1. Use specific proper ID if provided (preserves existing color)
+  // 2. If hex provided and starts with #, map to closest ID (user changed color)
+  // 3. Otherwise, return undefined to let event inherit calendar default (essential for "Peacock" etc.)
+  let colorId = specificColorId;
+
+  if (!colorId && hexColor && hexColor.startsWith('#')) {
+    colorId = mapHexToGoogleColorId(hexColor);
+  }
 
   console.log('🎨 Update color mapping:', {
-    input: { hexColor },
+    input: { hexColor, specificColorId },
     output: colorId,
-    colorName: GOOGLE_COLOR_NAMES[colorId] || 'Unknown'
+    colorName: colorId ? (GOOGLE_COLOR_NAMES[colorId] || 'Unknown') : 'Inherit/Default'
   });
 
   const eventResource: any = {
     summary: title,
-    colorId: colorId, // Always set colorId
     start: {
       dateTime: startDate.toISOString(),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -780,10 +787,16 @@ export async function updateGoogleCalendarEvent(
     },
   };
 
+  // Only add colorId if we have a specific one. 
+  // Omitting it (undefined) lets it inherit the calendar's color.
+  if (colorId) {
+    eventResource.colorId = colorId;
+  }
+
   console.log('📤 Updating Google Calendar event:', JSON.stringify(eventResource, null, 2));
 
   try {
-    await gapi.client.calendar.events.update({
+    await (gapi.client.calendar.events as any).patch({
       calendarId: targetCalendarId,
       eventId: eventId,
       resource: eventResource,

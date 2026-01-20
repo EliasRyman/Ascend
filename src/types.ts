@@ -46,6 +46,7 @@ export interface ScheduleBlock {
     calendarName?: string;
     calendarId?: string;
     canEdit?: boolean;
+    colorId?: string;
 }
 
 export interface UserSettings {
