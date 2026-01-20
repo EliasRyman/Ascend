@@ -71,6 +71,7 @@ import {
 } from './googleCalendar';
 
 import ConsistencyCard from './components/ConsistencyCard';
+import DayDetailsModal from './components/DayDetailsModal';
 import WeightSection from './components/WeightSection';
 import {
   signIn,
@@ -1427,6 +1428,59 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   useEffect(() => {
     localStorage.setItem('ascend_selected_date', selectedDate.toISOString());
   }, [selectedDate]);
+
+  // --- Day Details Modal ---
+  const [isDayDetailsOpen, setIsDayDetailsOpen] = useState(false);
+  const [dayDetailsDate, setDayDetailsDate] = useState<Date>(new Date());
+  const [dayDetailsData, setDayDetailsData] = useState<{
+    habits: Habit[];
+    tasks: { active: Task[]; later: Task[] };
+    weight: number | null;
+    note: string;
+  }>({
+    habits: [],
+    tasks: { active: [], later: [] },
+    weight: null,
+    note: ''
+  });
+
+  const handleDayClick = async (date: Date) => {
+    setDayDetailsDate(date);
+
+    const dateStr = formatDateISO(date);
+    const weightEntry = weightEntries.find(w => w.date === dateStr);
+    const weight = weightEntry ? weightEntry.weight : null;
+
+    let active: Task[] = [];
+    let later: Task[] = [];
+    let note = '';
+
+    if (isSameDay(date, selectedDate)) {
+      active = activeTasks;
+      later = laterTasks;
+      note = notesContent;
+    } else {
+      try {
+        const { active: fetchedActive, later: fetchedLater } = await loadAllTasksForDate(dateStr);
+        active = fetchedActive;
+        later = fetchedLater;
+        const fetchedNote = await loadNote(dateStr);
+        note = fetchedNote || '';
+      } catch (error) {
+        console.error("Error fetching day details:", error);
+      }
+    }
+
+    setDayDetailsData({
+      habits: habits,
+      tasks: { active, later },
+      weight,
+      note
+    });
+    setIsDayDetailsOpen(true);
+  };
+
+
 
   // Load data from database on mount
   useEffect(() => {
@@ -3714,7 +3768,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
               {/* Consistency/Streak View */}
               < div className="pt-0" >
-                <ConsistencyCard habits={habits} />
+                <ConsistencyCard habits={habits} onDayClick={handleDayClick} />
               </div >
             </div >
           </div >
@@ -5154,6 +5208,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           </button>
         </div>
       </div>
+      <DayDetailsModal
+        isOpen={isDayDetailsOpen}
+        onClose={() => setIsDayDetailsOpen(false)}
+        date={dayDetailsDate}
+        data={dayDetailsData}
+      />
     </div >
 
   )

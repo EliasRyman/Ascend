@@ -9,9 +9,10 @@ interface Habit {
 
 interface ConsistencyCardProps {
     habits: Habit[];
+    onDayClick?: (date: Date) => void;
 }
 
-const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits }) => {
+const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits, onDayClick }) => {
     const [viewRange, setViewRange] = useState<'week' | 'month' | 'year'>('year');
     const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -362,7 +363,13 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits }) => {
                                     return (
                                         <div
                                             key={rowIndex}
-                                            className={`w-full aspect-square rounded-[1.5px] md:rounded-sm transition-colors ${getCellColor(cellData.level)} group relative`}
+                                            onClick={() => {
+                                                console.log("Click on cell:", cellData.date);
+                                                console.log("onDayClick type:", typeof onDayClick);
+                                                if (!onDayClick) console.error("onDayClick is UNDEFINED!");
+                                                onDayClick?.(cellData.date);
+                                            }}
+                                            className={`w-full aspect-square rounded-[1.5px] md:rounded-sm transition-colors ${getCellColor(cellData.level)} group relative ${onDayClick ? 'cursor-pointer hover:ring-2 hover:ring-purple-400 hover:ring-offset-2 hover:ring-offset-white dark:hover:ring-offset-slate-900 z-0 hover:z-10' : ''}`}
                                         >
                                             {/* Tooltip on hover */}
                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10 transition-opacity">

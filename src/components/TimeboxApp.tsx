@@ -24,6 +24,7 @@ import NoteSection from './NoteSection';
 import WeightSection from './WeightSection';
 import StreakFlame from './StreakFlame';
 import ConsistencyCard from './ConsistencyCard';
+import DayDetailsModal from './DayDetailsModal';
 import { WeightTrendChart } from './WeightTrendChart';
 
 // Backend Services
@@ -149,6 +150,21 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
     const [isSyncing, setIsSyncing] = useState(false);
     const [isCalendarSynced, setIsCalendarSynced] = useState(false);
     const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+    // Day Details Modal State
+    const [isDayDetailsOpen, setIsDayDetailsOpen] = useState(false);
+    const [dayDetailsDate, setDayDetailsDate] = useState<Date>(new Date());
+    const [dayDetailsData, setDayDetailsData] = useState<{
+        habits: Habit[];
+        tasks: { active: Task[]; later: Task[] };
+        weight: number | null;
+        note: string;
+    }>({
+        habits: [],
+        tasks: { active: [], later: [] },
+        weight: null,
+        note: ''
+    });
 
     // Refs for drag/resize
     const scheduleRef = useRef(schedule);
@@ -460,6 +476,49 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
         return streak;
     };
 
+    const handleDayClick = async (date: Date) => {
+        console.log("Day clicked in TimeboxApp:", date);
+        setDayDetailsDate(date);
+
+        // 1. Habits (Already in state, just filter)
+        // habits are already available in 'habits' state
+
+        // 2. Weight
+        const dateStr = formatDateISO(date);
+        const weightEntry = weightEntries.find(w => w.date === dateStr);
+
+        // 3. Notes & Tasks (Need to fetch if not today/selectedDate)
+        let note = "";
+        let tasks = { active: [] as Task[], later: [] as Task[] };
+
+        // Optimistic check if we already have the data locally for selected date
+        if (isSameDay(date, selectedDate)) {
+            note = notesContent;
+            tasks = { active: activeTasks, later: laterTasks };
+        } else {
+            // Fetch from DB
+            try {
+                const [fetchedTasks, fetchedNote] = await Promise.all([
+                    loadAllTasksForDate(date),
+                    loadNote(date)
+                ]);
+                tasks = fetchedTasks;
+                note = fetchedNote;
+            } catch (err) {
+                console.error("Failed to fetch day details", err);
+            }
+        }
+
+        setDayDetailsData({
+            habits: habits, // Pass all habits, modal filters them
+            tasks,
+            weight: weightEntry ? weightEntry.weight : null,
+            note
+        });
+
+        setIsDayDetailsOpen(true);
+    };
+
     // --- Effects ---
 
     useEffect(() => {
@@ -639,38 +698,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
         checkGoogle();
     }, [user]);
 
-    const fetchGoogleEventsForDate = async (date: Date): Promise<ScheduleBlock[]> => {
-        if (!googleAccount) return [];
-        const token = await getValidAccessToken();
-        if (!token) return [];
-        setAccessToken(token);
-        try {
-            const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
-            const end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
-            const gEvents = await fetchGoogleCalendarEvents(start, end, true, true);
-            return gEvents.map(e => ({
-                id: e.id, title: e.title, tag: (e as any).calendarName || 'google',
-                start: e.start, duration: e.duration, color: '', textColor: 'text-white',
-                isGoogle: true, googleEventId: e.id, completed: false,
-                calendarColor: (e as any).calendarColor, calendarName: (e as any).calendarName,
-                calendarId: (e as any).calendarId, canEdit: (e as any).canEdit ?? false
-            }));
-        } catch (err) {
-            console.error(err);
-            return [];
-        }
-    };
-
     useEffect(() => {
-        let isCurrent = true;
-
         const loadData = async () => {
             if (!user) return;
-            // Delay showing loader slightly to avoid flickers on fast loads
-            const loaderTimeout = setTimeout(() => {
-                if (isCurrent && !isDataLoaded) setIsDataLoaded(false);
-            }, 100);
-
+            if (!isDataLoaded) setIsDataLoaded(false);
             try {
                 const todayISO = formatDateISO(selectedDate);
                 await generateRecurringInstances(selectedDate);
@@ -680,12 +711,6 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                     loadNote(selectedDate),
                     isToday(selectedDate) ? null : loadAllTasksForDate(new Date())
                 ]);
-
-                if (!isCurrent) {
-                    clearTimeout(loaderTimeout);
-                    return;
-                }
-
                 const { active, later } = allTasksData;
                 setActiveTasks(active);
                 setLaterTasks(later);
@@ -706,66 +731,37 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                     }
                     return b;
                 });
-
-                let currentSchedule = synced.filter(b => !b.habitId || habitsRef.current.some(h => String(h.id) === String(b.habitId)));
-                const gBlocks = await fetchGoogleEventsForDate(selectedDate);
-
-                if (!isCurrent) {
-                    clearTimeout(loaderTimeout);
-                    return;
-                }
-
-                // Remove ALL existing pure Google events (that aren't linked to tasks/habits)
-                // This ensures we don't keep events from a previous date when switching days
-                const scheduleWithoutOldGoogleEvents = currentSchedule.filter(b =>
-                    !b.isGoogle || b.taskId || b.habitId
-                );
-
-                // Add the new Google events ensuring no duplicates with existing linked events
-                const linkedGoogleIds = new Set(scheduleWithoutOldGoogleEvents.map(b => b.googleEventId).filter(Boolean));
-                const uniqueGBlocks = gBlocks.filter(b => !b.googleEventId || !linkedGoogleIds.has(b.googleEventId));
-
-                setSchedule([...scheduleWithoutOldGoogleEvents, ...uniqueGBlocks]);
+                setSchedule(synced.filter(b => !b.habitId || habitsRef.current.some(h => String(h.id) === String(b.habitId))));
                 setNotesContent(noteContent);
                 setIsDataLoaded(true);
-                clearTimeout(loaderTimeout);
-            } catch (err) {
-                if (isCurrent) {
-                    setIsDataLoaded(true);
-                }
-                clearTimeout(loaderTimeout);
-            }
+                if (googleAccount) loadGoogleEvents(selectedDate);
+            } catch (err) { setIsDataLoaded(true); }
         };
-
         loadData();
-
-        return () => {
-            isCurrent = false;
-        };
     }, [user, selectedDate]);
 
-    const handleSyncGoogleEvents = async () => {
+    const loadGoogleEvents = async (date: Date) => {
         if (!googleAccount) return;
-        setIsSyncing(true);
+        const token = await getValidAccessToken();
+        if (!token) return;
+        setAccessToken(token);
         try {
-            const gBlocks = await fetchGoogleEventsForDate(selectedDate);
+            const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+            const end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+            const gEvents = await fetchGoogleCalendarEvents(start, end, true, true);
+            const gBlocks: ScheduleBlock[] = gEvents.map(e => ({
+                id: e.id, title: e.title, tag: (e as any).calendarName || 'google',
+                start: e.start, duration: e.duration, color: '', textColor: 'text-white',
+                isGoogle: true, googleEventId: e.id, completed: false,
+                calendarColor: (e as any).calendarColor, calendarName: (e as any).calendarName,
+                calendarId: (e as any).calendarId, canEdit: (e as any).canEdit ?? false
+            }));
             setSchedule(prev => {
-                const scheduleWithoutOldGoogleEvents = prev.filter(b =>
-                    !b.isGoogle || b.taskId || b.habitId
-                );
-
-                const linkedGoogleIds = new Set(scheduleWithoutOldGoogleEvents.map(b => b.googleEventId).filter(Boolean));
-                const uniqueGBlocks = gBlocks.filter(b => !b.googleEventId || !linkedGoogleIds.has(b.googleEventId));
-
-                return [...scheduleWithoutOldGoogleEvents, ...uniqueGBlocks];
+                const ids = new Set(gBlocks.map(b => b.googleEventId));
+                const filtered = prev.filter(b => !b.googleEventId || !ids.has(b.googleEventId) || !b.isGoogle || b.taskId || b.habitId);
+                return [...filtered, ...gBlocks];
             });
-            setNotification({ type: 'success', message: 'Calendar synced' });
-        } catch (error) {
-            console.error(error);
-            setNotification({ type: 'error', message: 'Sync failed' });
-        } finally {
-            setIsSyncing(false);
-        }
+        } catch (err) { console.error(err); }
     };
 
     const hourLabels = Array.from({ length: 24 }, (_, i) => i);
@@ -829,8 +825,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                     <h2 className="font-bold dark:text-white flex items-center gap-2">
                                         <ListTodo size={18} className="text-[#6F00FF]" /> To-Do List
                                     </h2>
+                                    <ConsistencyCard habits={habits} onDayClick={handleDayClick} />
                                 </div>
-                                <div className="relative">
+                                <div className="mt-6 p-4">
                                     <Plus className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                     <input
                                         className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#6F00FF]/20 dark:text-white"
@@ -869,6 +866,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                             onRemoveTag={handleRemoveTagFromTask}
                                             onOpenTagModal={handleOpenTagModal}
                                             onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
+                                            onDeleteTag={handleDeleteTagByName}
                                         />
                                     ))}
                                 </div>
@@ -896,6 +894,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                     onRemoveTag={handleRemoveTagFromTask}
                                                     onOpenTagModal={id => handleOpenTagModal(id)}
                                                     onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
+                                                    onDeleteTag={handleDeleteTagByName}
                                                 />
                                             ))}
                                         </div>
@@ -930,7 +929,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                         {isZoomedOut ? <ZoomIn size={18} /> : <ZoomOut size={18} />}
                                     </button>
                                     <button
-                                        onClick={() => { handleSyncGoogleEvents(); }}
+                                        onClick={() => { setIsSyncing(true); loadGoogleEvents(selectedDate).finally(() => setIsSyncing(false)); }}
                                         className={`flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl font-bold transition-all ${isSyncing ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#6F00FF]/50'}`}
                                         disabled={isSyncing}
                                     >
@@ -1127,7 +1126,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                 {activeTab === 'dashboard' && (
                     <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
                         <div className="max-w-6xl mx-auto space-y-6">
-                            <ConsistencyCard habits={habits} />
+                            <ConsistencyCard habits={habits} onDayClick={handleDayClick} />
 
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -1161,6 +1160,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                         onRemoveTag={handleRemoveTagFromTask}
                                                         onOpenTagModal={handleOpenTagModal}
                                                         onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
+                                                        onDeleteTag={handleDeleteTagByName}
                                                     />
                                                 ))}
                                                 {todayTasks.later.map(task => (
@@ -1174,6 +1174,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                         onRemoveTag={handleRemoveTagFromTask}
                                                         onOpenTagModal={handleOpenTagModal}
                                                         onEditTag={tag => handleOpenEditTagModal(tag, { taskId: task.id })}
+                                                        onDeleteTag={handleDeleteTagByName}
                                                     />
                                                 ))}
                                             </>
