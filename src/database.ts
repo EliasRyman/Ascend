@@ -70,8 +70,8 @@ function dbBlockToBlock(dbBlock: DbScheduleBlock): ScheduleBlock {
     googleEventId: dbBlock.google_event_id || undefined,
     taskId: dbBlock.task_id || undefined,
     habitId: dbBlock.habit_id || undefined,
-    colorId: dbBlock.color_id || undefined,
-    completed: dbBlock.completed || false, // CRITICAL: This was missing!
+    // Note: colorId removed - doesn't exist in schema, only used for Google Calendar events
+    completed: dbBlock.completed || false,
   };
 }
 
@@ -289,7 +289,7 @@ export async function createScheduleBlock(block: Omit<ScheduleBlock, 'id'>, date
     // Robustly convert to string, handling 0, numbers, and strings
     task_id: (block.taskId !== undefined && block.taskId !== null) ? String(block.taskId) : null,
     habit_id: (block.habitId !== undefined && block.habitId !== null) ? String(block.habitId) : null,
-    color_id: block.colorId || null,
+    // Note: color_id removed - doesn't exist in schema, colorId is stored in memory only for Google Calendar
     date: dateStr,
   };
 
@@ -323,7 +323,7 @@ export async function updateScheduleBlock(blockId: string, updates: Partial<Sche
   if (updates.googleEventId !== undefined) updateData.google_event_id = updates.googleEventId;
   if (updates.taskId !== undefined) updateData.task_id = updates.taskId;
   if (updates.habitId !== undefined) updateData.habit_id = updates.habitId;
-  if (updates.colorId !== undefined) updateData.color_id = updates.colorId;
+  // Note: colorId is NOT saved to DB - it's only for Google Calendar events in memory
 
   const { error } = await supabase
     .from('schedule_blocks')

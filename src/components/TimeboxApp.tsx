@@ -159,6 +159,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
     const resizingBlockIdRef = useRef<number | string | null>(null);
     const resizeStartYRef = useRef<number | null>(null);
     const resizeStartDurationRef = useRef<number | null>(null);
+    const isLongPressRef = useRef<boolean>(false);
 
     const [isSyncing, setIsSyncing] = useState(false);
     const [isCalendarSynced, setIsCalendarSynced] = useState(false);
@@ -729,7 +730,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
         }
 
         // Handle drag/move
-        if (draggingBlockIdRef.current !== null && dragStartYRef.current !== null && dragStartTimeRef.current !== null) {
+        if (draggingBlockIdRef.current !== null && dragStartYRef.current !== null && dragStartTimeRef.current !== null && isLongPressRef.current) {
             const deltaY = e.clientY - dragStartYRef.current;
             const deltaHours = deltaY / currentHourHeight;
             let newStart = dragStartTimeRef.current + deltaHours;
@@ -817,28 +818,39 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
             const dId = draggingBlockIdRef.current;
             const movedBlock = currentSchedule.find(b => b.id === dId);
 
+            // Clear Ref interaction state IMMEDIATELY
+            draggingBlockIdRef.current = null;
+            dragStartYRef.current = null;
+            dragStartTimeRef.current = null;
+            isLongPressRef.current = false;
+
+            // Clear UI state
+            setDraggingBlockId(null);
+            setDragStartY(null);
+            setDragStartTime(null);
+
+            // Then do async operations in background
             if (movedBlock) {
                 if (!movedBlock.isGoogle) {
-                    await updateScheduleBlock(String(movedBlock.id), { start: movedBlock.start });
+                    updateScheduleBlock(String(movedBlock.id), { start: movedBlock.start }).catch(err => console.error(err));
                 }
                 if (movedBlock.googleEventId && googleAccount) {
                     if (canEditGoogleEvent(movedBlock)) {
-                        try {
-                            await updateGoogleCalendarEvent(
-                                movedBlock.googleEventId,
-                                movedBlock.title,
-                                movedBlock.start,
-                                movedBlock.duration,
-                                selectedDate,
-                                movedBlock.calendarId,
-                                undefined,
-                                movedBlock.colorId
-                            );
+                        updateGoogleCalendarEvent(
+                            movedBlock.googleEventId,
+                            movedBlock.title,
+                            movedBlock.start,
+                            movedBlock.duration,
+                            selectedDate,
+                            movedBlock.calendarId,
+                            undefined,
+                            movedBlock.colorId
+                        ).then(() => {
                             setNotification({ type: 'success', message: 'Event time updated' });
-                        } catch (error) {
+                        }).catch(error => {
                             console.error('Failed to update Google Calendar event:', error);
                             setNotification({ type: 'error', message: 'Failed to update event' });
-                        }
+                        });
                     } else {
                         setNotification({ type: 'info', message: `Base calendar events cannot be edited here` });
                     }
@@ -847,18 +859,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                     const newTimeString = formatTime(movedBlock.start);
                     setActiveTasks(prev => prev.map(t => String(t.id) === String(movedBlock.taskId) ? { ...t, time: newTimeString } : t));
                     setLaterTasks(prev => prev.map(t => String(t.id) === String(movedBlock.taskId) ? { ...t, time: newTimeString } : t));
-                    await updateTask(String(movedBlock.taskId), { time: newTimeString });
+                    updateTask(String(movedBlock.taskId), { time: newTimeString }).catch(err => console.error(err));
                 }
             }
-            // Clear Ref interaction state
-            draggingBlockIdRef.current = null;
-            dragStartYRef.current = null;
-            dragStartTimeRef.current = null;
-
-            // Clear UI state
-            setDraggingBlockId(null);
-            setDragStartY(null);
-            setDragStartTime(null);
         }
 
         // Remove listeners
@@ -1351,19 +1354,57 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                 className={`group rounded-lg p-2 border-l-4 shadow-sm transition-all cursor-move select-none overflow-hidden ${block.isGoogle ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-400' : 'bg-[#6F00FF]/10 dark:bg-[#6F00FF]/20 border-[#6F00FF]'} ${block.completed ? 'opacity-50 grayscale-[0.3]' : ''}`}
                                                 onMouseDown={e => {
                                                     if ((e.target as HTMLElement).classList.contains('resize-handle')) return;
-                                                    // 1. Set Refs (Instant source of truth)
-                                                    draggingBlockIdRef.current = block.id;
-                                                    dragStartYRef.current = e.clientY;
-                                                    dragStartTimeRef.current = block.start;
 
-                                                    // 2. Set State (For UI styling)
-                                                    setDraggingBlockId(block.id);
-                                                    setDragStartY(e.clientY);
-                                                    setDragStartTime(block.start);
+                                                    // Hold-to-drag logic
+                                                    const initialX = e.clientX;
+                                                    const initialY = e.clientY;
+                                                    let dragTimer: NodeJS.Timeout | null = null;
+                                                    let hasMoved = false;
 
-                                                    // 3. Attach Listeners Synchronously
-                                                    window.addEventListener('mousemove', handleWindowMouseMove);
-                                                    window.addEventListener('mouseup', handleWindowMouseUp);
+                                                    const handleMove = (moveE: MouseEvent) => {
+                                                        const moveX = Math.abs(moveE.clientX - initialX);
+                                                        const moveY = Math.abs(moveE.clientY - initialY);
+
+                                                        if (moveX > 5 || moveY > 5) {
+                                                            hasMoved = true;
+                                                            if (dragTimer) {
+                                                                clearTimeout(dragTimer);
+                                                                dragTimer = null;
+                                                            }
+                                                            window.removeEventListener('mousemove', handleMove);
+                                                            window.removeEventListener('mouseup', handleUp);
+                                                        }
+                                                    };
+
+                                                    const handleUp = () => {
+                                                        if (dragTimer) {
+                                                            clearTimeout(dragTimer);
+                                                            dragTimer = null;
+                                                        }
+                                                        window.removeEventListener('mousemove', handleMove);
+                                                        window.removeEventListener('mouseup', handleUp);
+                                                    };
+
+                                                    window.addEventListener('mousemove', handleMove);
+                                                    window.addEventListener('mouseup', handleUp);
+
+                                                    dragTimer = setTimeout(() => {
+                                                        if (!hasMoved) {
+                                                            // Hold completed - initiate drag
+                                                            isLongPressRef.current = true;
+                                                            draggingBlockIdRef.current = block.id;
+                                                            dragStartYRef.current = e.clientY;
+                                                            dragStartTimeRef.current = block.start;
+                                                            setDraggingBlockId(block.id);
+                                                            setDragStartY(e.clientY);
+                                                            setDragStartTime(block.start);
+                                                            if (navigator.vibrate) navigator.vibrate(50);
+                                                            window.addEventListener('mousemove', handleWindowMouseMove);
+                                                            window.addEventListener('mouseup', handleWindowMouseUp);
+                                                        }
+                                                        window.removeEventListener('mousemove', handleMove);
+                                                        window.removeEventListener('mouseup', handleUp);
+                                                    }, 200);
                                                 }}
                                             >
                                                 <div className="flex items-start justify-between h-full">

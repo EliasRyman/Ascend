@@ -1519,7 +1519,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         const { active: fetchedActive, later: fetchedLater } = await loadAllTasksForDate(new Date(dateStr));
         active = fetchedActive;
         later = fetchedLater;
-        const fetchedNote = await loadNote(dateStr);
+        const fetchedNote = await loadNote(new Date(dateStr));
         note = fetchedNote || '';
       } catch (error) {
         console.error("Error fetching day details:", error);
@@ -2487,66 +2487,83 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           };
         });
 
-      // Fetch Google Calendar events
-      let googleBlocks: ScheduleBlock[] = [];
-      if (googleAccount) {
-        const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
-        const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
-        try {
-          const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
-          googleBlocks = googleEvents.map(event => ({
-            id: event.id,
-            title: event.title,
-            tag: (event as any).calendarName || 'google',
-            start: event.start,
-            duration: event.duration,
-            color: (event as any).calendarColor ? '' : 'bg-fuchsia-600/90 dark:bg-fuchsia-700/90 border-fuchsia-600',
-            textColor: 'text-white',
-            isGoogle: true,
-            googleEventId: event.id,
-            calendarColor: (event as any).calendarColor,
-            calendarName: (event as any).calendarName,
-            calendarId: (event as any).calendarId,
-            canEdit: (event as any).canEdit,
-            colorId: (event as any).colorId, // Preserve Google colorId
-          }));
+      // OPTIMISTIC LOADING: Show cached Google events immediately, fetch fresh in background
+      const cacheKey = `google_events_${dateString}`;
+      let cachedGoogleBlocks: ScheduleBlock[] = [];
 
-          console.log('📅 Fetched Google events with colors:', googleBlocks.map(b => ({ title: b.title, colorId: b.colorId })));
-
-        } catch (error) {
-          console.error('Failed to fetch Google Calendar events:', error);
+      // Load cache synchronously
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          cachedGoogleBlocks = JSON.parse(cached);
+          console.log('⚡ Loaded cached Google events:', cachedGoogleBlocks.length);
         }
+      } catch (err) {
+        console.error('Cache load error:', err);
       }
 
       // Combine all blocks, avoiding duplicates
       const dbBlockGoogleIds = new Set(blocksData.map(b => b.googleEventId).filter(Boolean));
-      console.log('🔍 DB Block Google IDs:', Array.from(dbBlockGoogleIds));
 
       // Also create a "signature" set for fallback matching (Start Time + Title)
       const dbBlockSignatures = new Set(blocksData.map(b => `${b.start}-${b.title}`));
-      console.log('🔍 DB Block Signatures:', Array.from(dbBlockSignatures));
-      console.log('🔍 Google Blocks to filter:', googleBlocks.map(g => ({ title: g.title, start: g.start, id: g.googleEventId })));
 
-      const uniqueGoogleBlocks = googleBlocks.filter(g => {
-        // 1. Exact ID Match
-        if (g.googleEventId && dbBlockGoogleIds.has(g.googleEventId)) {
-
-          return false;
-        }
-
-        // 2. Signature Match
+      const uniqueCachedGoogleBlocks = cachedGoogleBlocks.filter(g => {
+        if (g.googleEventId && dbBlockGoogleIds.has(g.googleEventId)) return false;
         const signature = `${g.start}-${g.title}`;
-        if (dbBlockSignatures.has(signature)) {
-
-          return false;
-        }
-
-
-        return true;
+        return !dbBlockSignatures.has(signature);
       });
 
+      // Show cached data IMMEDIATELY
+      setSchedule([...blocksData, ...uniqueCachedGoogleBlocks, ...habitBlocks]);
 
-      setSchedule([...blocksData, ...uniqueGoogleBlocks, ...habitBlocks]);
+      // THEN fetch fresh Google events in background
+      if (googleAccount) {
+        const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+        const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+
+        fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true)
+          .then(googleEvents => {
+            const googleBlocks: ScheduleBlock[] = googleEvents.map(event => ({
+              id: event.id,
+              title: event.title,
+              tag: (event as any).calendarName || 'google',
+              start: event.start,
+              duration: event.duration,
+              color: (event as any).calendarColor ? '' : 'bg-fuchsia-600/90 dark:bg-fuchsia-700/90 border-fuchsia-600',
+              textColor: 'text-white',
+              isGoogle: true,
+              googleEventId: event.id,
+              calendarColor: (event as any).calendarColor,
+              calendarName: (event as any).calendarName,
+              calendarId: (event as any).calendarId,
+              canEdit: (event as any).canEdit,
+              colorId: (event as any).colorId,
+            }));
+
+            console.log('📅 Fresh Google events:', googleBlocks.length);
+
+            // Update cache
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(googleBlocks));
+            } catch (err) {
+              console.error('Cache save error:', err);
+            }
+
+            // Filter unique Google blocks
+            const uniqueGoogleBlocks = googleBlocks.filter(g => {
+              if (g.googleEventId && dbBlockGoogleIds.has(g.googleEventId)) return false;
+              const signature = `${g.start}-${g.title}`;
+              return !dbBlockSignatures.has(signature);
+            });
+
+            // Update schedule with fresh data
+            setSchedule([...blocksData, ...uniqueGoogleBlocks, ...habitBlocks]);
+          })
+          .catch(error => {
+            console.error('Failed to fetch Google events:', error);
+          });
+      }
     } catch (error) {
       console.error('Failed to load schedule for date:', error);
       setNotification({ type: 'error', message: 'Failed to load schedule' });
@@ -2601,12 +2618,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       }
 
       // Handle drag/move
-      if (draggingBlockId !== null && dragStartY !== null && dragStartTime !== null) {
+      if (draggingBlockId !== null && dragStartY !== null && dragStartTime !== null && isLongPress) {
         const deltaY = e.clientY - dragStartY;
-        const deltaHours = deltaY / currentHourHeight;
+        const deltaHours = deltaY / 60; // 60px per hour
         let newStart = dragStartTime + deltaHours;
+        // Snap to 15-minute intervals
         newStart = Math.round(newStart * 4) / 4;
-        // Use ref to get current schedule without causing re-renders
+        // Get block to check duration constraints
         const currentSchedule = scheduleRef.current;
         const block = currentSchedule.find(b => b.id === draggingBlockId);
         if (block) {
@@ -2635,75 +2653,82 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       // Handle resize end
       if (resizingBlockId !== null) {
         const resizedBlock = currentSchedule.find(b => b.id === resizingBlockId);
+
+        // Clear resize state IMMEDIATELY for instant snap
+        setResizingBlockId(null);
+        setResizeStartY(null);
+        setResizeStartDuration(null);
+
+        // Then do async operations in background
         if (resizedBlock) {
           // Only save to database if it's NOT a Google Calendar event
-          // (Google events are synced from Google, not stored locally)
           if (!resizedBlock.isGoogle) {
-            await updateScheduleBlock(String(resizedBlock.id), {
+            updateScheduleBlock(String(resizedBlock.id), {
               duration: resizedBlock.duration
-            });
+            }).catch(err => console.error('Failed to save block:', err));
           }
 
           // Update Google Calendar if it's an Ascend calendar event (we have write access)
           if (resizedBlock.googleEventId && googleAccount) {
             if (canEditGoogleEvent(resizedBlock)) {
-              try {
-                await updateGoogleCalendarEvent(
-                  resizedBlock.googleEventId,
-                  resizedBlock.title,
-                  resizedBlock.start,
-                  resizedBlock.duration,
-                  selectedDate,
-                  resizedBlock.calendarId,
-                  resizedBlock.color || resizedBlock.calendarColor || undefined
-                );
-
+              updateGoogleCalendarEvent(
+                resizedBlock.googleEventId,
+                resizedBlock.title,
+                resizedBlock.start,
+                resizedBlock.duration,
+                selectedDate,
+                resizedBlock.calendarId,
+                resizedBlock.colorId || resizedBlock.color || resizedBlock.calendarColor || undefined
+              ).then(() => {
                 setNotification({ type: 'success', message: 'Event updated' });
-              } catch (error) {
+              }).catch(error => {
                 console.error('Failed to update Google Calendar event:', error);
                 setNotification({ type: 'error', message: 'Failed to update event' });
-              }
+              });
             } else {
               // External calendar - can't edit, show message
               setNotification({ type: 'info', message: `External calendar events (${resizedBlock.calendarName}) are read-only` });
             }
           }
         }
-        setResizingBlockId(null);
-        setResizeStartY(null);
-        setResizeStartDuration(null);
       }
 
       // Handle drag/move end
       if (draggingBlockId !== null) {
         const movedBlock = currentSchedule.find(b => b.id === draggingBlockId);
+
+        // Clear drag state IMMEDIATELY for instant snap
+        setDraggingBlockId(null);
+        setDragStartY(null);
+        setDragStartTime(null);
+        setIsLongPress(false);
+
+        // Then do async operations in background
         if (movedBlock) {
           // Only save to database if it's NOT a Google Calendar event
           if (!movedBlock.isGoogle) {
-            await updateScheduleBlock(String(movedBlock.id), {
+            updateScheduleBlock(String(movedBlock.id), {
               start: movedBlock.start
-            });
+            }).catch(err => console.error('Failed to save block:', err));
           }
 
           // Update Google Calendar if it's an Ascend calendar event (we have write access)
           if (movedBlock.googleEventId && googleAccount) {
             if (canEditGoogleEvent(movedBlock)) {
-              try {
-                await updateGoogleCalendarEvent(
-                  movedBlock.googleEventId,
-                  movedBlock.title,
-                  movedBlock.start,
-                  movedBlock.duration,
-                  selectedDate,
-                  movedBlock.calendarId,
-                  movedBlock.colorId || movedBlock.color || movedBlock.calendarColor || undefined
-                );
-
+              updateGoogleCalendarEvent(
+                movedBlock.googleEventId,
+                movedBlock.title,
+                movedBlock.start,
+                movedBlock.duration,
+                selectedDate,
+                movedBlock.calendarId,
+                movedBlock.colorId || movedBlock.color || movedBlock.calendarColor || undefined
+              ).then(() => {
                 setNotification({ type: 'success', message: 'Event time updated' });
-              } catch (error) {
+              }).catch(error => {
                 console.error('Failed to update Google Calendar event:', error);
                 setNotification({ type: 'error', message: 'Failed to update event' });
-              }
+              });
             } else {
               // External calendar - can't edit, show message
               setNotification({ type: 'info', message: `External calendar events (${movedBlock.calendarName}) are read-only` });
@@ -2715,13 +2740,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
             const newTimeString = formatTime(movedBlock.start);
             setActiveTasks(prev => prev.map(t => String(t.id) === String(movedBlock.taskId) ? { ...t, time: newTimeString } : t));
             setLaterTasks(prev => prev.map(t => String(t.id) === String(movedBlock.taskId) ? { ...t, time: newTimeString } : t));
-            await updateTask(String(movedBlock.taskId), { time: newTimeString });
-
+            updateTask(String(movedBlock.taskId), { time: newTimeString }).catch(err => console.error('Failed to update task:', err));
           }
         }
-        setDraggingBlockId(null);
-        setDragStartY(null);
-        setDragStartTime(null);
       }
     };
 
@@ -3187,8 +3208,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           hour,
           1,
           selectedDate,
-          existingBlock.tag || undefined,
-          existingBlock.colorId || existingBlock.color || existingBlock.calendarColor || undefined
+          task.tag || undefined,
+          task.tagColor || undefined
         );
 
         if (eventId) {
@@ -4502,7 +4523,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
                   {/* Calendar Popup */}
                   {isCalendarOpen && (
-                    <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 z-50 min-w-[280px]">
+                    <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 z-[100] min-w-[280px]">
                       <div className="flex items-center justify-between mb-4">
                         <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronLeft size={18} className="text-slate-500" /></button>
                         <span className="font-semibold text-slate-800 dark:text-slate-200">{calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
