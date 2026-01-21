@@ -591,6 +591,18 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
 
     const toggleHabitCompletion = (habitId: string, date?: Date) => {
         const targetDate = date || selectedDate;
+
+        // Prevent marking future dates as complete
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const checkDate = new Date(targetDate);
+        checkDate.setHours(0, 0, 0, 0);
+
+        if (checkDate > today) {
+            setNotification({ type: 'error', message: 'Cannot mark future dates' });
+            return;
+        }
+
         const dateString = formatDateISO(targetDate);
         const habit = habits.find(h => h.id === habitId);
         if (!habit) return;
@@ -611,26 +623,32 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
     };
 
     const calculateStreak = (habit: Habit): number => {
-        let streak = 0;
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        let checkDate = new Date(now);
-        const sorted = [...habit.completedDates].sort().reverse();
-        if (sorted.length > 0) {
-            const latest = new Date(sorted[0]);
-            if (latest > checkDate) checkDate = latest;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStr = formatDateISO(today);
+
+        // If today is not completed, streak is 0
+        if (!habit.completedDates.includes(todayStr)) {
+            return 0;
         }
-        const todayStr = formatDateISO(now);
-        const yesterday = new Date(now);
-        yesterday.setDate(yesterday.getDate() - 1);
-        if (!habit.completedDates.includes(todayStr) && !habit.completedDates.includes(formatDateISO(yesterday))) return 0;
+
+        let streak = 0;
+        let checkDate = new Date(today);
+
+        // Count backwards from today through consecutive completed days
         while (true) {
-            if (habit.completedDates.includes(formatDateISO(checkDate))) {
+            const dateStr = formatDateISO(checkDate);
+            if (habit.completedDates.includes(dateStr)) {
                 streak++;
                 checkDate.setDate(checkDate.getDate() - 1);
-            } else break;
+            } else {
+                break; // Stop when we hit an incomplete day
+            }
+
+            // Safety limit
             if (streak > 1000) break;
         }
+
         return streak;
     };
 
