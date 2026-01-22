@@ -73,10 +73,11 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signInWithGoogle() {
+  const redirectTo = import.meta.env.VITE_AUTH_REDIRECT_URL || window.location.origin;
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: window.location.origin,
+      redirectTo,
     },
   });
   if (error) throw error;
@@ -96,4 +97,3 @@ export async function getCurrentUser() {
 export function onAuthStateChange(callback: (event: string, session: any) => void) {
   return supabase.auth.onAuthStateChange(callback);
 }
-
