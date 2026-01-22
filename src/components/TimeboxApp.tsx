@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
     Calendar, ListTodo, BarChart3, Clock, RefreshCw, Target, Plus,
     MoreVertical, ChevronDown, ChevronRight, ChevronLeft, User,
@@ -84,6 +85,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [calendarViewDate, setCalendarViewDate] = useState(new Date());
     const calendarRef = useRef<HTMLDivElement>(null);
+    const calendarButtonRef = useRef<HTMLButtonElement>(null);
 
     // Tags
     const [userTags, setUserTags] = useState<{ name: string; color: string }[]>(() => {
@@ -1165,10 +1167,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                         </div>
 
                         <div className="flex-1 flex flex-col bg-white dark:bg-slate-950 relative overflow-hidden">
-                            <div className="relative z-30 flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
+                            <div className="relative flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800" style={{ zIndex: 10000 }}>
                                 <div className="flex items-center gap-4">
-                                    <div className="relative z-50">
+                                    <div className="relative z-[10000]">
                                         <button
+                                            ref={calendarButtonRef}
                                             onClick={() => setIsCalendarOpen(!isCalendarOpen)}
                                             className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:border-[#6F00FF]/50 transition-all font-bold group"
                                         >
@@ -1179,78 +1182,100 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                             <ChevronDown size={16} className={`text-slate-400 group-hover:text-slate-600 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
                                         </button>
 
-                                        {isCalendarOpen && (
-                                            <div className="absolute top-full left-0 mt-2 p-4 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 z-50 w-[320px]">
-                                                <div className="flex items-center justify-between mb-4">
-                                                    <button
-                                                        onClick={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1))}
-                                                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"
-                                                    >
-                                                        <ChevronLeft size={16} />
-                                                    </button>
-                                                    <span className="font-bold dark:text-white">
-                                                        {calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                                                    </span>
-                                                    <button
-                                                        onClick={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1))}
-                                                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"
-                                                    >
-                                                        <ChevronRight size={16} />
-                                                    </button>
-                                                </div>
+                                        {isCalendarOpen && createPortal(
+                                            <>
+                                                {/* Transparent backdrop for z-index isolation */}
+                                                <div
+                                                    onClick={() => setIsCalendarOpen(false)}
+                                                    style={{
+                                                        position: 'fixed',
+                                                        inset: 0,
+                                                        zIndex: 999998,
+                                                        background: 'transparent'
+                                                    }}
+                                                />
+                                                {/* Calendar dropdown */}
+                                                <div
+                                                    className="p-4 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 w-[320px]"
+                                                    style={{
+                                                        position: 'fixed',
+                                                        top: `${(calendarButtonRef.current?.getBoundingClientRect().bottom || 0) + 8}px`,
+                                                        left: `${calendarButtonRef.current?.getBoundingClientRect().left || 0}px`,
+                                                        zIndex: 999999
+                                                    }}
+                                                >
+                                                    <div className="flex items-center justify-between mb-4">
+                                                        <button
+                                                            onClick={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1))}
+                                                            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"
+                                                        >
+                                                            <ChevronLeft size={16} />
+                                                        </button>
+                                                        <span className="font-bold dark:text-white">
+                                                            {calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1))}
+                                                            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"
+                                                        >
+                                                            <ChevronRight size={16} />
+                                                        </button>
+                                                    </div>
 
-                                                <div className="grid grid-cols-7 mb-2">
-                                                    {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                                                        <div key={day} className="h-8 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase">
-                                                            {day}
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                                    <div className="grid grid-cols-7 mb-2">
+                                                        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                                                            <div key={day} className="h-8 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase">
+                                                                {day}
+                                                            </div>
+                                                        ))}
+                                                    </div>
 
-                                                <div className="grid grid-cols-7 gap-1">
-                                                    {Array.from({ length: new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), 1).getDay() }).map((_, i) => (
-                                                        <div key={`empty-${i}`} />
-                                                    ))}
+                                                    <div className="grid grid-cols-7 gap-1">
+                                                        {Array.from({ length: new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), 1).getDay() }).map((_, i) => (
+                                                            <div key={`empty-${i}`} />
+                                                        ))}
 
-                                                    {Array.from({ length: new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 0).getDate() }).map((_, i) => {
-                                                        const day = i + 1;
-                                                        const date = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
-                                                        const isSelected = isSameDay(date, selectedDate);
+                                                        {Array.from({ length: new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 0).getDate() }).map((_, i) => {
+                                                            const day = i + 1;
+                                                            const date = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
+                                                            const isSelected = isSameDay(date, selectedDate);
 
-                                                        return (
-                                                            <button
-                                                                key={day}
-                                                                onClick={() => {
-                                                                    setSelectedDate(date);
-                                                                    setIsCalendarOpen(false);
-                                                                }}
-                                                                className={`
+                                                            return (
+                                                                <button
+                                                                    key={day}
+                                                                    onClick={() => {
+                                                                        setSelectedDate(date);
+                                                                        setIsCalendarOpen(false);
+                                                                    }}
+                                                                    className={`
                                                                 h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium transition-all
                                                                 ${isSelected
-                                                                        ? 'bg-[#6F00FF] text-white shadow-lg shadow-purple-500/30'
-                                                                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-300'
-                                                                    }
+                                                                            ? 'bg-[#6F00FF] text-white shadow-lg shadow-purple-500/30'
+                                                                            : 'hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-300'
+                                                                        }
                                                                 ${isToday(date) && !isSelected ? 'bg-slate-100 dark:bg-slate-800 font-bold' : ''}
                                                             `}
-                                                            >
-                                                                {day}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
+                                                                >
+                                                                    {day}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
 
-                                                <button
-                                                    onClick={() => {
-                                                        const now = new Date();
-                                                        setSelectedDate(now);
-                                                        setCalendarViewDate(now);
-                                                        setIsCalendarOpen(false);
-                                                    }}
-                                                    className="w-full mt-4 py-2 text-sm font-bold text-slate-500 hover:text-[#6F00FF] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors"
-                                                >
-                                                    Today
-                                                </button>
-                                            </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            const now = new Date();
+                                                            setSelectedDate(now);
+                                                            setCalendarViewDate(now);
+                                                            setIsCalendarOpen(false);
+                                                        }}
+                                                        className="w-full mt-4 py-2 text-sm font-bold text-slate-500 hover:text-[#6F00FF] hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors"
+                                                    >
+                                                        Today
+                                                    </button>
+                                                </div>
+                                            </>,
+                                            document.body
                                         )}
                                     </div>
                                 </div>
@@ -1279,7 +1304,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
 
                             <div
                                 ref={timelineRef}
-                                className="flex-1 overflow-y-auto overflow-x-hidden relative custom-scrollbar scroll-smooth"
+                                className="flex-1 overflow-y-auto overflow-x-hidden relative z-0 custom-scrollbar scroll-smooth"
                             >
                                 <div className="flex relative">
                                     <div className="w-20 flex-shrink-0 border-r border-slate-100 dark:border-slate-900/50 bg-slate-50/30 dark:bg-slate-900/10">
