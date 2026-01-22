@@ -71,7 +71,34 @@ serve(async (req) => {
         const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET') ?? '';
         const ENCRYPTION_KEY = Deno.env.get('ENCRYPTION_KEY') ?? 'default-key-change-in-production-32c';
         const REDIRECT_URI = 'https://hmnbdkwjgmwchuyhtmqh.supabase.co/functions/v1/google-auth/callback';
-        const FRONTEND_URL = 'https://www.ascendtimebox.com'; // Hardcoded allowed origin or env var
+        const FRONTEND_URL = 'https://www.ascendtimebox.com'; // Default/fallback
+
+        const ALLOWED_RETURN_ORIGINS = new Set([
+            FRONTEND_URL,
+            'http://localhost:5173',
+            'http://127.0.0.1:5173',
+        ]);
+
+        const isAllowedReturnOrigin = (origin: string): boolean => {
+            if (ALLOWED_RETURN_ORIGINS.has(origin)) return true;
+
+            // Allow common LAN dev origin on the same Vite port
+            // (keeps this fairly tight while still working on phones on the same network)
+            if (origin.startsWith('http://192.168.') && origin.endsWith(':5173')) return true;
+
+            return false;
+        };
+
+        const sanitizeReturnUrl = (candidate: string | null): string => {
+            if (!candidate) return FRONTEND_URL;
+            try {
+                const u = new URL(candidate);
+                if (!isAllowedReturnOrigin(u.origin)) return FRONTEND_URL;
+                return u.toString();
+            } catch {
+                return FRONTEND_URL;
+            }
+        };
 
         // Validate Env
         if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
@@ -91,6 +118,9 @@ serve(async (req) => {
             const userId = url.searchParams.get('userId');
             if (!userId) throw new Error('userId is required');
 
+            const requestedReturnUrl = url.searchParams.get('returnUrl');
+            const safeReturnUrl = sanitizeReturnUrl(requestedReturnUrl);
+
             const scopes = [
                 'https://www.googleapis.com/auth/calendar',
                 'https://www.googleapis.com/auth/calendar.events',
@@ -99,7 +129,7 @@ serve(async (req) => {
                 'https://www.googleapis.com/auth/userinfo.profile',
             ];
 
-            const state = btoa(JSON.stringify({ userId, returnUrl: FRONTEND_URL }));
+            const state = btoa(JSON.stringify({ userId, returnUrl: safeReturnUrl }));
 
             const authUrl = oauth2Client.generateAuthUrl({
                 access_type: 'offline',
@@ -125,16 +155,27 @@ serve(async (req) => {
             const state = url.searchParams.get('state');
             const error = url.searchParams.get('error');
 
+            let safeReturnUrl = FRONTEND_URL;
+            if (state) {
+                try {
+                    const stateData = JSON.parse(atob(state));
+                    safeReturnUrl = sanitizeReturnUrl(stateData?.returnUrl ?? null);
+                } catch {
+                    // ignore
+                }
+            }
+
             if (error) {
-                return Response.redirect(`${FRONTEND_URL}?google_error=${error}`);
+                return Response.redirect(`${safeReturnUrl}?google_error=${error}`);
             }
             if (!code || !state) {
-                return Response.redirect(`${FRONTEND_URL}?google_error=missing_params`);
+                return Response.redirect(`${safeReturnUrl}?google_error=missing_params`);
             }
 
             // Decode state
             const stateData = JSON.parse(atob(state));
-            const { userId, returnUrl } = stateData;
+            const { userId } = stateData;
+            const returnUrl = sanitizeReturnUrl(stateData?.returnUrl ?? null);
 
             // Exchange code
             const { tokens } = await oauth2Client.getToken(code);
