@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import LandingPage from './components/LandingPage';
 import { LegalProvider } from './context/LegalContext';
 import LegalModals from './components/LegalModals';
@@ -1235,6 +1236,31 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [calendarViewDate, setCalendarViewDate] = useState(new Date());
   const calendarRef = useRef<HTMLDivElement>(null);
+  const calendarPopupRef = useRef<HTMLDivElement>(null);
+  const [calendarPopupPos, setCalendarPopupPos] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (!isCalendarOpen) return;
+
+    const update = () => {
+      const rect = calendarRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setCalendarPopupPos({
+        top: rect.bottom + 8,
+        left: rect.left + rect.width / 2,
+      });
+    };
+
+    update();
+
+    window.addEventListener('resize', update);
+    // Capture scroll from any ancestor scroll container
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [isCalendarOpen]);
 
   // State for Tags
   const [userTags, setUserTags] = useState<{ name: string; color: string }[]>(() => {
@@ -1937,10 +1963,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   // Close calendar when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (calendarRef.current && !calendarRef.current.contains(event.target as Node)) {
-        setIsCalendarOpen(false);
-      }
-      if (weightCalendarRef.current && !weightCalendarRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const clickedInsideCalendar =
+        (calendarRef.current && calendarRef.current.contains(target)) ||
+        (calendarPopupRef.current && calendarPopupRef.current.contains(target));
+      if (!clickedInsideCalendar) setIsCalendarOpen(false);
+
+      if (weightCalendarRef.current && !weightCalendarRef.current.contains(target)) {
         setIsWeightCalendarOpen(false);
       }
     };
@@ -4479,7 +4508,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
             {/* Middle Column: Calendar/Timeline */}
             <div className="md:col-span-6 bg-white dark:bg-slate-950 flex flex-col relative overflow-visible md:overflow-hidden h-[1500px] md:h-auto">
               {/* Date Selector Header - Floating Style */}
-              <div className="h-14 flex items-center justify-center shrink-0 relative z-10">
+              <div className="h-14 flex items-center justify-center shrink-0 relative z-40">
                 <div ref={calendarRef} className="relative flex items-center">
                   <div className="flex items-center gap-2 px-4 py-1.5 bg-white dark:bg-slate-900 rounded-full text-sm font-medium text-slate-700 dark:text-slate-200 shadow-md shadow-slate-200/50 dark:shadow-black/40 border border-slate-100 dark:border-slate-800">
                     <div
@@ -4522,46 +4551,66 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                   </div>
 
                   {/* Calendar Popup */}
-                  {isCalendarOpen && (
-                    <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 z-[100] min-w-[280px]">
-                      <div className="flex items-center justify-between mb-4">
-                        <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronLeft size={18} className="text-slate-500" /></button>
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">{calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
-                        <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronRight size={18} className="text-slate-500" /></button>
+                  {isCalendarOpen && createPortal(
+                    <>
+                      {/* Transparent backdrop so the popup always sits above blocks */}
+                      <div
+                        onClick={() => setIsCalendarOpen(false)}
+                        style={{ position: 'fixed', inset: 0, zIndex: 999998 }}
+                      />
+
+                      <div
+                        ref={calendarPopupRef}
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 min-w-[280px]"
+                        style={{
+                          position: 'fixed',
+                          top: `${calendarPopupPos?.top ?? 0}px`,
+                          left: `${calendarPopupPos?.left ?? 0}px`,
+                          transform: 'translateX(-50%)',
+                          visibility: calendarPopupPos ? 'visible' : 'hidden',
+                          zIndex: 999999,
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <button onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronLeft size={18} className="text-slate-500" /></button>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">{calendarViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                          <button onClick={handleNextMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronRight size={18} className="text-slate-500" /></button>
+                        </div>
+                        <div className="grid grid-cols-7 gap-1 mb-2">
+                          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (<div key={day} className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 py-1">{day}</div>))}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1">
+                          {Array.from({ length: getFirstDayOfMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => (<div key={`empty-${i}`} className="w-8 h-8" />))}
+                          {Array.from({ length: getDaysInMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => {
+                            const day = i + 1;
+                            const date = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
+                            const isSelected = isSameDay(date, selectedDate);
+                            const isTodayDate = isToday(date);
+                            return (
+                              <button
+                                key={day}
+                                onClick={() => handleDateSelect(day)}
+                                className={`w-8 h-8 rounded-full text-sm font-semibold transition-all flex items-center justify-center ${isSelected
+                                  ? 'bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white shadow-lg shadow-purple-500/30'
+                                  : isTodayDate
+                                    ? 'bg-purple-50 dark:bg-purple-500/10 stroke-gradient dark:text-purple-400 border border-purple-200 dark:border-purple-500/30'
+                                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'
+                                  }`}
+                              >
+                                {day}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <button onClick={async () => { const today = new Date(); setSelectedDate(today); setCalendarViewDate(today); setIsCalendarOpen(false); await loadScheduleForDate(today); }} className="mt-3 w-full py-2 text-sm font-medium stroke-gradient dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg">Today</button>
                       </div>
-                      <div className="grid grid-cols-7 gap-1 mb-2">
-                        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (<div key={day} className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 py-1">{day}</div>))}
-                      </div>
-                      <div className="grid grid-cols-7 gap-1">
-                        {Array.from({ length: getFirstDayOfMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => (<div key={`empty-${i}`} className="w-8 h-8" />))}
-                        {Array.from({ length: getDaysInMonth(calendarViewDate.getFullYear(), calendarViewDate.getMonth()) }).map((_, i) => {
-                          const day = i + 1;
-                          const date = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
-                          const isSelected = isSameDay(date, selectedDate);
-                          const isTodayDate = isToday(date);
-                          return (
-                            <button
-                              key={day}
-                              onClick={() => handleDateSelect(day)}
-                              className={`w-8 h-8 rounded-full text-sm font-semibold transition-all flex items-center justify-center ${isSelected
-                                ? 'bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white shadow-lg shadow-purple-500/30'
-                                : isTodayDate
-                                  ? 'bg-purple-50 dark:bg-purple-500/10 stroke-gradient dark:text-purple-400 border border-purple-200 dark:border-purple-500/30'
-                                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'
-                                }`}
-                            >
-                              {day}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <button onClick={async () => { const today = new Date(); setSelectedDate(today); setCalendarViewDate(today); setIsCalendarOpen(false); await loadScheduleForDate(today); }} className="mt-3 w-full py-2 text-sm font-medium stroke-gradient dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg">Today</button>
-                    </div>
+                    </>,
+                    document.body
                   )}
                 </div>
               </div>
 
-              <div ref={timelineRef} className="flex-1 overflow-y-auto relative custom-scrollbar scroll-smooth">
+              <div ref={timelineRef} className="flex-1 overflow-y-auto relative z-0 custom-scrollbar scroll-smooth">
 
                 {/* Calendar Grid - 24 hours */}
                 <div className="relative" style={{ minHeight: `${24 * hourHeight}px` }}>
