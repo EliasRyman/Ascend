@@ -6,6 +6,9 @@ dist/
 dist-ssr/
 build/
 
+# Vite cache
+.vite/
+
 # Environment files
 .env
 .env.local

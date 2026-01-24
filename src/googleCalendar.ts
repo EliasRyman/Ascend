@@ -709,30 +709,60 @@ export async function createGoogleCalendarEvent(
 }
 
 // Delete an event from the Ascend calendar
-export async function deleteGoogleCalendarEvent(eventId: string): Promise<void> {
+export async function deleteGoogleCalendarEvent(eventId: string, calendarId?: string): Promise<void> {
   const isValid = await ensureValidToken();
   if (!isValid) {
     throw new Error('Google token expired. Please reconnect Google Calendar.');
   }
 
-  const calendarId = await getAscendCalendarId();
+  const tryCalendarIds: string[] = [];
+  if (calendarId) tryCalendarIds.push(calendarId);
 
+  // Always include Ascend calendar as a candidate
   try {
-    await gapi.client.calendar.events.delete({
-      calendarId: calendarId,
-      eventId: eventId,
-    });
-  } catch (error: any) {
-    // If calendar or event not found (404), just log and continue
-    if (is404Error(error)) {
-      console.warn('Calendar or event not found (404), skipping delete:', eventId);
-      // Reset calendar ID for next operations
-      await resetAndCreateNewCalendar();
-      return;
-    }
-    console.error('Error deleting calendar event:', error);
-    throw error;
+    const ascendId = await getAscendCalendarId();
+    if (!tryCalendarIds.includes(ascendId)) tryCalendarIds.push(ascendId);
+  } catch {
+    // ignore
   }
+
+  // Also include all writable calendars so external events can be deleted
+  try {
+    const listResponse = await gapi.client.calendar.calendarList.list();
+    const calendars: any[] = (listResponse.result.items as any[]) || [];
+    for (const cal of calendars) {
+      const role = (cal as any).accessRole;
+      const canEdit = role === 'owner' || role === 'writer';
+      if (!canEdit) continue;
+      const id = (cal as any).id;
+      if (!id) continue;
+      if (!tryCalendarIds.includes(id)) tryCalendarIds.push(id);
+    }
+  } catch (err) {
+    console.warn('Could not fetch calendar list for delete fallback:', err);
+  }
+
+  let lastErr: any = null;
+  for (const calId of tryCalendarIds) {
+    try {
+      await gapi.client.calendar.events.delete({
+        calendarId: calId,
+        eventId: eventId,
+      });
+      return;
+    } catch (error: any) {
+      lastErr = error;
+      if (is404Error(error)) continue;
+      // For permission errors etc, don't keep hammering other calendars
+      throw error;
+    }
+  }
+
+  if (lastErr && is404Error(lastErr)) {
+    console.warn('Event not found for delete (404):', eventId);
+    return;
+  }
+  if (lastErr) throw lastErr;
 }
 
 // Update an event in Google Calendar
@@ -751,7 +781,7 @@ export async function updateGoogleCalendarEvent(
     throw new Error('Google token expired. Please reconnect Google Calendar.');
   }
 
-  const targetCalendarId = calendarId || await getAscendCalendarId();
+  const targetCalendarId = calendarId;
 
   const startDate = new Date(date);
   startDate.setHours(Math.floor(startHour), Math.round((startHour % 1) * 60), 0, 0);
@@ -795,23 +825,55 @@ export async function updateGoogleCalendarEvent(
 
   console.log('📤 Updating Google Calendar event:', JSON.stringify(eventResource, null, 2));
 
+  const tryCalendarIds: string[] = [];
+  if (targetCalendarId) tryCalendarIds.push(targetCalendarId);
+
+  // Always include Ascend calendar as a candidate
   try {
-    await (gapi.client.calendar.events as any).patch({
-      calendarId: targetCalendarId,
-      eventId: eventId,
-      resource: eventResource,
-    });
-  } catch (error: any) {
-    // If calendar or event not found (404), log and don't throw
-    if (is404Error(error)) {
-      console.warn('Calendar or event not found (404), skipping update:', eventId);
-      // Reset calendar ID for next operations
-      await resetAndCreateNewCalendar();
-      return;
-    }
-    console.error('Error updating calendar event:', error);
-    throw error;
+    const ascendId = await getAscendCalendarId();
+    if (!tryCalendarIds.includes(ascendId)) tryCalendarIds.push(ascendId);
+  } catch {
+    // ignore
   }
+
+  // Also include all writable calendars so external events can be edited
+  try {
+    const listResponse = await gapi.client.calendar.calendarList.list();
+    const calendars: any[] = (listResponse.result.items as any[]) || [];
+    for (const cal of calendars) {
+      const role = (cal as any).accessRole;
+      const canEdit = role === 'owner' || role === 'writer';
+      if (!canEdit) continue;
+      const id = (cal as any).id;
+      if (!id) continue;
+      if (!tryCalendarIds.includes(id)) tryCalendarIds.push(id);
+    }
+  } catch (err) {
+    console.warn('Could not fetch calendar list for update fallback:', err);
+  }
+
+  let lastErr: any = null;
+  for (const calId of tryCalendarIds) {
+    try {
+      await (gapi.client.calendar.events as any).patch({
+        calendarId: calId,
+        eventId: eventId,
+        resource: eventResource,
+      });
+      return;
+    } catch (error: any) {
+      lastErr = error;
+      if (is404Error(error)) continue;
+      console.error('Error updating calendar event:', error);
+      throw error;
+    }
+  }
+
+  if (lastErr && is404Error(lastErr)) {
+    console.warn('Event not found for update (404):', eventId);
+    return;
+  }
+  if (lastErr) throw lastErr;
 }
 
 // Debug function to check calendar connectivity and events

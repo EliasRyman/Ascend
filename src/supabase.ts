@@ -44,6 +44,14 @@ export interface DbScheduleBlock {
   task_id: string | null;
   habit_id: string | null;
   color_id: string | null;
+
+  // Newer optional Google metadata columns (may not exist in all environments)
+  calendar_id?: string | null;
+  calendar_name?: string | null;
+  calendar_color?: string | null;
+  can_edit?: boolean | null;
+  google_updated_at?: string | null;
+  etag?: string | null;
 }
 
 export interface DbUserSettings {

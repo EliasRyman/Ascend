@@ -104,6 +104,7 @@ import {
   generateRecurringInstances,
   createTaskForDate,
   syncHabitCompletion,
+  syncGoogleScheduleBlocksForDate,
   cleanupDuplicateTasks,
   moveTaskToList,
   // Recurring task functions
@@ -1211,6 +1212,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [isLongPress, setIsLongPress] = useState(false);
   const dragTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialClickPos = useRef<{ x: number, y: number } | null>(null);
+  const isMouseDownRef = useRef(false);
 
   // State for Calendar Picker - persist selected date across refreshes
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -1397,6 +1399,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   } | null>(null);
   const [isGoogleConnecting, setIsGoogleConnecting] = useState(false);
   const [googleApiReady, setGoogleApiReady] = useState(false);
+  const [isGoogleBackfilling, setIsGoogleBackfilling] = useState(false);
 
   // Initialize Google APIs on mount
   useEffect(() => {
@@ -1748,12 +1751,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
 
       const googleBlocks: ScheduleBlock[] = googleEvents.map(event => ({
-        id: event.id,
+        id: `tmp_google_${event.id}`,
         title: event.title,
         tag: (event as any).calendarName || 'google',
         start: event.start,
         duration: event.duration,
-        color: (event as any).calendarColor ? '' : 'bg-blue-400/90 dark:bg-blue-600/90 border-blue-500',
+        color: (event as any).calendarColor || '#4285f4',
         textColor: 'text-white',
         isGoogle: true,
         googleEventId: event.id,
@@ -1762,7 +1765,23 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         calendarName: (event as any).calendarName,
         calendarId: (event as any).calendarId,
         canEdit: (event as any).canEdit ?? false, // true if user has write access
+        colorId: (event as any).colorId,
+        pending: 'saving',
       }));
+
+      const dbSyncInputs = googleBlocks
+        .filter(b => !!b.googleEventId)
+        .map(b => ({
+          googleEventId: String(b.googleEventId),
+          title: b.title,
+          start: b.start,
+          duration: b.duration,
+          calendarName: b.calendarName,
+          calendarId: b.calendarId,
+          calendarColor: b.calendarColor || b.color,
+          colorId: b.colorId,
+          canEdit: b.canEdit,
+        }));
 
       // Deduplicate and update: Merge Google events with local blocks
       setSchedule(prev => {
@@ -1784,8 +1803,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
             return false;
           }
-          // Keep non-Google blocks or user-created blocks
-          return !b.isGoogle || b.taskId || b.habitId;
+          // Keep non-Google blocks, user-created blocks, and any block currently syncing
+          return !b.isGoogle || b.taskId || b.habitId || (b as any).pending;
         });
 
         // Find old Google events that will be replaced
@@ -1803,15 +1822,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           }
         });
 
-        // Remove old Google events that will be replaced by incoming ones
-        const existingGoogleBlocks = prev.filter(b =>
-          b.isGoogle &&
-          b.googleEventId &&
-          !incomingGoogleEventIds.has(b.googleEventId)
-        );
+        // Google events are sourced from Google for this day; any old Google blocks
+        // that are not in the incoming set are treated as deleted/moved-away.
 
-        // Create sets for signature matching (to avoid duplicates without Google IDs)
-        const localBlockSignatures = new Set(localBlocks.map(b => `${b.start}-${b.title}`));
 
         // Process Google blocks: merge with old properties if they exist
         const processedGoogleBlocks = googleBlocks.map(g => {
@@ -1821,9 +1834,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
             return {
               ...g,
+              id: oldBlock.id,
+              // Preserve whether this block is treated as "Google" in the UI.
+              // If it was created inside Ascend (task/habit block) we keep it as non-Google.
+              isGoogle: oldBlock.isGoogle,
               taskId: oldBlock.taskId,
               habitId: oldBlock.habitId,
               completed: oldBlock.completed,
+              pending: oldBlock.pending,
               // Keep original tag if it was user-set, otherwise use Google calendar name
               tag: oldBlock.taskId || oldBlock.habitId ? oldBlock.tag : g.tag,
             };
@@ -1831,20 +1849,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           return g;
         });
 
-        // Filter out Google events that match local blocks by signature
-        const uniqueGoogleBlocks = processedGoogleBlocks.filter(g => {
-          const signature = `${g.start}-${g.title}`;
-          if (localBlockSignatures.has(signature)) {
-
-            return false;
-          }
-          return true;
-        });
-
-
-
         // Merge all blocks and remove any duplicates by ID
-        const mergedBlocks = [...localBlocks, ...existingGoogleBlocks, ...uniqueGoogleBlocks];
+        const mergedBlocks = [...localBlocks, ...processedGoogleBlocks];
         const dedupedBlocks = mergedBlocks.filter((block, index, self) =>
           index === self.findIndex(b => String(b.id) === String(block.id))
         );
@@ -1854,6 +1860,22 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         }
 
         return dedupedBlocks;
+      });
+
+      // Persist to DB (and swap temporary IDs to stable DB IDs) after UI update.
+      void syncGoogleScheduleBlocksForDate(date, dbSyncInputs).then(idByGoogleId => {
+        setSchedule(prev => prev.map(b => {
+          const gid = b.googleEventId ? String(b.googleEventId) : null;
+          if (!gid) return b;
+          const dbId = idByGoogleId[gid];
+          if (!dbId) return b;
+          if (String(b.id).startsWith('tmp_google_')) {
+            return { ...b, id: dbId, pending: undefined };
+          }
+          return b;
+        }));
+      }).catch(err => {
+        console.error('Failed to persist Google events to DB:', err);
       });
     } catch (error: any) {
       console.error('Failed to load Google Calendar events:', error);
@@ -1867,6 +1889,67 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       }
     }
   };
+
+  // Initial Google backfill: persist events from today -> +90 days into DB.
+  // This makes refresh instant (DB is source of truth) and avoids flicker during mapping.
+  useEffect(() => {
+    if (!user || !googleAccount) return;
+    if (isGoogleBackfilling) return;
+
+    const key = `ascend_google_backfill_v1_${user.id}`;
+    if (localStorage.getItem(key) === 'done') return;
+
+    setIsGoogleBackfilling(true);
+
+    void (async () => {
+      try {
+        const token = await getValidAccessToken();
+        if (!token) return;
+        setAccessToken(token);
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const days = 90;
+
+        setNotification({ type: 'info', message: `Importing Google events (${days} days)...` });
+
+        for (let i = 0; i < days; i++) {
+          const d = new Date(today);
+          d.setDate(today.getDate() + i);
+          const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+          const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+
+          const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
+          await syncGoogleScheduleBlocksForDate(
+            d,
+            googleEvents.map(ev => ({
+              googleEventId: ev.id,
+              title: ev.title,
+              start: ev.start,
+              duration: ev.duration,
+              calendarName: (ev as any).calendarName,
+              calendarId: (ev as any).calendarId,
+              calendarColor: (ev as any).calendarColor,
+              colorId: (ev as any).colorId,
+              canEdit: (ev as any).canEdit,
+            }))
+          );
+
+          // Lightweight progress update
+          if (i === 0 || (i + 1) % 15 === 0) {
+            setNotification({ type: 'info', message: `Importing Google events... ${i + 1}/${days}` });
+          }
+        }
+
+        localStorage.setItem(key, 'done');
+        setNotification({ type: 'success', message: 'Google events imported (90 days).' });
+      } catch (err) {
+        console.error('Google backfill failed:', err);
+      } finally {
+        setIsGoogleBackfilling(false);
+      }
+    })();
+  }, [user, googleAccount, isGoogleBackfilling]);
 
   // Drag State
   const [draggedItem, setDraggedItem] = useState<any>(null);
@@ -2517,82 +2600,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           };
         });
 
-      // OPTIMISTIC LOADING: Show cached Google events immediately, fetch fresh in background
-      const cacheKey = `google_events_${dateString}`;
-      let cachedGoogleBlocks: ScheduleBlock[] = [];
+      // DB is the source of truth for what we show immediately.
+      // Google sync runs in the background and patches DB + UI (no schedule rebuild flicker).
+      setSchedule([...blocksData, ...habitBlocks]);
 
-      // Load cache synchronously
-      try {
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          cachedGoogleBlocks = JSON.parse(cached);
-          console.log('⚡ Loaded cached Google events:', cachedGoogleBlocks.length);
-        }
-      } catch (err) {
-        console.error('Cache load error:', err);
-      }
-
-      // Combine all blocks, avoiding duplicates
-      const dbBlockGoogleIds = new Set(blocksData.map(b => b.googleEventId).filter(Boolean));
-
-      // Also create a "signature" set for fallback matching (Start Time + Title)
-      const dbBlockSignatures = new Set(blocksData.map(b => `${b.start}-${b.title}`));
-
-      const uniqueCachedGoogleBlocks = cachedGoogleBlocks.filter(g => {
-        if (g.googleEventId && dbBlockGoogleIds.has(g.googleEventId)) return false;
-        const signature = `${g.start}-${g.title}`;
-        return !dbBlockSignatures.has(signature);
-      });
-
-      // Show cached data IMMEDIATELY
-      setSchedule([...blocksData, ...uniqueCachedGoogleBlocks, ...habitBlocks]);
-
-      // THEN fetch fresh Google events in background
       if (googleAccount) {
-        const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
-        const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
-
-        fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true)
-          .then(googleEvents => {
-            const googleBlocks: ScheduleBlock[] = googleEvents.map(event => ({
-              id: event.id,
-              title: event.title,
-              tag: (event as any).calendarName || 'google',
-              start: event.start,
-              duration: event.duration,
-              color: (event as any).calendarColor ? '' : 'bg-fuchsia-600/90 dark:bg-fuchsia-700/90 border-fuchsia-600',
-              textColor: 'text-white',
-              isGoogle: true,
-              googleEventId: event.id,
-              calendarColor: (event as any).calendarColor,
-              calendarName: (event as any).calendarName,
-              calendarId: (event as any).calendarId,
-              canEdit: (event as any).canEdit,
-              colorId: (event as any).colorId,
-            }));
-
-            console.log('📅 Fresh Google events:', googleBlocks.length);
-
-            // Update cache
-            try {
-              localStorage.setItem(cacheKey, JSON.stringify(googleBlocks));
-            } catch (err) {
-              console.error('Cache save error:', err);
-            }
-
-            // Filter unique Google blocks
-            const uniqueGoogleBlocks = googleBlocks.filter(g => {
-              if (g.googleEventId && dbBlockGoogleIds.has(g.googleEventId)) return false;
-              const signature = `${g.start}-${g.title}`;
-              return !dbBlockSignatures.has(signature);
-            });
-
-            // Update schedule with fresh data
-            setSchedule([...blocksData, ...uniqueGoogleBlocks, ...habitBlocks]);
-          })
-          .catch(error => {
-            console.error('Failed to fetch Google events:', error);
-          });
+        loadGoogleEventsForDate(date).catch(error => {
+          console.error('Failed to fetch Google events:', error);
+        });
       }
     } catch (error) {
       console.error('Failed to load schedule for date:', error);
@@ -2691,8 +2706,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
         // Then do async operations in background
         if (resizedBlock) {
-          // Only save to database if it's NOT a Google Calendar event
-          if (!resizedBlock.isGoogle) {
+          // Persist to DB (DB is source of truth for UI)
+          if (!String(resizedBlock.id).startsWith('tmp_')) {
             updateScheduleBlock(String(resizedBlock.id), {
               duration: resizedBlock.duration
             }).catch(err => console.error('Failed to save block:', err));
@@ -2701,6 +2716,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           // Update Google Calendar if it's an Ascend calendar event (we have write access)
           if (resizedBlock.googleEventId && googleAccount) {
             if (canEditGoogleEvent(resizedBlock)) {
+              setSchedule(prev => prev.map(b => b.id === resizedBlock.id ? { ...b, pending: 'syncing' } : b));
               updateGoogleCalendarEvent(
                 resizedBlock.googleEventId,
                 resizedBlock.title,
@@ -2710,9 +2726,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 resizedBlock.calendarId,
                 resizedBlock.colorId || resizedBlock.color || resizedBlock.calendarColor || undefined
               ).then(() => {
+                setSchedule(prev => prev.map(b => b.id === resizedBlock.id ? { ...b, pending: undefined } : b));
                 setNotification({ type: 'success', message: 'Event updated' });
               }).catch(error => {
                 console.error('Failed to update Google Calendar event:', error);
+                setSchedule(prev => prev.map(b => b.id === resizedBlock.id ? { ...b, pending: undefined } : b));
                 setNotification({ type: 'error', message: 'Failed to update event' });
               });
             } else {
@@ -2735,8 +2753,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
         // Then do async operations in background
         if (movedBlock) {
-          // Only save to database if it's NOT a Google Calendar event
-          if (!movedBlock.isGoogle) {
+          // Persist to DB (DB is source of truth for UI)
+          if (!String(movedBlock.id).startsWith('tmp_')) {
             updateScheduleBlock(String(movedBlock.id), {
               start: movedBlock.start
             }).catch(err => console.error('Failed to save block:', err));
@@ -2745,6 +2763,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           // Update Google Calendar if it's an Ascend calendar event (we have write access)
           if (movedBlock.googleEventId && googleAccount) {
             if (canEditGoogleEvent(movedBlock)) {
+              setSchedule(prev => prev.map(b => b.id === movedBlock.id ? { ...b, pending: 'syncing' } : b));
               updateGoogleCalendarEvent(
                 movedBlock.googleEventId,
                 movedBlock.title,
@@ -2754,9 +2773,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                 movedBlock.calendarId,
                 movedBlock.colorId || movedBlock.color || movedBlock.calendarColor || undefined
               ).then(() => {
+                setSchedule(prev => prev.map(b => b.id === movedBlock.id ? { ...b, pending: undefined } : b));
                 setNotification({ type: 'success', message: 'Event time updated' });
               }).catch(error => {
                 console.error('Failed to update Google Calendar event:', error);
+                setSchedule(prev => prev.map(b => b.id === movedBlock.id ? { ...b, pending: undefined } : b));
                 setNotification({ type: 'error', message: 'Failed to update event' });
               });
             } else {
@@ -2824,13 +2845,13 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     // Find and delete linked schedule block
     const linkedBlock = schedule.find(b => b.taskId && String(b.taskId) === String(taskId));
     if (linkedBlock) {
-      if (linkedBlock.googleEventId && googleAccount) {
-        try {
-          await deleteGoogleCalendarEvent(linkedBlock.googleEventId);
-        } catch (error) {
-          console.error('Failed to delete from Google Calendar:', error);
-        }
-      }
+          if (linkedBlock.googleEventId && googleAccount) {
+            try {
+          await deleteGoogleCalendarEvent(linkedBlock.googleEventId, (linkedBlock as any).calendarId);
+            } catch (error) {
+              console.error('Failed to delete from Google Calendar:', error);
+            }
+          }
       await deleteScheduleBlock(String(linkedBlock.id));
       setSchedule(prev => prev.filter(b => String(b.id) !== String(linkedBlock.id)));
     }
@@ -2863,15 +2884,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     // We should delete if: 1) It's NOT a read-only external calendar, OR 2) We created it (has taskId/habitId)
     const shouldDeleteFromGoogle = block?.googleEventId && googleAccount && (!block?.isGoogle || block?.canEdit || block?.taskId || block?.habitId);
 
-    if (shouldDeleteFromGoogle) {
-      try {
+      if (shouldDeleteFromGoogle) {
+        try {
 
-        await deleteGoogleCalendarEvent(block.googleEventId);
+        await deleteGoogleCalendarEvent(block.googleEventId, (block as any).calendarId);
 
-      } catch (error) {
-        console.error('❌ Failed to delete from Google Calendar:', error);
-        setNotification({ type: 'error', message: 'Failed to delete from Google Calendar' });
-      }
+        } catch (error) {
+          console.error('❌ Failed to delete from Google Calendar:', error);
+          setNotification({ type: 'error', message: 'Failed to delete from Google Calendar' });
+        }
     }
 
     // Clear linked task's time (but don't delete the task)
@@ -4760,6 +4781,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             if (block.pending) return;
                             if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.cursor-ns-resize')) return;
 
+                            isMouseDownRef.current = true;
+
                             // Prevent default behavior
                             // e.preventDefault(); // Don't prevent default immediately to allow click events if needed
 
@@ -4768,13 +4791,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
                             // Start timer for drag
                             dragTimerRef.current = setTimeout(() => {
+                              // Require the mouse button to still be held down.
+                              if (!isMouseDownRef.current) return;
                               setIsLongPress(true);
                               setDraggingBlockId(block.id);
                               setDragStartY(e.clientY);
                               setDragStartTime(block.start);
                               // Trigger haptic feedback if available (mobile)
                               if (navigator.vibrate) navigator.vibrate(50);
-                            }, 200); // 200ms hold time
+                            }, 400); // Require a deliberate hold to drag
                           }}
                           onMouseMove={(e) => {
                             if (initialClickPos.current && !isLongPress) {
@@ -4793,6 +4818,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           }}
                           onMouseUp={() => {
                             // If mouse up before timer, cancel drag
+                            isMouseDownRef.current = false;
                             if (dragTimerRef.current) {
                               clearTimeout(dragTimerRef.current);
                               dragTimerRef.current = null;
@@ -4802,6 +4828,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           }}
                           onMouseLeave={() => {
                             // If mouse leaves before timer, cancel drag
+                            isMouseDownRef.current = false;
                             if (dragTimerRef.current) {
                               clearTimeout(dragTimerRef.current);
                               dragTimerRef.current = null;

@@ -30,6 +30,10 @@ export interface ScheduleBlock {
   taskId?: string;
   habitId?: string;
   colorId?: string;
+  calendarId?: string;
+  calendarName?: string;
+  calendarColor?: string;
+  canEdit?: boolean;
 }
 
 export interface UserSettings {
@@ -70,9 +74,27 @@ function dbBlockToBlock(dbBlock: DbScheduleBlock): ScheduleBlock {
     googleEventId: dbBlock.google_event_id || undefined,
     taskId: dbBlock.task_id || undefined,
     habitId: dbBlock.habit_id || undefined,
-    // Note: colorId removed - doesn't exist in schema, only used for Google Calendar events
+    colorId: (dbBlock as any).color_id || undefined,
+    calendarId: (dbBlock as any).calendar_id || undefined,
+    calendarName: (dbBlock as any).calendar_name || undefined,
+    calendarColor: (dbBlock as any).calendar_color || undefined,
+    canEdit: (dbBlock as any).can_edit ?? undefined,
     completed: dbBlock.completed || false,
   };
+}
+
+function formatDbDate(date: Date): string {
+  const formatter = new Intl.DateTimeFormat('sv-SE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  return formatter.format(date);
+}
+
+function isMissingColumnError(error: any): boolean {
+  const msg = String(error?.message || '').toLowerCase();
+  return error?.code === '42703' || error?.code === 'PGRST204' || msg.includes('does not exist');
 }
 
 // ============ TASKS ============
@@ -266,14 +288,8 @@ export async function createScheduleBlock(block: Omit<ScheduleBlock, 'id'>, date
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  // Revert to ISO string to match existing DB format and ensure consistency
   const targetDate = date || new Date();
-  const formatter = new Intl.DateTimeFormat('sv-SE', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  });
-  const dateStr = formatter.format(targetDate);
+  const dateStr = formatDbDate(targetDate);
 
   const insertData = {
     user_id: user.id,
@@ -286,20 +302,41 @@ export async function createScheduleBlock(block: Omit<ScheduleBlock, 'id'>, date
     is_google: block.isGoogle || false,
     completed: block.completed || false,
     google_event_id: block.googleEventId || null,
+    color_id: (block as any).colorId || null,
+    calendar_id: (block as any).calendarId || null,
+    calendar_name: (block as any).calendarName || null,
+    calendar_color: (block as any).calendarColor || null,
+    can_edit: (block as any).canEdit ?? null,
     // Robustly convert to string, handling 0, numbers, and strings
     task_id: (block.taskId !== undefined && block.taskId !== null) ? String(block.taskId) : null,
     habit_id: (block.habitId !== undefined && block.habitId !== null) ? String(block.habitId) : null,
-    // Note: color_id removed - doesn't exist in schema, colorId is stored in memory only for Google Calendar
     date: dateStr,
   };
 
   console.log('📝 Creating Schedule Block (Payload):', insertData);
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('schedule_blocks')
-    .insert(insertData)
+    .insert(insertData as any)
     .select()
     .single();
+
+  if (error && isMissingColumnError(error)) {
+    // Retry without newer optional columns
+    const retryData: any = { ...insertData };
+    // Some environments may not have these columns yet
+    delete retryData.color_id;
+    delete retryData.calendar_id;
+    delete retryData.calendar_name;
+    delete retryData.calendar_color;
+    delete retryData.can_edit;
+
+    ({ data, error } = await supabase
+      .from('schedule_blocks')
+      .insert(retryData)
+      .select()
+      .single());
+  }
 
   if (error) {
     console.error('❌ Error creating schedule block:', error);
@@ -323,12 +360,30 @@ export async function updateScheduleBlock(blockId: string, updates: Partial<Sche
   if (updates.googleEventId !== undefined) updateData.google_event_id = updates.googleEventId;
   if (updates.taskId !== undefined) updateData.task_id = updates.taskId;
   if (updates.habitId !== undefined) updateData.habit_id = updates.habitId;
-  // Note: colorId is NOT saved to DB - it's only for Google Calendar events in memory
+  if (updates.colorId !== undefined) updateData.color_id = updates.colorId;
+  if (updates.calendarId !== undefined) updateData.calendar_id = updates.calendarId;
+  if (updates.calendarName !== undefined) updateData.calendar_name = updates.calendarName;
+  if (updates.calendarColor !== undefined) updateData.calendar_color = updates.calendarColor;
+  if (updates.canEdit !== undefined) updateData.can_edit = updates.canEdit;
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from('schedule_blocks')
     .update(updateData)
     .eq('id', blockId);
+
+  if (error && isMissingColumnError(error)) {
+    const retryData: any = { ...updateData };
+    delete retryData.color_id;
+    delete retryData.calendar_id;
+    delete retryData.calendar_name;
+    delete retryData.calendar_color;
+    delete retryData.can_edit;
+
+    ({ error } = await supabase
+      .from('schedule_blocks')
+      .update(retryData)
+      .eq('id', blockId));
+  }
 
   if (error) {
     console.error('Error updating schedule block:', error);
@@ -350,6 +405,116 @@ export async function deleteScheduleBlock(blockId: string): Promise<boolean> {
   }
 
   return true;
+}
+
+export type GoogleScheduleBlockInput = {
+  googleEventId: string;
+  title: string;
+  start: number;
+  duration: number;
+  calendarName?: string;
+  calendarId?: string;
+  calendarColor?: string;
+  colorId?: string;
+  canEdit?: boolean;
+};
+
+export async function syncGoogleScheduleBlocksForDate(
+  date: Date,
+  blocks: GoogleScheduleBlockInput[]
+): Promise<Record<string, string>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return {};
+
+  const dateStr = formatDbDate(date);
+
+  const { data: existingRows, error: loadErr } = await supabase
+    .from('schedule_blocks')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('date', dateStr)
+    .not('google_event_id', 'is', null);
+
+  if (loadErr) {
+    console.error('Failed to load existing Google blocks from DB:', loadErr);
+    return {};
+  }
+
+  const existingByGoogleId = new Map<string, any>();
+  (existingRows || []).forEach((r: any) => {
+    if (r.google_event_id) existingByGoogleId.set(String(r.google_event_id), r);
+  });
+
+  const incomingIds = new Set(blocks.map(b => String(b.googleEventId)));
+
+  const idByGoogleId: Record<string, string> = {};
+
+  // Upsert/update
+  for (const b of blocks) {
+    const googleId = String(b.googleEventId);
+    const existing = existingByGoogleId.get(googleId);
+
+    if (!existing) {
+      const created = await createScheduleBlock({
+        title: b.title,
+        tag: b.calendarName || 'google',
+        start: b.start,
+        duration: b.duration,
+        color: b.calendarColor || '#4285f4',
+        textColor: 'text-white',
+        isGoogle: true,
+        googleEventId: googleId,
+        completed: false,
+        colorId: b.colorId,
+        calendarId: b.calendarId,
+        calendarName: b.calendarName,
+        calendarColor: b.calendarColor,
+        canEdit: b.canEdit ?? false,
+      } as any, date);
+      if (created) idByGoogleId[googleId] = String(created.id);
+      continue;
+    }
+
+    idByGoogleId[googleId] = String(existing.id);
+
+    const needsUpdate =
+      existing.title !== b.title ||
+      Number(existing.start_hour) !== b.start ||
+      Number(existing.duration) !== b.duration ||
+      (existing.color_id || null) !== (b.colorId || null) ||
+      (existing.calendar_id || null) !== (b.calendarId || null) ||
+      (existing.calendar_name || null) !== (b.calendarName || null) ||
+      (existing.calendar_color || null) !== (b.calendarColor || null) ||
+      Boolean(existing.can_edit) !== Boolean(b.canEdit);
+
+    if (!needsUpdate) continue;
+
+    await updateScheduleBlock(String(existing.id), {
+      title: b.title,
+      tag: b.calendarName || 'google',
+      start: b.start,
+      duration: b.duration,
+      color: b.calendarColor || '#4285f4',
+      isGoogle: Boolean(existing.is_google),
+      googleEventId: googleId,
+      colorId: b.colorId,
+      calendarId: b.calendarId,
+      calendarName: b.calendarName,
+      calendarColor: b.calendarColor,
+      canEdit: b.canEdit ?? false,
+    } as any);
+  }
+
+  // Remove rows that no longer exist in Google (for this date)
+  for (const [googleId, row] of existingByGoogleId.entries()) {
+    if (!incomingIds.has(googleId)) {
+      if (row.is_google === true) {
+        await deleteScheduleBlock(String(row.id));
+      }
+    }
+  }
+
+  return idByGoogleId;
 }
 
 // ============ USER SETTINGS ============
