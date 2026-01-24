@@ -1530,7 +1530,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                 )}
                                             </div>
                                         </div>
-                                        <StreakFlame count={streak} />
+                                        <StreakFlame
+                                            streakCount={streak}
+                                            progressPercentage={streak > 0 ? 100 : 0}
+                                            size={44}
+                                        />
                                     </div>
                                     <div className="grid grid-cols-7 gap-2">
                                         {WEEKDAYS.map((day, i) => (

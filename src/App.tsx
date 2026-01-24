@@ -2209,57 +2209,34 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const isHabitCompletedOnDate = (habit: Habit, dateString: string) => habit.completedDates.includes(dateString);
 
   const calculateStreak = (habit: Habit): number => {
-    let streak = 0;
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    // Start checking from "now" or the latest completion date (whichever is later)
-    // to handle completion of future habits or keeping streak alive today
-    let checkDate = new Date(now);
-
-    // If the habit is completed in the future, we start from there
-    const sortedDates = [...habit.completedDates].sort().reverse();
-    if (sortedDates.length > 0) {
-      const latestDone = new Date(sortedDates[0]);
-      if (latestDone > checkDate) {
-        checkDate = latestDone;
-      }
-    }
-
-    // Check if it's completed today or was completed yesterday to keep streak alive
-    const todayStr = formatDateISO(now);
-    const yesterday = new Date(now);
+    const todayStr = formatDateISO(today);
+    const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = formatDateISO(yesterday);
 
-    const isDoneToday = habit.completedDates.includes(todayStr);
-    const isDoneYesterday = habit.completedDates.includes(yesterdayStr);
+    // Keep the streak alive even if today isn't checked yet.
+    // We only allow a 1-day grace (today can be unchecked if yesterday was checked).
+    const anchor = habit.completedDates.includes(todayStr)
+      ? today
+      : habit.completedDates.includes(yesterdayStr)
+        ? yesterday
+        : null;
 
-    // Also check for "Tomorrow" if we are counting future streaks
-    if (!isDoneToday && !isDoneYesterday) {
-      // Check if there are any completions at all that could be part of a streak
-      const hasAnyCompletion = habit.completedDates.length > 0;
-      if (!hasAnyCompletion) return 0;
+    if (!anchor) return 0;
 
-      // If we are looking at a streak, we might have skipped today but done yesterday.
-      // If we haven't done today OR yesterday, the streak is broken (0).
-      return 0;
-    }
-
-    // Start checking backwards from the checkDate
-    let currentCheck = new Date(checkDate);
+    let streak = 0;
+    const checkDate = new Date(anchor);
     while (true) {
-      const dateStr = formatDateISO(currentCheck);
-      if (habit.completedDates.includes(dateStr)) {
-        streak++;
-        currentCheck.setDate(currentCheck.getDate() - 1);
-      } else {
-        // Only break if we've passed "now" back into the past
-        // If we started from a future date, we keep going until we hit a gap
-        break;
-      }
+      const dateStr = formatDateISO(checkDate);
+      if (!habit.completedDates.includes(dateStr)) break;
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
       if (streak > 1000) break;
     }
+
     return streak;
   };
 
@@ -4236,6 +4213,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                     // Use the new calculateWeeklyProgress function that respects start dates
                                     const weekDates = weekData.map(d => d.date);
                                     const weeklyProgress = calculateWeeklyProgress(habit, weekDates);
+                                    const flameFill = streak > 0 ? 100 : 0;
                                     return (
                                       <div className="flex items-center gap-4">
                                         <div className="flex flex-col items-center">
@@ -4248,7 +4226,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                         </div>
                                         <div className="h-8 w-px bg-slate-200 dark:bg-slate-700 mx-2"></div>
                                         <StreakFlame
-                                          progressPercentage={weeklyProgress}
+                                          progressPercentage={flameFill}
                                           streakCount={streak}
                                           size={44}
                                         />
