@@ -1507,7 +1507,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                     <Plus size={18} /> Add Habit
                                 </button>
                             </div>
-                            {habits.map(habit => (
+                            {habits.map(habit => {
+                                const streak = calculateStreak(habit);
+                                return (
                                 <div key={habit.id} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
                                     <div className="flex items-center justify-between mb-4">
                                         <div className="flex items-center gap-3">
@@ -1528,7 +1530,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                                 )}
                                             </div>
                                         </div>
-                                        <StreakFlame count={habit.currentStreak} />
+                                        <StreakFlame count={streak} />
                                     </div>
                                     <div className="grid grid-cols-7 gap-2">
                                         {WEEKDAYS.map((day, i) => (
@@ -1541,7 +1543,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
                                         ))}
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 )}
