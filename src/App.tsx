@@ -4950,12 +4950,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           <div className={`absolute ${isVeryCompact ? 'top-1 right-1' : isCompact ? 'top-1.5 right-1.5' : 'top-2 right-2'} flex flex-row items-center gap-1.5`}>
                             {/* Category tag - prioritize actual tag over calendar name, skip "Ascend" as it's not a real tag */}
                             {(block.tag || (block.calendarName && block.calendarName !== 'Ascend')) && (
-                              <span className={`uppercase font-bold bg-black/10 dark:bg-white/15 px-1.5 py-0.5 rounded pointer-events-none ${isVeryCompact ? 'text-[8px]' : 'text-[10px]'}`}>
+                              <span className="uppercase font-bold bg-black/10 dark:bg-white/15 px-1.5 h-5 inline-flex items-center rounded pointer-events-none text-[10px] leading-none">
                                 {block.tag || block.calendarName}
                               </span>
                             )}
                             {block.pending && (
-                              <span className={`flex items-center gap-1 font-bold bg-black/20 dark:bg-white/15 px-1.5 py-0.5 rounded pointer-events-none ${isVeryCompact ? 'text-[8px]' : 'text-[10px]'}`}>
+                              <span className="inline-flex items-center gap-1 font-bold bg-black/20 dark:bg-white/15 px-1.5 h-5 rounded pointer-events-none text-[10px] leading-none">
                                 <Loader2 size={isVeryCompact ? 10 : 12} className="animate-spin" />
                                 {!isVeryCompact && (block.pending === 'syncing' ? 'Syncing' : 'Saving')}
                               </span>
