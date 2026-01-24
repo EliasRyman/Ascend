@@ -5009,14 +5009,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                               >
                                 {block.completed && <Check size={isVeryCompact ? 8 : isCompact ? 10 : 14} className="text-white" strokeWidth={3} />}
                               </div>
-                              <h3 className={`font-bold pointer-events-none truncate ${isVeryCompact ? 'text-[11px]' : isCompact ? 'text-xs' : 'text-sm'} ${block.completed ? 'line-through opacity-70' : ''}`}>{block.title}</h3>
+                              <h3 className={`font-bold pointer-events-none truncate text-sm leading-tight ${block.completed ? 'line-through opacity-70' : ''}`}>{block.title}</h3>
                             </div>
 
                             {/* Time row - below title */}
                             {!isVeryCompact && (
                               <div className={`flex items-center gap-1 ${isCompact ? 'mt-0.5' : 'mt-1'} pointer-events-none`}>
                                 {block.isGoogle && <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" className="w-3 h-3 opacity-80" alt="GCal" />}
-                                <span className={`opacity-70 ${isCompact ? 'text-[10px]' : 'text-xs'}`}>
+                                <span className="opacity-70 text-xs leading-tight">
                                   {formatTime(block.start)} – {formatTime(endTime)}
                                 </span>
                               </div>
