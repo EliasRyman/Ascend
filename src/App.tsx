@@ -801,6 +801,10 @@ interface SettingsModalProps {
   googleApiReady: boolean;
   handleConnectGoogle: () => void;
   handleDisconnectGoogle: () => void;
+  onSyncGoogle90Days: () => void;
+  onResetGoogleSync: () => void;
+  isGoogleBackfilling: boolean;
+  googleBackfillProgress: string | null;
   isDark: boolean;
   toggleTheme: () => void;
   user: any;
@@ -818,6 +822,10 @@ const SettingsModal = ({
   googleApiReady,
   handleConnectGoogle,
   handleDisconnectGoogle,
+  onSyncGoogle90Days,
+  onResetGoogleSync,
+  isGoogleBackfilling,
+  googleBackfillProgress,
   isDark,
   toggleTheme,
   user,
@@ -1116,6 +1124,40 @@ const SettingsModal = ({
                           Disconnect
                         </button>
                       </div>
+
+                      <div className="pt-3 border-t border-purple-200/60 dark:border-purple-800/40">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={onSyncGoogle90Days}
+                            disabled={isGoogleBackfilling}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-purple-500/10 text-slate-700 dark:text-purple-200 border border-purple-200 dark:border-purple-800/50 hover:bg-purple-50 dark:hover:bg-purple-500/20 rounded-lg transition-all text-sm font-semibold whitespace-nowrap shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                            title="Sync Google events to Ascend database"
+                          >
+                            {isGoogleBackfilling ? (
+                              <>
+                                <Loader2 size={16} className="animate-spin" />
+                                Syncing{googleBackfillProgress ? ` ${googleBackfillProgress}` : ''}
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw size={16} />
+                                Sync Now (90 days)
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={onResetGoogleSync}
+                            disabled={isGoogleBackfilling}
+                            className="px-3 py-2 text-slate-500 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100 hover:bg-white/60 dark:hover:bg-purple-500/10 rounded-lg transition-all text-sm font-medium whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+                            title="Reset sync state so auto-sync can run again"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-purple-300/80 mt-2">
+                          Sync saves Google events from today and 90 days ahead into the database so day navigation is instant. Changes then reconcile in the background.
+                        </p>
+                      </div>
                     </div>
                   ) : (
                     <button
@@ -1400,6 +1442,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [isGoogleConnecting, setIsGoogleConnecting] = useState(false);
   const [googleApiReady, setGoogleApiReady] = useState(false);
   const [isGoogleBackfilling, setIsGoogleBackfilling] = useState(false);
+  const [googleBackfillProgress, setGoogleBackfillProgress] = useState<string | null>(null);
 
   // Initialize Google APIs on mount
   useEffect(() => {
@@ -1687,7 +1730,41 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           return true;
         });
 
-        setSchedule(validSchedule);
+        // Add recurring/scheduled habit blocks (these are UI-only; not stored as schedule_blocks)
+        const dateString = formatDateISO(selectedDate);
+        const habitIdsAlreadyScheduled = new Set(
+          validSchedule
+            .filter(b => b.habitId)
+            .map(b => String(b.habitId))
+        );
+
+        const habitBlocks: ScheduleBlock[] = habitsRef.current
+          .filter(h => h.scheduledStartTime && isHabitScheduledForDay(h, selectedDate))
+          .filter(h => !habitIdsAlreadyScheduled.has(String(h.id)))
+          .map(habit => {
+            const [startHours, startMinutes] = habit.scheduledStartTime!.split(':').map(Number);
+            const startTime = startHours + startMinutes / 60;
+            let duration = 0.5;
+            if (habit.scheduledEndTime) {
+              const [endHours, endMinutes] = habit.scheduledEndTime.split(':').map(Number);
+              duration = Math.max(0.25, (endHours + endMinutes / 60) - startTime);
+            }
+            return {
+              id: `habit-${habit.id}-${dateString}`,
+              title: habit.name,
+              tag: habit.tag,
+              start: startTime,
+              duration,
+              color: habit.tagColor || '#6F00FF',
+              textColor: 'text-white',
+              isGoogle: false,
+              completed: habit.completedDates.includes(dateString),
+              habitId: habit.id,
+              calendarColor: habit.tagColor,
+            };
+          });
+
+        setSchedule([...validSchedule, ...habitBlocks]);
         setNotesContent(noteContent);
         setIsDataLoaded(true);
 
@@ -1890,66 +1967,103 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     }
   };
 
-  // Initial Google backfill: persist events from today -> +90 days into DB.
-  // This makes refresh instant (DB is source of truth) and avoids flicker during mapping.
-  useEffect(() => {
+  const runGoogleBackfill = async (opts: { days: number; force?: boolean }) => {
     if (!user || !googleAccount) return;
     if (isGoogleBackfilling) return;
 
-    const key = `ascend_google_backfill_v1_${user.id}`;
-    if (localStorage.getItem(key) === 'done') return;
+    const days = opts.days;
+    const force = !!opts.force;
+    const key = `ascend_google_backfill_v2_${user.id}_${days}`;
+    if (!force && localStorage.getItem(key) === 'done') return;
+
+    const dateFromISO = (isoDate: string): Date => {
+      const [y, m, d] = isoDate.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    };
 
     setIsGoogleBackfilling(true);
+    setGoogleBackfillProgress(`0/${days}`);
 
-    void (async () => {
-      try {
-        const token = await getValidAccessToken();
-        if (!token) return;
-        setAccessToken(token);
+    try {
+      const token = await getValidAccessToken();
+      if (!token) return;
+      setAccessToken(token);
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const days = 90;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const end = new Date(today);
+      end.setDate(end.getDate() + (days - 1));
+      end.setHours(23, 59, 59, 999);
 
-        setNotification({ type: 'info', message: `Importing Google events (${days} days)...` });
+      setNotification({ type: 'info', message: `Syncing Google events (${days} days)...` });
 
-        for (let i = 0; i < days; i++) {
-          const d = new Date(today);
-          d.setDate(today.getDate() + i);
-          const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
-          const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
-
-          const googleEvents = await fetchGoogleCalendarEvents(startOfDay, endOfDay, true, true);
-          await syncGoogleScheduleBlocksForDate(
-            d,
-            googleEvents.map(ev => ({
-              googleEventId: ev.id,
-              title: ev.title,
-              start: ev.start,
-              duration: ev.duration,
-              calendarName: (ev as any).calendarName,
-              calendarId: (ev as any).calendarId,
-              calendarColor: (ev as any).calendarColor,
-              colorId: (ev as any).colorId,
-              canEdit: (ev as any).canEdit,
-            }))
-          );
-
-          // Lightweight progress update
-          if (i === 0 || (i + 1) % 15 === 0) {
-            setNotification({ type: 'info', message: `Importing Google events... ${i + 1}/${days}` });
-          }
-        }
-
-        localStorage.setItem(key, 'done');
-        setNotification({ type: 'success', message: 'Google events imported (90 days).' });
-      } catch (err) {
-        console.error('Google backfill failed:', err);
-      } finally {
-        setIsGoogleBackfilling(false);
+      const googleEvents = await fetchGoogleCalendarEvents(today, end, true, true);
+      const byDate = new Map<string, any[]>();
+      for (const ev of googleEvents) {
+        const startIso = (ev as any).startDateTime as string | undefined;
+        if (!startIso) continue;
+        const d = new Date(startIso);
+        d.setHours(0, 0, 0, 0);
+        const dateKey = formatDateISO(d);
+        const list = byDate.get(dateKey) || [];
+        list.push(ev);
+        byDate.set(dateKey, list);
       }
-    })();
-  }, [user, googleAccount, isGoogleBackfilling]);
+
+      for (let i = 0; i < days; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        const dateKey = formatDateISO(d);
+
+        const eventsForDay = byDate.get(dateKey) || [];
+        await syncGoogleScheduleBlocksForDate(
+          dateFromISO(dateKey),
+          eventsForDay.map((ev: any) => ({
+            googleEventId: ev.id,
+            title: ev.title,
+            start: ev.start,
+            duration: ev.duration,
+            calendarName: ev.calendarName,
+            calendarId: ev.calendarId,
+            calendarColor: ev.calendarColor,
+            colorId: ev.colorId,
+            canEdit: ev.canEdit,
+          }))
+        );
+
+        setGoogleBackfillProgress(`${i + 1}/${days}`);
+      }
+
+      localStorage.setItem(key, 'done');
+      setNotification({ type: 'success', message: `Google events synced (${days} days).` });
+
+      // Trigger a refresh of the current view (re-runs the date load effect)
+      setSelectedDate(prev => {
+        const d = new Date(prev);
+        d.setHours(0, 0, 0, 0);
+        return d;
+      });
+    } catch (err) {
+      console.error('Google backfill failed:', err);
+      setNotification({ type: 'error', message: 'Google backfill failed. Please try again.' });
+    } finally {
+      setIsGoogleBackfilling(false);
+      setGoogleBackfillProgress(null);
+    }
+  };
+
+  const resetGoogleBackfill = () => {
+    if (!user) return;
+    localStorage.removeItem(`ascend_google_backfill_v1_${user.id}`);
+    localStorage.removeItem(`ascend_google_backfill_v2_${user.id}_90`);
+    setNotification({ type: 'info', message: 'Google sync state reset.' });
+  };
+
+  // Auto-run initial Google backfill once per user (90 days)
+  useEffect(() => {
+    if (!user || !googleAccount) return;
+    void runGoogleBackfill({ days: 90, force: false });
+  }, [user, googleAccount]);
 
   // Drag State
   const [draggedItem, setDraggedItem] = useState<any>(null);
@@ -2562,11 +2676,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   };
 
   // Calendar date selection
-  const handleDateSelect = async (day: number) => {
+  const handleDateSelect = (day: number) => {
     const newDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
     setSelectedDate(newDate);
     setIsCalendarOpen(false);
-    await loadScheduleForDate(newDate);
   };
 
   const loadScheduleForDate = async (date: Date) => {
@@ -3462,6 +3575,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
             googleApiReady={googleApiReady}
             handleConnectGoogle={handleConnectGoogle}
             handleDisconnectGoogle={handleDisconnectGoogle}
+            onSyncGoogle90Days={() => void runGoogleBackfill({ days: 90, force: true })}
+            onResetGoogleSync={resetGoogleBackfill}
+            isGoogleBackfilling={isGoogleBackfilling}
+            googleBackfillProgress={googleBackfillProgress}
             isDark={isDark}
             toggleTheme={toggleTheme}
             user={user}
@@ -4643,7 +4760,18 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             );
                           })}
                         </div>
-                        <button onClick={async () => { const today = new Date(); setSelectedDate(today); setCalendarViewDate(today); setIsCalendarOpen(false); await loadScheduleForDate(today); }} className="mt-3 w-full py-2 text-sm font-medium stroke-gradient dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg">Today</button>
+                        <button
+                          onClick={() => {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            setSelectedDate(today);
+                            setCalendarViewDate(today);
+                            setIsCalendarOpen(false);
+                          }}
+                          className="mt-3 w-full py-2 text-sm font-medium stroke-gradient dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg"
+                        >
+                          Today
+                        </button>
                       </div>
                     </>,
                     document.body

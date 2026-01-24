@@ -154,6 +154,9 @@ interface CalendarEvent {
   calendarColor?: string;
   calendarId?: string;
   canEdit?: boolean; // true if user has write access to this calendar
+
+  // For multi-day sync/backfill
+  startDateTime?: string; // ISO datetime
 }
 
 interface GoogleConnectionStatus {
@@ -506,24 +509,31 @@ export async function fetchGoogleCalendarEvents(
       const canEditCalendar = calendar.accessRole === 'owner' || calendar.accessRole === 'writer';
 
       try {
-        const response = await gapi.client.calendar.events.list({
-          calendarId: calendar.id!,
-          timeMin: timeMin.toISOString(),
-          timeMax: timeMax.toISOString(),
-          singleEvents: true,
-          orderBy: 'startTime',
-        });
+        let pageToken: string | undefined;
+        do {
+          const response = await gapi.client.calendar.events.list({
+            calendarId: calendar.id!,
+            timeMin: timeMin.toISOString(),
+            timeMax: timeMax.toISOString(),
+            singleEvents: true,
+            orderBy: 'startTime',
+            maxResults: 2500,
+            pageToken,
+          } as any);
 
-        const events: GoogleCalendarEvent[] = response.result.items || [];
-        const timedEvents = events.filter(event => event.start?.dateTime);
-        allEvents.push(...timedEvents.map(event => mapGoogleEventToCalendarEvent(
-          event,
-          false,
-          calendar.summary || 'Calendar',
-          calendar.backgroundColor || '#4285f4',
-          calendar.id!,
-          canEditCalendar
-        )));
+          const events: GoogleCalendarEvent[] = response.result.items || [];
+          const timedEvents = events.filter(event => event.start?.dateTime);
+          allEvents.push(...timedEvents.map(event => mapGoogleEventToCalendarEvent(
+            event,
+            false,
+            calendar.summary || 'Calendar',
+            calendar.backgroundColor || '#4285f4',
+            calendar.id!,
+            canEditCalendar
+          )));
+
+          pageToken = (response.result as any).nextPageToken || undefined;
+        } while (pageToken);
       } catch (error: any) {
         // Skip 404 errors silently (calendar may have been deleted/unsubscribed)
         if (is404Error(error)) {
@@ -536,19 +546,26 @@ export async function fetchGoogleCalendarEvents(
 
     if (includeAscendCalendar && ascendCalendarId) {
       try {
-        const ascendResponse = await gapi.client.calendar.events.list({
-          calendarId: ascendCalendarId,
-          timeMin: timeMin.toISOString(),
-          timeMax: timeMax.toISOString(),
-          singleEvents: true,
-          orderBy: 'startTime',
-        });
+        let pageToken: string | undefined;
+        do {
+          const ascendResponse = await gapi.client.calendar.events.list({
+            calendarId: ascendCalendarId,
+            timeMin: timeMin.toISOString(),
+            timeMax: timeMax.toISOString(),
+            singleEvents: true,
+            orderBy: 'startTime',
+            maxResults: 2500,
+            pageToken,
+          } as any);
 
-        const ascendEvents: GoogleCalendarEvent[] = ascendResponse.result.items || [];
-        allEvents.push(...ascendEvents
-          .filter(event => event.start?.dateTime)
-          .map(event => mapGoogleEventToCalendarEvent(event, true, 'Ascend', '#7C3AED', ascendCalendarId, true)) // Ascend is always editable
-        );
+          const ascendEvents: GoogleCalendarEvent[] = ascendResponse.result.items || [];
+          allEvents.push(...ascendEvents
+            .filter(event => event.start?.dateTime)
+            .map(event => mapGoogleEventToCalendarEvent(event, true, 'Ascend', '#7C3AED', ascendCalendarId, true))
+          );
+
+          pageToken = (ascendResponse.result as any).nextPageToken || undefined;
+        } while (pageToken);
       } catch (error: any) {
         // Handle 404 - Ascend calendar was deleted
         if (is404Error(error)) {
@@ -610,6 +627,7 @@ function mapGoogleEventToCalendarEvent(
     calendarColor: eventColor || calendarColor,
     calendarId,
     canEdit,
+    startDateTime: event.start.dateTime!,
   };
 }
 
