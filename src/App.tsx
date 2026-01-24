@@ -220,6 +220,7 @@ interface ScheduleBlock {
   calendarId?: string; // Google Calendar ID for external events
   canEdit?: boolean; // true if user has write access to edit this event
   colorId?: string; // Google Calendar Color ID for persistence
+  pending?: 'saving' | 'syncing';
 }
 // Import our new high-performance chart
 import { WeightTrendChart } from './components/WeightTrendChart';
@@ -3024,7 +3025,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     e.dataTransfer.dropEffect = 'copy';
   };
 
-  const handleHourDrop = async (e: React.DragEvent, hour: number) => {
+  const handleHourDrop = (e: React.DragEvent, hour: number) => {
     e.preventDefault();
     setDragOverHour(null);
 
@@ -3059,52 +3060,75 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         habitId: habitId,
       };
 
-      // Save to database
-      const savedBlock = await createScheduleBlock(blockData, selectedDate);
-
-      const habitBlock: ScheduleBlock = savedBlock ? {
-        ...savedBlock,
-        habitId: habitId,
-        calendarColor: habitTagColor,
-      } : {
-        id: Date.now(),
+      const tempId = `tmp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const optimisticBlock: ScheduleBlock = {
+        id: tempId,
         ...blockData,
         calendarColor: habitTagColor,
+        pending: 'saving',
       };
 
-      // Sync to Google Calendar if connected - do this BEFORE adding to state
-      let googleEventId: string | undefined;
+      // Optimistic UI: show immediately
+      setSchedule(prev => [...prev, optimisticBlock]);
+      setNotification({
+        type: 'success',
+        message: googleAccount
+          ? `Scheduled "${habitName}" at ${formatTime(hour)} (syncing...)`
+          : `Scheduled "${habitName}" at ${formatTime(hour)}`,
+      });
 
+      // Persist in background (DB + optional Google sync)
+      void (async () => {
+        const savedBlock = await createScheduleBlock(blockData as any, selectedDate);
+        if (!savedBlock) {
+          setSchedule(prev => prev.filter(b => b.id !== tempId));
+          setNotification({ type: 'error', message: 'Failed to save to database. Please try again.' });
+          return;
+        }
 
-      if (googleAccount) {
+        const savedId = savedBlock.id;
+
+        setSchedule(prev => prev.map(b =>
+          b.id === tempId
+            ? {
+              ...b,
+              ...savedBlock,
+              id: savedId,
+              habitId,
+              calendarColor: habitTagColor,
+              pending: googleAccount ? 'syncing' : undefined,
+            }
+            : b
+        ));
+
+        if (!googleAccount) return;
+
         try {
+          const googleEventId = await createGoogleCalendarEvent(
+            habitName,
+            hour,
+            1,
+            selectedDate,
+            habitTag || undefined,
+            habitTagColor || undefined
+          );
 
-          googleEventId = await createGoogleCalendarEvent(habitName, hour, 1, selectedDate, habitTag || undefined, habitTagColor || undefined);
+          setSchedule(prev => prev.map(b =>
+            b.id === savedId
+              ? { ...b, googleEventId: googleEventId || undefined, pending: undefined }
+              : b
+          ));
 
-
-          // Update database with Google event ID
-          if (savedBlock && googleEventId) {
-            await updateScheduleBlock(String(savedBlock.id), { googleEventId: googleEventId });
+          if (googleEventId) {
+            await updateScheduleBlock(String(savedId), { googleEventId });
           }
         } catch (error: any) {
           console.error('Failed to create Google Calendar event for habit:', error);
+          setSchedule(prev => prev.map(b => (b.id === savedId ? { ...b, pending: undefined } : b)));
           setNotification({ type: 'error', message: `Failed to sync "${habitName}" to Google Calendar` });
         }
-      }
+      })();
 
-      // Add to schedule with Google event ID if available
-      const finalBlock: ScheduleBlock = {
-        ...habitBlock,
-        googleEventId: googleEventId,
-      };
-
-      setSchedule(prev => [...prev, finalBlock]);
-
-      if (googleEventId) {
-        setNotification({ type: 'success', message: `Scheduled "${habitName}" and synced to Google Calendar` });
-      } else if (!googleAccount) {
-        setNotification({ type: 'success', message: `Scheduled "${habitName}" at ${formatTime(hour)}` });
-      }
       return;
     }
 
@@ -3123,17 +3147,20 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       // Update local state
       setSchedule(prev => prev.map(b => b.id === existingBlock.id ? { ...b, start: newStart } : b));
 
-      // Update DB
-      if (!existingBlock.isGoogle) {
-        await updateScheduleBlock(String(existingBlock.id), { start: newStart });
-      }
+      // Persist move + optional Google sync in background
+      void (async () => {
+        try {
+          if (!existingBlock.isGoogle) {
+            await updateScheduleBlock(String(existingBlock.id), { start: newStart });
+          }
+        } catch (err) {
+          console.error('Failed to update schedule block start:', err);
+        }
 
-      // Handle Google Sync
-      if (googleAccount) {
+        if (!googleAccount) return;
+
         // If it already has a Google ID, update the time
         if (existingBlock.googleEventId) {
-          // Logic to update existing event time...
-          // We can reuse the updateGoogleCalendarEvent logic here if we extract it or call it
           try {
             await updateGoogleCalendarEvent(
               existingBlock.googleEventId,
@@ -3141,60 +3168,41 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
               newStart,
               existingBlock.duration,
               selectedDate,
-              existingBlock.tag || undefined, // calendarId
-              existingBlock.colorId || existingBlock.color || existingBlock.calendarColor || undefined
-            );
-            setNotification({ type: 'success', message: `Updated "${task.title}" time on Google Calendar` });
-          } catch (error) {
-            console.error('Failed to update Google event on drop:', error);
-          }
-        } else {
-          // It doesn't have a Google ID yet! Create one now.
-          try {
-            const eventId = await createGoogleCalendarEvent(
-              existingBlock.title,
-              newStart,
-              existingBlock.duration,
-              selectedDate,
               existingBlock.tag || undefined,
               existingBlock.colorId || existingBlock.color || existingBlock.calendarColor || undefined
             );
-
-            // Update state with new ID
-            setSchedule(prev => prev.map(b => b.id === existingBlock.id ? { ...b, googleEventId: eventId, isGoogle: true } : b));
-
-            // Save ID to DB immediately
-
-            await updateScheduleBlock(String(existingBlock.id), { googleEventId: eventId, isGoogle: true });
-
-            setNotification({ type: 'success', message: `Synced "${task.title}" to Google Calendar` });
           } catch (error) {
-            console.error('Failed to create Google event for existing block:', error);
+            console.error('Failed to update Google event on drop:', error);
           }
+          return;
         }
-      } else {
-        setNotification({ type: 'success', message: `Moved "${task.title}" to ${formatTime(hour)}` });
-      }
 
+        // It doesn't have a Google ID yet: create one.
+        try {
+          const eventId = await createGoogleCalendarEvent(
+            existingBlock.title,
+            newStart,
+            existingBlock.duration,
+            selectedDate,
+            existingBlock.tag || undefined,
+            existingBlock.colorId || existingBlock.color || existingBlock.calendarColor || undefined
+          );
+
+          setSchedule(prev => prev.map(b => b.id === existingBlock.id ? { ...b, googleEventId: eventId, isGoogle: true } : b));
+          await updateScheduleBlock(String(existingBlock.id), { googleEventId: eventId, isGoogle: true });
+        } catch (error) {
+          console.error('Failed to create Google event for existing block:', error);
+        }
+      })();
+
+      setNotification({ type: 'success', message: `Moved "${task.title}" to ${formatTime(hour)}` });
       setDraggedItem(null);
       return;
     }
 
-    // CRITICAL: Update the task's assigned_date to the current selectedDate
-    // This ensures the task will load correctly after refresh (date-bound logic)
-    const dateStr = formatDateISO(selectedDate);
-
-    await updateTask(String(task.id), {
-      assignedDate: dateStr
-    });
-
-    // Update local state to reflect the date change
-    setActiveTasks(prev => prev.map(t =>
-      String(t.id) === String(task.id) ? { ...t, assignedDate: dateStr } : t
-    ));
-    setLaterTasks(prev => prev.map(t =>
-      String(t.id) === String(task.id) ? { ...t, assignedDate: dateStr } : t
-    ));
+    const taskIdStr = String(task.id);
+    const timeString = formatTime(hour);
+    const dateString = formatDateISO(selectedDate);
 
     const blockData = {
       title: task.title,
@@ -3208,30 +3216,79 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       taskId: String(task.id) // Explicitly cast to string
     };
 
-    const savedBlock = await createScheduleBlock(blockData, selectedDate);
+    const sourceList = draggedItem.sourceList;
 
-    if (!savedBlock) {
-      console.error('❌ Failed to save block to DB immediately after creation');
-      setNotification({ type: 'error', message: 'Failed to save to database! Please try logging out and in again.' });
+    // Optimistic UI: update task lists immediately
+    if (sourceList === 'later') {
+      setLaterTasks(prev => prev.filter(t => String(t.id) !== taskIdStr));
+      setActiveTasks(prev => [...prev, { ...task, time: timeString, assignedDate: dateString }]);
+    } else {
+      setActiveTasks(prev => prev.map(t =>
+        String(t.id) === taskIdStr ? { ...t, time: timeString, assignedDate: dateString } : t
+      ));
+      setLaterTasks(prev => prev.map(t =>
+        String(t.id) === taskIdStr ? { ...t, assignedDate: dateString } : t
+      ));
     }
 
-    const newBlock: ScheduleBlock = savedBlock ? {
-      ...savedBlock,
-      taskId: String(task.id),
-      calendarColor: task.tagColor || undefined,
-      completed: task.completed || false
-    } : {
-      id: Date.now(),
+    // Optimistic UI: show block immediately
+    const tempId = `tmp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const optimisticBlock: ScheduleBlock = {
+      id: tempId,
       ...blockData,
-      calendarColor: task.tagColor || undefined
+      calendarColor: task.tagColor || undefined,
+      completed: task.completed || false,
+      pending: 'saving',
     };
 
-    setSchedule(prev => [...prev, newBlock]);
+    setSchedule(prev => [...prev, optimisticBlock]);
+    setDraggedItem(null);
+    setNotification({
+      type: 'success',
+      message: googleAccount
+        ? `Scheduled "${task.title}" at ${timeString} (syncing...)`
+        : `Scheduled "${task.title}" at ${timeString}`,
+    });
 
-    // AUTO-SYNC: If Google is connected, sync immediately!
-    if (googleAccount && savedBlock) {
+    // Persist in background (task update + schedule block + optional Google sync)
+    void (async () => {
       try {
+        if (sourceList === 'later') {
+          await moveTaskToList(taskIdStr, 'active', selectedDate);
+          await updateTask(taskIdStr, { time: timeString });
+        } else {
+          await updateTask(taskIdStr, { time: timeString, assignedDate: dateString });
+        }
+      } catch (err) {
+        console.error('Failed to persist task updates after drop:', err);
+        setNotification({ type: 'error', message: 'Task scheduled, but failed to save task metadata.' });
+      }
 
+      const savedBlock = await createScheduleBlock(blockData as any, selectedDate);
+      if (!savedBlock) {
+        setSchedule(prev => prev.filter(b => b.id !== tempId));
+        setNotification({ type: 'error', message: 'Failed to save to database. Please try again.' });
+        return;
+      }
+
+      const savedId = savedBlock.id;
+      setSchedule(prev => prev.map(b =>
+        b.id === tempId
+          ? {
+            ...b,
+            ...savedBlock,
+            id: savedId,
+            taskId: taskIdStr,
+            calendarColor: task.tagColor || undefined,
+            completed: task.completed || false,
+            pending: googleAccount ? 'syncing' : undefined,
+          }
+          : b
+      ));
+
+      if (!googleAccount) return;
+
+      try {
         const eventId = await createGoogleCalendarEvent(
           task.title,
           hour,
@@ -3241,57 +3298,20 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           task.tagColor || undefined
         );
 
+        setSchedule(prev => prev.map(b =>
+          b.id === savedId
+            ? { ...b, googleEventId: eventId || undefined, isGoogle: !!eventId, pending: undefined }
+            : b
+        ));
+
         if (eventId) {
-
-
-          // Update local state isGoogle=true immediately so UI reflects it (and hides duplicates on refresh)
-          const updatedBlock = { ...newBlock, googleEventId: eventId, isGoogle: true };
-          setSchedule(prev => prev.map(b => b.id === savedBlock.id ? updatedBlock : b));
-
-          // Update DB isGoogle=true and googleEventId
-          await updateScheduleBlock(String(savedBlock.id), { googleEventId: eventId, isGoogle: true });
+          await updateScheduleBlock(String(savedId), { googleEventId: eventId, isGoogle: true });
         }
       } catch (err) {
         console.error('❌ Failed to auto-sync to Google:', err);
+        setSchedule(prev => prev.map(b => (b.id === savedId ? { ...b, pending: undefined } : b)));
       }
-    }
-
-    // Update task time and assigned date in both UI and database
-    const timeString = formatTime(hour);
-    const dateString = formatDateISO(selectedDate);
-
-    // If task is from "Later" list, move it to "Active" list for this date
-    if (draggedItem.sourceList === 'later') {
-      // Remove from Later list
-      setLaterTasks(prev => prev.filter(t => t.id !== task.id));
-
-      // Add to Active list with updated time and date
-      const updatedTask = {
-        ...task,
-        time: timeString,
-        assignedDate: dateString
-      };
-      setActiveTasks(prev => [...prev, updatedTask]);
-
-      // Update in database: move to active list with new date and time
-      await moveTaskToList(String(task.id), 'active', selectedDate);
-      await updateTask(String(task.id), { time: timeString });
-    } else {
-      // Task is already in Active list, just update time and date
-      setActiveTasks(prev => prev.map(t =>
-        t.id === task.id
-          ? { ...t, time: timeString, assignedDate: dateString }
-          : t
-      ));
-
-      // Update in database
-      await updateTask(String(task.id), {
-        time: timeString,
-        assignedDate: dateString
-      });
-    }
-
-    setDraggedItem(null);
+    })();
 
     // REMOVED: Old Google sync code - now handled by AUTO-SYNC above (line ~2408)
     // This was creating duplicate events!
@@ -4735,8 +4755,9 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                         <div
                           key={block.id}
                           style={blockStyle}
-                          className={`absolute left-16 right-4 rounded-lg border shadow-sm cursor-move hover:brightness-95 transition-all z-10 group text-white overflow-hidden ${isVeryCompact ? 'p-1.5 pr-6' : isCompact ? 'p-2 pr-8' : 'p-3 pr-10'} ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 !text-slate-500' : ''} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
+                          className={`absolute left-16 right-4 rounded-lg border shadow-sm ${block.pending ? 'cursor-default opacity-85' : 'cursor-move hover:brightness-95'} transition-all z-10 group text-white overflow-hidden ${isVeryCompact ? 'p-1.5 pr-6' : isCompact ? 'p-2 pr-8' : 'p-3 pr-10'} ${block.completed ? 'bg-slate-300/80 dark:bg-slate-700/80 border-slate-400 !text-slate-500' : ''} ${resizingBlockId === block.id || draggingBlockId === block.id ? 'z-20 ring-2 ring-emerald-400 select-none' : ''}`}
                           onMouseDown={(e) => {
+                            if (block.pending) return;
                             if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.cursor-ns-resize')) return;
 
                             // Prevent default behavior
@@ -4797,14 +4818,23 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                 {block.tag || block.calendarName}
                               </span>
                             )}
+                            {block.pending && (
+                              <span className={`flex items-center gap-1 font-bold bg-black/20 dark:bg-white/15 px-1.5 py-0.5 rounded pointer-events-none ${isVeryCompact ? 'text-[8px]' : 'text-[10px]'}`}>
+                                <Loader2 size={isVeryCompact ? 10 : 12} className="animate-spin" />
+                                {!isVeryCompact && (block.pending === 'syncing' ? 'Syncing' : 'Saving')}
+                              </span>
+                            )}
+
                             {/* Close button - always visible on hover */}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-300 bg-black/20 hover:bg-black/30 rounded p-0.5 pointer-events-auto"
-                            >
-                              <X size={isVeryCompact ? 10 : 12} />
-                            </button>
+                            {!block.pending && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-300 bg-black/20 hover:bg-black/30 rounded p-0.5 pointer-events-auto"
+                              >
+                                <X size={isVeryCompact ? 10 : 12} />
+                              </button>
+                            )}
                           </div>
 
                           {/* Content: Title first, then time below */}
@@ -4813,7 +4843,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             <div className="flex items-center gap-1.5 min-w-0">
                               {/* Completion checkbox */}
                               <div
-                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleToggleBlockComplete(block.id); }}
+                                onClick={(e) => {
+                                  if (block.pending) return;
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  handleToggleBlockComplete(block.id);
+                                }}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 className={`shrink-0 rounded border-2 flex items-center justify-center cursor-pointer transition-colors pointer-events-auto ${isVeryCompact ? 'w-3.5 h-3.5' : isCompact ? 'w-4 h-4' : 'w-5 h-5'} ${block.completed ? 'bg-emerald-500 border-emerald-500' : 'border-white/50 hover:border-emerald-400 bg-white/20'}`}
                               >
@@ -4837,6 +4872,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           <div
                             className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-end justify-center pb-1 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity z-20"
                             onMouseDown={(e) => {
+                              if (block.pending) return;
                               e.stopPropagation();
                               e.preventDefault();
                               setResizingBlockId(block.id);
