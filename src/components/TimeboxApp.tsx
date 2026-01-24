@@ -628,27 +628,29 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }: TimeboxAppProps) => {
     const calculateStreak = (habit: Habit): number => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const todayStr = formatDateISO(today);
 
-        // If today is not completed, streak is 0
-        if (!habit.completedDates.includes(todayStr)) {
-            return 0;
-        }
+        const todayStr = formatDateISO(today);
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = formatDateISO(yesterday);
+
+        // Keep the streak alive even if today isn't checked yet.
+        // If neither today nor yesterday is completed, the streak is broken.
+        const anchor = habit.completedDates.includes(todayStr)
+            ? today
+            : habit.completedDates.includes(yesterdayStr)
+                ? yesterday
+                : null;
+
+        if (!anchor) return 0;
 
         let streak = 0;
-        let checkDate = new Date(today);
-
-        // Count backwards from today through consecutive completed days
+        const checkDate = new Date(anchor);
         while (true) {
             const dateStr = formatDateISO(checkDate);
-            if (habit.completedDates.includes(dateStr)) {
-                streak++;
-                checkDate.setDate(checkDate.getDate() - 1);
-            } else {
-                break; // Stop when we hit an incomplete day
-            }
-
-            // Safety limit
+            if (!habit.completedDates.includes(dateStr)) break;
+            streak++;
+            checkDate.setDate(checkDate.getDate() - 1);
             if (streak > 1000) break;
         }
 

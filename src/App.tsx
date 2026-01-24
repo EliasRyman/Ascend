@@ -3919,6 +3919,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                         <AnimatePresence>
                           {getTodaysHabits().map(habit => {
                             const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
+                            const streak = calculateStreak(habit);
                             return (
                               <motion.button
                                 key={habit.id}
@@ -3942,7 +3943,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                   </div>
                                   <div className="text-[10px] font-bold text-slate-500 dark:text-slate-300 flex items-center gap-1 bg-slate-100/50 dark:bg-black/30 px-1.5 py-0.5 rounded-lg backdrop-blur-sm">
                                     <Flame size={11} className={isCompleted ? 'text-orange-500 animate-pulse' : 'text-slate-400'} fill={isCompleted ? 'currentColor' : 'none'} />
-                                    {habit.currentStreak}
+                                    {streak}
                                   </div>
                                 </div>
                                 <h3 className={`font-bold text-sm leading-tight transition-colors relative z-10 ${isCompleted ? 'stroke-gradient dark:text-purple-300' : 'text-slate-700 dark:text-slate-200 group-hover:text-purple-600'}`}>
@@ -4134,6 +4135,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       <div className="space-y-4">
                         {getTodaysHabits().map((habit, index) => {
                           const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
+                          const streak = calculateStreak(habit);
                           const weekData = getWeeklyData(habit);
 
                           return (
@@ -4247,7 +4249,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                         <div className="h-8 w-px bg-slate-200 dark:bg-slate-700 mx-2"></div>
                                         <StreakFlame
                                           progressPercentage={weeklyProgress}
-                                          streakCount={habit.currentStreak}
+                                          streakCount={streak}
                                           size={44}
                                         />
                                       </div>
@@ -4392,6 +4394,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       {getUnscheduledTodaysHabits().map(habit => {
                         const dateStr = formatDateISO(selectedDate);
                         const isCompleted = isHabitCompletedOnDate(habit, dateStr);
+                        const streak = calculateStreak(habit);
                         return (
                           <div
                             key={`habit-${habit.id}`}
@@ -4435,7 +4438,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                   return null;
                                 })()}
 
-                                {habit.currentStreak > 0 && (
+                                {streak > 0 && (
                                   <div
                                     className="flex items-center gap-0.5 text-xs"
                                     style={{
@@ -4465,7 +4468,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                         animation: isCompleted ? 'numberPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none'
                                       }}
                                     >
-                                      {habit.currentStreak}
+                                      {streak}
                                     </span>
                                   </div>
                                 )}
