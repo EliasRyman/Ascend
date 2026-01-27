@@ -5,6 +5,9 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 export default defineConfig({
   base: '/', // For custom domain via Cloudflare
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
   server: {
     port: 3000,
     host: '0.0.0.0',

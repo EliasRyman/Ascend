@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Target, Clock, Calendar, ChevronLeft, ChevronRight, Flame } from 'lucide-react';
+
+type ViewRange = 'week' | 'month' | 'year';
 
 interface Habit {
     id: string;
@@ -10,11 +12,43 @@ interface Habit {
 interface ConsistencyCardProps {
     habits: Habit[];
     onDayClick?: (date: Date) => void;
+    showTitleBlock?: boolean;
+    allowedRanges?: ViewRange[];
+    streakMode?: 'current' | 'best';
+    controlsLayout?: 'default' | 'inlineYearLeft';
+    showLegend?: boolean;
+    cellFill?: 'levels' | 'gradient';
+    labelsLayout?: 'default' | 'dashboard';
 }
 
-const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits, onDayClick }) => {
-    const [viewRange, setViewRange] = useState<'week' | 'month' | 'year'>('year');
+const ConsistencyCard: React.FC<ConsistencyCardProps> = ({
+    habits,
+    onDayClick,
+    showTitleBlock = true,
+    allowedRanges: allowedRangesProp,
+    streakMode = 'current',
+    controlsLayout = 'default',
+    showLegend = true,
+    cellFill = 'levels',
+    labelsLayout = 'default'
+}) => {
+    const allowedRanges: ViewRange[] = useMemo(() => {
+        if (allowedRangesProp && allowedRangesProp.length > 0) return allowedRangesProp;
+        return ['week', 'month', 'year'];
+    }, [allowedRangesProp]);
+
+    const [viewRange, setViewRange] = useState<ViewRange>(() =>
+        allowedRangesProp && allowedRangesProp.length > 0
+            ? (allowedRangesProp.includes('year') ? 'year' : allowedRangesProp[0])
+            : 'year'
+    );
     const [currentDate, setCurrentDate] = useState(new Date());
+
+    useEffect(() => {
+        if (!allowedRanges.includes(viewRange)) {
+            setViewRange(allowedRanges.includes('year') ? 'year' : allowedRanges[0]);
+        }
+    }, [allowedRanges, viewRange]);
 
     const handleNavigate = (direction: 'prev' | 'next') => {
         const newDate = new Date(currentDate);
@@ -28,16 +62,16 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits, onDayClick })
         setCurrentDate(newDate);
     };
 
-    const getWeekNumber = (d: Date) => {
+    const getWeekNumber = useCallback((d: Date) => {
         const date = new Date(d.getTime());
         date.setHours(0, 0, 0, 0);
         date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
         const week1 = new Date(date.getFullYear(), 0, 4);
         return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-    };
+    }, []);
 
     // 1. Calculate Activity Data
-    const { activityMap, totalActivities, currentStreak } = useMemo(() => {
+    const { activityMap, totalActivities, currentStreak, bestStreak } = useMemo(() => {
         const map = new Map<string, number>();
         let total = 0;
 
@@ -99,7 +133,37 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits, onDayClick })
             }
         }
 
-        return { activityMap: map, totalActivities: total, currentStreak: streak };
+        // Calculate best streak (longest consecutive run anywhere)
+        const parseISO = (dateStr: string) => {
+            const [yy, mm, dd] = dateStr.split('-').map(Number);
+            return new Date(yy, (mm || 1) - 1, dd || 1);
+        };
+        const sameDay = (a: Date, b: Date) =>
+            a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+        const activeDates = Array.from(map.entries())
+            .filter(([, count]) => count > 0)
+            .map(([date]) => date)
+            .sort();
+
+        let best = 0;
+        let run = 0;
+        let prev: Date | null = null;
+
+        for (const ds of activeDates) {
+            const dt = parseISO(ds);
+            if (prev) {
+                const next = new Date(prev);
+                next.setDate(next.getDate() + 1);
+                run = sameDay(next, dt) ? run + 1 : 1;
+            } else {
+                run = 1;
+            }
+            best = Math.max(best, run);
+            prev = dt;
+        }
+
+        return { activityMap: map, totalActivities: total, currentStreak: streak, bestStreak: best };
     }, [habits]);
 
     // 2. Generate Grid Data based on viewRange
@@ -246,7 +310,7 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits, onDayClick })
                 if (dayIndex >= gridData.length) break;
                 const date = gridData[dayIndex].date;
                 if (date.getDate() <= 7) {
-                    labels.push({ text: months[date.getMonth()], colIndex: col });
+                    labels.push({ text: months[date.getMonth()], colIndex: col, type: 'month' });
                 }
             }
         } else if (viewRange === 'month') {
@@ -260,10 +324,15 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits, onDayClick })
             // No grid-level labels needed for single week view as it's in the header
         }
         return labels;
-    }, [gridData, viewRange, totalCols]);
+    }, [gridData, viewRange, totalCols, getWeekNumber]);
 
     // Color functions
     const getCellColor = (level: number) => {
+        if (cellFill === 'gradient') {
+            return level === 0
+                ? 'bg-slate-100 dark:bg-slate-800'
+                : 'bg-gradient-to-br from-[#6F00FF] to-purple-600 shadow-sm shadow-purple-500/25';
+        }
         // Purple theme
         switch (level) {
             case 0: return 'bg-slate-100 dark:bg-slate-800'; // Empty
@@ -275,67 +344,145 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits, onDayClick })
         }
     };
 
+    const colWidth = totalCols > 0
+        ? `calc((100% - ${(totalCols - 1) * 3}px) / ${totalCols})`
+        : '0px';
+
+    const showRangeSelector = allowedRanges.length > 1;
+    const isInlineHeader = !showTitleBlock && controlsLayout === 'inlineYearLeft';
+    const streakValue = streakMode === 'best' ? bestStreak : currentStreak;
+    const streakText = streakMode === 'best'
+        ? `BEST STREAK: ${streakValue} DAYS`
+        : `${streakValue} day streak`;
+    const headerJustify = controlsLayout === 'inlineYearLeft'
+        ? 'justify-between'
+        : (showTitleBlock ? 'justify-between' : 'justify-end');
+
+    const labelsRowClass = labelsLayout === 'dashboard'
+        ? 'w-full mt-4 mb-4'
+        : 'w-full mt-2 mb-8';
+
+    const monthLabelClass = isInlineHeader
+        ? 'text-sm font-bold text-slate-700 dark:text-slate-200'
+        : labelsLayout === 'dashboard'
+            ? 'text-sm font-bold text-slate-700 dark:text-slate-200 -translate-y-2'
+            : 'text-sm font-bold text-slate-700 dark:text-slate-200 -translate-y-4';
+
     return (
         <div className="bg-white dark:bg-[#151e32] rounded-3xl p-6 shadow-sm dark:shadow-lg dark:shadow-black/20 border border-slate-200 dark:border-white/5 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                    <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl">
-                        <Flame className="text-purple-600 dark:text-violet-400" size={20} />
+            <div className={`flex items-center ${isInlineHeader ? 'mb-4' : 'mb-6'} ${headerJustify}`}>
+                {showTitleBlock && (
+                    <div className="flex items-center gap-3">
+                        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl">
+                            <Flame className="text-purple-600 dark:text-violet-400" size={20} />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Habit Consistency</h2>
+                            <p className="text-slate-500 dark:text-slate-400 text-sm">
+                                {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Habit Consistency</h2>
-                        <p className="text-slate-500 dark:text-slate-400 text-sm">
-                            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                    </div>
-                </div>
+                )}
 
-                <div className="flex items-center gap-4">
-                    {/* Period Display */}
-                    <div className="flex items-center bg-slate-100 dark:bg-white/10 px-4 py-2 rounded-xl border border-slate-200 dark:border-white/5 shadow-sm">
-                        <span className="text-sm font-bold bg-gradient-to-r from-violet-600 to-purple-600 dark:from-violet-400 dark:to-purple-400 bg-clip-text text-transparent">
-                            {viewRange === 'month'
-                                ? currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })
-                                : viewRange === 'week'
-                                    ? `Week ${getWeekNumber(currentDate)}, ${currentDate.getFullYear()}`
-                                    : currentDate.getFullYear()
-                            }
-                        </span>
-                    </div>
+                {(() => {
+                    const periodDisplayText = viewRange === 'month'
+                        ? currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })
+                        : viewRange === 'week'
+                            ? `Week ${getWeekNumber(currentDate)}, ${currentDate.getFullYear()}`
+                            : currentDate.getFullYear();
 
-                    {/* Range Selector */}
-                    <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-xl">
-                        {(['week', 'month', 'year'] as const).map((range) => (
-                            <button
-                                key={range}
-                                onClick={() => setViewRange(range)}
-                                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${viewRange === range
-                                    ? 'bg-white dark:bg-violet-600 text-violet-600 dark:text-white shadow-sm'
-                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                                    }`}
-                            >
-                                {range === 'week' ? 'Week' : range === 'month' ? 'Month' : 'Year'}
-                            </button>
-                        ))}
-                    </div>
+                    const periodDisplay = isInlineHeader ? (
+                        <div className="inline-flex flex-col">
+                            <span className="text-2xl font-black tracking-tight text-[#1E293B] dark:text-slate-100 leading-none">
+                                {periodDisplayText}
+                            </span>
+                        </div>
+                    ) : (
+                        <div className="flex items-center bg-slate-100 dark:bg-white/10 px-4 py-2 rounded-xl border border-slate-200 dark:border-white/5 shadow-sm">
+                            <span className="text-sm font-bold bg-gradient-to-r from-violet-600 to-purple-600 dark:from-violet-400 dark:to-purple-400 bg-clip-text text-transparent">
+                                {periodDisplayText}
+                            </span>
+                        </div>
+                    );
 
-                    <div className="text-right ml-4">
-                        <div className="text-2xl font-bold text-slate-800 dark:text-white">{currentStreak} <span className="text-sm font-normal text-slate-400 dark:text-slate-500">day streak</span></div>
-                    </div>
-                </div>
+                    const rangeSelector = showRangeSelector ? (
+                        <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-xl">
+                            {(allowedRanges as ViewRange[]).map((range) => (
+                                <button
+                                    key={range}
+                                    onClick={() => setViewRange(range)}
+                                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${viewRange === range
+                                        ? 'bg-white dark:bg-violet-600 text-violet-600 dark:text-white shadow-sm'
+                                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                        }`}
+                                >
+                                    {range === 'week' ? 'Week' : range === 'month' ? 'Month' : 'Year'}
+                                </button>
+                            ))}
+                        </div>
+                    ) : null;
+
+                    const streakBlock = (
+                        <div className={isInlineHeader ? 'text-right' : 'text-right ml-4'}>
+                            {streakMode === 'best' ? (
+                                <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-400 leading-none">
+                                        BEST STREAK:
+                                    </span>
+                                    <span className="font-black text-2xl leading-none bg-gradient-to-r from-[#6F00FF] to-purple-600 bg-clip-text text-transparent">
+                                        {streakValue}
+                                    </span>
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-400 leading-none">
+                                        DAYS
+                                    </span>
+                                </div>
+                            ) : (
+                                <div className="flex items-baseline justify-end gap-2 whitespace-nowrap">
+                                    <span className="font-black text-2xl leading-none text-slate-800 dark:text-white">
+                                        {streakValue}
+                                    </span>
+                                    <span className="text-xs font-medium text-slate-500 dark:text-slate-300">
+                                        day streak
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    );
+
+                    if (isInlineHeader) {
+                        return (
+                            <>
+                                {periodDisplay}
+                                <div className="flex items-center gap-4">
+                                    {rangeSelector}
+                                    {streakBlock}
+                                </div>
+                            </>
+                        );
+                    }
+
+                    return (
+                        <div className="flex items-center gap-4">
+                            {periodDisplay}
+                            {rangeSelector}
+                            {streakBlock}
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* The Grid Scroller */}
             <div className="pb-4">
                 <div className="w-full relative">
                     {/* Month/Week Labels */}
-                    <div className="w-full mb-8 text-[10px] md:text-xs text-slate-400 dark:text-slate-500 relative h-4">
+                    <div className={`${labelsRowClass} text-[10px] md:text-xs text-slate-400 dark:text-slate-500 relative h-4`}>
                         {gridLabels.map((label, i) => (
                             <div
                                 key={i}
-                                className={`absolute transform ${label.type === 'month' ? 'text-sm font-bold text-slate-700 dark:text-slate-200 -translate-y-6' : '-translate-x-1/2'}`}
+                                className={`absolute transform ${label.type === 'month' ? monthLabelClass : '-translate-x-1/2'}`}
                                 style={{
-                                    left: label.type === 'month' ? '0' : `${((label.colIndex + 0.5) / 53) * 100}%`,
+                                    left: `${((label.type === 'month' ? label.colIndex : (label.colIndex + 0.5)) / Math.max(totalCols, 1)) * 100}%`,
                                     whiteSpace: 'nowrap'
                                 }}
                             >
@@ -351,7 +498,7 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits, onDayClick })
                             <div
                                 key={colIndex}
                                 className="flex flex-col gap-[3px]"
-                                style={{ width: 'calc((100% - 52 * 3px) / 53)' }}
+                                style={{ width: colWidth }}
                             >
                                 {/* Render Rows (Days) */}
                                 {Array.from({ length: 7 }).map((_, rowIndex) => {
@@ -364,17 +511,13 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits, onDayClick })
                                         <div
                                             key={rowIndex}
                                             onClick={() => {
-                                                console.log("Click on cell:", cellData.date);
-                                                console.log("onDayClick type:", typeof onDayClick);
-                                                if (!onDayClick) console.error("onDayClick is UNDEFINED!");
                                                 onDayClick?.(cellData.date);
                                             }}
-                                            className={`w-full aspect-square rounded-[1.5px] md:rounded-sm transition-colors ${getCellColor(cellData.level)} group relative ${onDayClick ? 'cursor-pointer hover:ring-2 hover:ring-purple-400 hover:ring-offset-2 hover:ring-offset-white dark:hover:ring-offset-slate-900 z-0 hover:z-10' : ''}`}
+                                            className={`w-full aspect-square rounded-[1.5px] md:rounded-sm transition-colors ${getCellColor(cellData.level)} group/cell relative ${onDayClick ? 'cursor-pointer hover:ring-2 hover:ring-purple-400 hover:ring-offset-2 hover:ring-offset-white dark:hover:ring-offset-slate-900 z-0 hover:z-10' : ''}`}
                                         >
                                             {/* Tooltip on hover */}
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10 transition-opacity">
-                                                {cellData.count} activities<br />
-                                                <span className="opacity-70">{cellData.dateStr}</span>
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover/cell:opacity-100 pointer-events-none whitespace-nowrap z-10 transition-opacity">
+                                                <span className="opacity-80">{cellData.dateStr}</span>
                                             </div>
                                         </div>
                                     );
@@ -384,17 +527,19 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({ habits, onDayClick })
                     </div>
 
                     {/* Legend */}
-                    <div className="flex items-center justify-end mt-4 gap-2 text-xs text-slate-400 dark:text-slate-500">
-                        <span>Less</span>
-                        <div className="flex gap-1">
-                            <div className="w-3 h-3 rounded-sm bg-slate-100 dark:bg-slate-800"></div>
-                            <div className="w-3 h-3 rounded-sm bg-purple-200 dark:bg-purple-900/40"></div>
-                            <div className="w-3 h-3 rounded-sm bg-purple-300 dark:bg-purple-700/60"></div>
-                            <div className="w-3 h-3 rounded-sm bg-purple-400 dark:bg-purple-600"></div>
-                            <div className="w-3 h-3 rounded-sm bg-[#6F00FF] dark:bg-[#6F00FF]"></div>
+                    {showLegend && (
+                        <div className="flex items-center justify-end mt-4 gap-2 text-xs text-slate-400 dark:text-slate-500">
+                            <span>Less</span>
+                            <div className="flex gap-1">
+                                <div className="w-3 h-3 rounded-sm bg-slate-100 dark:bg-slate-800"></div>
+                                <div className="w-3 h-3 rounded-sm bg-purple-200 dark:bg-purple-900/40"></div>
+                                <div className="w-3 h-3 rounded-sm bg-purple-300 dark:bg-purple-700/60"></div>
+                                <div className="w-3 h-3 rounded-sm bg-purple-400 dark:bg-purple-600"></div>
+                                <div className="w-3 h-3 rounded-sm bg-[#6F00FF] dark:bg-[#6F00FF]"></div>
+                            </div>
+                            <span>More</span>
                         </div>
-                        <span>More</span>
-                    </div>
+                    )}
 
                     {/* Year Navigation - Only show in year view */}
                     {viewRange === 'year' && (

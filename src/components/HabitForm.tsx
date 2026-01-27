@@ -8,10 +8,11 @@ interface HabitFormProps {
     userTags: { name: string; color: string }[];
     onSave: (data: Omit<Habit, 'id' | 'currentStreak' | 'longestStreak' | 'completedDates' | 'createdAt'>) => void;
     onCancel: () => void;
+    onDelete?: () => void;
     onCreateTag: () => void;
 }
 
-const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: HabitFormProps) => {
+const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onDelete, onCreateTag }: HabitFormProps) => {
     const [name, setName] = useState(initialHabit?.name || '');
     const [tag, setTag] = useState(initialHabit?.tag || '');
     const [frequency, setFrequency] = useState<'daily' | 'weekly'>(initialHabit?.frequency || 'daily');
@@ -115,6 +116,16 @@ const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: Ha
                         </div>
                     </div>
                 </div>
+
+                {initialHabit && onDelete && (
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        className="w-full py-3 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 font-extrabold rounded-xl hover:bg-red-100 dark:hover:bg-red-900/20 transition-all border border-red-200 dark:border-red-900/30"
+                    >
+                        DELETE HABIT
+                    </button>
+                )}
 
                 <div className="flex gap-3 pt-2">
                     <button

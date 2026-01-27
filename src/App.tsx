@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import LandingPage from './components/LandingPage';
 import { LegalProvider } from './context/LegalContext';
@@ -49,7 +49,8 @@ import {
   ZoomIn,
   ZoomOut,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  SlidersHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -542,11 +543,12 @@ const TagModal = ({ isOpen, onClose, onSave, editTag, onDelete }: TagModalProps)
 
 // --- Habit Form Component ---
 // Simplified: Habits are always daily (appear every day from creation)
-const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: {
+const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onDelete, onCreateTag }: {
   initialHabit?: Habit | null;
   userTags: { name: string; color: string }[];
   onSave: (data: Omit<Habit, 'id' | 'currentStreak' | 'longestStreak' | 'completedDates' | 'createdAt'>) => void;
   onCancel: () => void;
+  onDelete?: () => void;
   onCreateTag: () => void;
 }) => {
   const [name, setName] = useState(initialHabit?.name || '');
@@ -781,6 +783,16 @@ const HabitForm = ({ initialHabit, userTags, onSave, onCancel, onCreateTag }: {
         </div>
         <p className="text-xs text-slate-500 mt-2">Drag habits to the timeline to schedule them for a specific time. Your streak builds as you complete them each day!</p>
       </div>
+      {initialHabit && onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          className="w-full px-4 py-3 rounded-xl text-sm font-extrabold bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
+        >
+          DELETE HABIT
+        </button>
+      )}
+
       <div className="flex gap-3 pt-4">
         <button type="button" onClick={onCancel} className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 hover:bg-slate-200">Cancel</button>
         <button type="submit" disabled={!name.trim()} className="flex-1 px-4 py-3 rounded-xl text-sm font-medium bg-gradient-to-r from-[#6F00FF] to-purple-600 text-white shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30 transition-all disabled:opacity-50">{initialHabit ? 'Update Habit' : 'Create Habit'}</button>
@@ -1338,6 +1350,11 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   const [isWeightCalendarOpen, setIsWeightCalendarOpen] = useState(false);
   const [isWeightListOpen, setIsWeightListOpen] = useState(false);
   const [weightCalendarViewDate, setWeightCalendarViewDate] = useState(new Date());
+  const [weightRangeFilter, setWeightRangeFilter] = useState<'1m' | '3m' | '6m' | '1y'>(() => {
+    const saved = localStorage.getItem('ascend_weight_range_filter');
+    return (saved === '1m' || saved === '3m' || saved === '6m' || saved === '1y') ? saved : '1y';
+  });
+  const [isWeightFilterOpen, setIsWeightFilterOpen] = useState(false);
 
   // One-time migration for historical weight data
   useEffect(() => {
@@ -1387,6 +1404,30 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     }
   }, []);
   const weightCalendarRef = useRef<HTMLDivElement>(null);
+  const weightFilterRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem('ascend_weight_range_filter', weightRangeFilter);
+  }, [weightRangeFilter]);
+
+  const filteredWeightEntries = useMemo(() => {
+    if (!weightEntries || weightEntries.length === 0) return [];
+
+    const latestMs = Math.max(...weightEntries.map(e => new Date(e.date).getTime()).filter(n => Number.isFinite(n)));
+    if (!Number.isFinite(latestMs)) return weightEntries;
+
+    const latest = new Date(latestMs);
+    latest.setHours(0, 0, 0, 0);
+
+    const cutoff = new Date(latest);
+    if (weightRangeFilter === '1m') cutoff.setMonth(cutoff.getMonth() - 1);
+    if (weightRangeFilter === '3m') cutoff.setMonth(cutoff.getMonth() - 3);
+    if (weightRangeFilter === '6m') cutoff.setMonth(cutoff.getMonth() - 6);
+    if (weightRangeFilter === '1y') cutoff.setFullYear(cutoff.getFullYear() - 1);
+
+    const cutoffStr = formatDateISO(cutoff);
+    return weightEntries.filter(e => e.date >= cutoffStr);
+  }, [weightEntries, weightRangeFilter]);
 
   // State for Habits
   const [habits, setHabits] = useState<Habit[]>(() => {
@@ -1527,6 +1568,15 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     return saved ? JSON.parse(saved) : false;
   });
   const [habitWeekOffset, setHabitWeekOffset] = useState(0);
+
+  const [expandedHabitGrid, setExpandedHabitGrid] = useState<Record<string, boolean>>({});
+  const toggleHabitGrid = (habitId: string) => {
+    setExpandedHabitGrid(prev => ({
+      ...prev,
+      [habitId]: !prev[habitId]
+    }));
+  };
+
   const HOUR_HEIGHT_NORMAL = 96; // 96px per hour (normal view)
   const HOUR_HEIGHT_ZOOMED = 40; // 40px per hour (zoomed out view)
   const hourHeight = isZoomedOut ? HOUR_HEIGHT_ZOOMED : HOUR_HEIGHT_NORMAL;
@@ -2158,7 +2208,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     }
   }, [isDataLoaded]);
 
-  // Close calendar when clicking outside
+  // Close calendar/filter when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -2170,10 +2220,14 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
       if (weightCalendarRef.current && !weightCalendarRef.current.contains(target)) {
         setIsWeightCalendarOpen(false);
       }
+
+      if (weightFilterRef.current && !weightFilterRef.current.contains(target)) {
+        setIsWeightFilterOpen(false);
+      }
     };
-    if (isCalendarOpen || isWeightCalendarOpen) document.addEventListener('mousedown', handleClickOutside);
+    if (isCalendarOpen || isWeightCalendarOpen || isWeightFilterOpen) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isCalendarOpen, isWeightCalendarOpen]);
+  }, [isCalendarOpen, isWeightCalendarOpen, isWeightFilterOpen]);
 
   // State for habit tag menu
   const [habitTagMenuOpen, setHabitTagMenuOpen] = useState<string | null>(null);
@@ -3754,15 +3808,66 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             })()}
                           </div>
                         ) : (
-                          <WeightTrendChart entries={weightEntries} height={220} />
+                          <WeightTrendChart entries={filteredWeightEntries} height={220} />
                         )}
                       </div>
                     </div>
 
                     {/* Footer Input */}
                     <div className="p-4 bg-slate-50 dark:bg-slate-950/50 border-t border-slate-100 dark:border-slate-800 flex gap-3">
-                      {/* Custom Calendar Button */}
-                      <div ref={weightCalendarRef} className="relative">
+                      <div className="flex items-center gap-3">
+                        {/* Filter */}
+                        <div ref={weightFilterRef} className="relative">
+                          <button
+                            onClick={() => setIsWeightFilterOpen(v => !v)}
+                            className={`px-3 py-2.5 rounded-xl transition-colors flex items-center gap-2 ${isWeightFilterOpen
+                              ? 'bg-[#6F00FF] text-white shadow-lg shadow-purple-500/20'
+                              : 'bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-slate-500 hover:stroke-gradient hover:bg-slate-50 dark:hover:bg-white/5'
+                              }`}
+                            title="Filter range"
+                          >
+                            <SlidersHorizontal size={18} />
+                            <span className="text-xs font-bold">
+                              {weightRangeFilter === '1m' ? 'Month' : weightRangeFilter === '3m' ? '3M' : weightRangeFilter === '6m' ? '6M' : 'Year'}
+                            </span>
+                          </button>
+
+                          <AnimatePresence>
+                            {isWeightFilterOpen && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                                transition={{ duration: 0.15 }}
+                                className="absolute left-0 bottom-full mb-2 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-50"
+                              >
+                                {([
+                                  { key: '1m', label: 'Last month' },
+                                  { key: '3m', label: 'Last 3 months' },
+                                  { key: '6m', label: 'Last 6 months' },
+                                  { key: '1y', label: 'Last year' }
+                                ] as const).map(opt => (
+                                  <button
+                                    key={opt.key}
+                                    onClick={() => {
+                                      setWeightRangeFilter(opt.key);
+                                      setIsWeightFilterOpen(false);
+                                    }}
+                                    className={`w-full px-4 py-3 text-left text-sm font-semibold transition-colors ${weightRangeFilter === opt.key
+                                      ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300'
+                                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5'
+                                      }`}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        {/* Custom Calendar Button */}
+                        <div ref={weightCalendarRef} className="relative">
                         <button
                           onClick={() => setIsWeightCalendarOpen(!isWeightCalendarOpen)}
                           className="px-4 py-2.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:ring-2 focus:ring-fuchsia-500 outline-none w-40 dark:text-slate-200 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
@@ -3846,6 +3951,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                             </button>
                           </div>
                         )}
+                        </div>
                       </div>
                       <div className="flex-1 flex gap-2">
                         <input
@@ -4014,7 +4120,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
               {/* Consistency/Streak View */}
               < div className="pt-0" >
-                <ConsistencyCard habits={habits} onDayClick={handleDayClick} />
+                <ConsistencyCard habits={habits} onDayClick={handleDayClick} labelsLayout="dashboard" />
               </div >
             </div >
           </div >
@@ -4114,6 +4220,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                           const isCompleted = isHabitCompletedOnDate(habit, getTodayString());
                           const streak = calculateStreak(habit);
                           const weekData = getWeeklyData(habit);
+                          const isGridExpanded = !!expandedHabitGrid[habit.id];
 
                           return (
                             <motion.div
@@ -4245,16 +4352,47 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                   >
                                     <Edit3 size={18} className="stroke-gradient" />
                                   </motion.button>
+
                                   <motion.button
-                                    onClick={() => deleteHabit(habit.id)}
-                                    className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleHabitGrid(habit.id);
+                                    }}
+                                    className={`p-2.5 text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-all ${isGridExpanded ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400' : ''}`}
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
+                                    aria-label={isGridExpanded ? 'Collapse habit grid' : 'Expand habit grid'}
                                   >
-                                    <Trash2 size={18} className="stroke-gradient" />
+                                    <ChevronDown size={18} className={`stroke-gradient transition-transform duration-200 ${isGridExpanded ? 'rotate-180' : ''}`} />
                                   </motion.button>
                                 </div>
                               </div>
+
+                              <AnimatePresence initial={false}>
+                                {isGridExpanded && (
+                                  <motion.div
+                                    key={`habit-grid-${habit.id}`}
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                                    className="overflow-hidden"
+                                  >
+                                    <div className="pt-5">
+                                      <ConsistencyCard
+                                        habits={[habit]}
+                                        showTitleBlock={false}
+                                        allowedRanges={['year']}
+                                        streakMode="best"
+                                        controlsLayout="inlineYearLeft"
+                                        showLegend={false}
+                                        cellFill="gradient"
+                                        onDayClick={(date) => toggleHabitCompletion(habit.id, date)}
+                                      />
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </motion.div>
                           );
                         })}
@@ -4339,6 +4477,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       userTags={userTags}
                       onSave={(data) => { if (editingHabit) updateHabit(editingHabit.id, data); else addHabit(data); }}
                       onCancel={() => { setIsAddHabitOpen(false); setEditingHabit(null); }}
+                      onDelete={editingHabit ? () => {
+                        const id = editingHabit.id;
+                        setIsAddHabitOpen(false);
+                        setEditingHabit(null);
+                        deleteHabit(id);
+                      } : undefined}
                       onCreateTag={() => { setTagModalTaskId(null); setIsTagModalOpen(true); }}
                     />
                   </div>
