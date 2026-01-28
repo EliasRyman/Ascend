@@ -224,6 +224,52 @@ interface ScheduleBlock {
   colorId?: string; // Google Calendar Color ID for persistence
   pending?: 'saving' | 'syncing';
 }
+
+const intervalsOverlap = (aStart: number, aEnd: number, bStart: number, bEnd: number) => {
+  // Treat as half-open intervals [start, end) so touching edges don't overlap.
+  return aStart < bEnd && aEnd > bStart;
+};
+
+// Google Calendar-style overlay stacking:
+// - Larger/longer blocks are placed first (depth 0).
+// - Overlapping blocks are pushed "in" (depth 1, 2, ...) and rendered above via z-index.
+const computeOverlayDepthById = (blocks: ScheduleBlock[]) => {
+  const sorted = [...blocks].sort((a, b) => {
+    const dur = b.duration - a.duration;
+    if (dur !== 0) return dur;
+    const start = a.start - b.start;
+    if (start !== 0) return start;
+    return String(a.id).localeCompare(String(b.id));
+  });
+
+  const layers: Array<Array<{ start: number; end: number }>> = [];
+  const depthById = new Map<number | string, number>();
+
+  for (const block of sorted) {
+    const start = block.start;
+    const end = block.start + block.duration;
+
+    let depth = 0;
+    while (true) {
+      if (!layers[depth]) {
+        layers[depth] = [{ start, end }];
+        break;
+      }
+
+      const overlaps = layers[depth].some((placed) => intervalsOverlap(start, end, placed.start, placed.end));
+      if (!overlaps) {
+        layers[depth].push({ start, end });
+        break;
+      }
+
+      depth += 1;
+    }
+
+    depthById.set(block.id, depth);
+  }
+
+  return depthById;
+};
 // Import our new high-performance chart
 import { WeightTrendChart } from './components/WeightTrendChart';
 
@@ -1577,7 +1623,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
     }));
   };
 
-  const HOUR_HEIGHT_NORMAL = 96; // 96px per hour (normal view)
+  const HOUR_HEIGHT_NORMAL = 112; // 112px per hour (normal view)
   const HOUR_HEIGHT_ZOOMED = 40; // 40px per hour (zoomed out view)
   const hourHeight = isZoomedOut ? HOUR_HEIGHT_ZOOMED : HOUR_HEIGHT_NORMAL;
 
@@ -2200,13 +2246,20 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
   // Time labels for full 24-hour day
   const timeLabels = Array.from({ length: 24 }, (_, i) => i);
 
+  // Overlay layout (Google Calendar-style stacking for overlaps)
+  const overlayDepthById = useMemo(() => computeOverlayDepthById(schedule), [schedule]);
+  const OVERLAP_INSET_PX = 10;
+  const OVERLAP_MAX_DEPTH = 6;
+  const OVERLAP_BASE_LEFT_REM = 4; // matches `left-16`
+  const OVERLAP_BASE_RIGHT_REM = 1; // matches `right-4`
+
   // Scroll to current time on load
   useEffect(() => {
     if (timelineRef.current && isDataLoaded) {
-      const scrollPosition = Math.max(0, (currentTimeDecimal - 2) * 96);
+      const scrollPosition = Math.max(0, (currentTimeDecimal - 2) * hourHeight);
       timelineRef.current.scrollTop = scrollPosition;
     }
-  }, [isDataLoaded]);
+  }, [isDataLoaded, hourHeight]);
 
   // Close calendar/filter when clicking outside
   useEffect(() => {
@@ -3514,8 +3567,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
 
 
       {/* App Header */}
-      <header className="relative h-14 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 z-20 shrink-0">
-        <div className="flex items-center gap-4">
+      <header className="relative h-14 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-4 z-20 shrink-0">
+        <div className="min-w-0 flex items-center justify-start gap-4">
           <button onClick={onBack} className="flex items-center gap-2 group cursor-pointer">
             <div className="w-8 h-8 rounded-lg overflow-hidden shadow-md shadow-violet-600/20">
               <svg width="32" height="32" viewBox="0 0 512 512" fill="none">
@@ -3528,7 +3581,8 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
         </div>
 
         {/* Center Navigation Tabs */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center bg-slate-100 dark:bg-white/5 rounded-full p-1 border border-transparent dark:border-slate-800">
+        <div className="hidden md:flex items-center justify-self-center -translate-x-4">
+          <div className="flex items-center bg-slate-100 dark:bg-white/5 rounded-full p-1 border border-transparent dark:border-slate-800">
           <button
             onClick={() => setActiveTab('dashboard')}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTab === 'dashboard' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
@@ -3552,9 +3606,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
           </button>
 
 
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="min-w-0 flex items-center justify-end justify-self-end gap-3">
           <motion.button
             onClick={toggleTheme}
             whileHover={{ scale: 1.1, rotate: 15 }}
@@ -4387,6 +4442,7 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                                         controlsLayout="inlineYearLeft"
                                         showLegend={false}
                                         cellFill="gradient"
+                                        lightModeContrast="soft"
                                         onDayClick={(date) => toggleHabitCompletion(habit.id, date)}
                                       />
                                     </div>
@@ -4982,6 +5038,10 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                       const height = block.duration * hourHeight;
                       const endTime = block.start + block.duration;
 
+                      const depth = overlayDepthById.get(block.id) ?? 0;
+                      const cappedDepth = Math.min(depth, OVERLAP_MAX_DEPTH);
+                      const isActiveBlock = resizingBlockId === block.id || draggingBlockId === block.id;
+
                       // Determine block color:
                       // 1. If completed, use gray
                       // 2. If has tag color from task/habit, use that
@@ -5018,7 +5078,12 @@ const TimeboxApp = ({ onBack, user, onLogin, onLogout }) => {
                         top: `${topOffset}px`,
                         height: `${height}px`,
                         backgroundColor: block.completed ? undefined : bgColor,
-                        borderColor: block.completed ? undefined : bgColor
+                        borderColor: block.completed ? undefined : bgColor,
+                        // Indent overlapping blocks inward; keep base layout identical.
+                        left: `calc(${OVERLAP_BASE_LEFT_REM}rem + ${cappedDepth * OVERLAP_INSET_PX}px)`,
+                        right: `calc(${OVERLAP_BASE_RIGHT_REM}rem + ${cappedDepth * OVERLAP_INSET_PX}px)`,
+                        // Make "inner" (smaller) blocks render above "outer" ones.
+                        zIndex: isActiveBlock ? 30 : 10 + cappedDepth,
                       };
 
                       // Determine if this is a compact event (less than 1 hour)

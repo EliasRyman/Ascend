@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart3 } from 'lucide-react';
@@ -14,6 +14,7 @@ interface WeightTrendChartProps {
 }
 
 export const WeightTrendChart: React.FC<WeightTrendChartProps> = ({ entries, height = 240 }) => {
+    const id = useId();
     const [hoveredX, setHoveredX] = useState<number | null>(null);
     const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -139,11 +140,15 @@ export const WeightTrendChart: React.FC<WeightTrendChartProps> = ({ entries, hei
                 onMouseLeave={() => { setHoveredX(null); setTooltipPos(null); }}
             >
                 <defs>
-                    <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id={`trendGradient-${id}`} x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#6F00FF" stopOpacity="0.25" />
                         <stop offset="100%" stopColor="#6F00FF" stopOpacity="0" />
                     </linearGradient>
-                    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                    <linearGradient id={`weightLineGradient-${id}`} x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#6F00FF" />
+                        <stop offset="100%" stopColor="#9333EA" />
+                    </linearGradient>
+                    <filter id={`glow-${id}`} x="-50%" y="-50%" width="200%" height="200%">
                         <feGaussianBlur stdDeviation="3" result="coloredBlur" />
                         <feMerge>
                             <feMergeNode in="coloredBlur" />
@@ -189,7 +194,7 @@ export const WeightTrendChart: React.FC<WeightTrendChartProps> = ({ entries, hei
                 {/* Gradient Area */}
                 <motion.path
                     d={rawAreaPath}
-                    fill="url(#trendGradient)"
+                    fill={`url(#trendGradient-${id})`}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.8 }}
@@ -199,11 +204,11 @@ export const WeightTrendChart: React.FC<WeightTrendChartProps> = ({ entries, hei
                 <motion.path
                     d={rawPath}
                     fill="none"
-                    stroke="#6F00FF"
+                    stroke={`url(#weightLineGradient-${id})`}
                     strokeWidth="3"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    filter="url(#glow)"
+                    filter={`url(#glow-${id})`}
                     initial={{ pathLength: 0 }}
                     animate={{ pathLength: 1 }}
                     transition={{ duration: 1.5, ease: "easeOut" }}

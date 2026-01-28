@@ -81,7 +81,12 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signInWithGoogle() {
-  const redirectTo = import.meta.env.VITE_AUTH_REDIRECT_URL || window.location.origin;
+  const envRedirect = import.meta.env.VITE_AUTH_REDIRECT_URL;
+  const hostname = window.location.hostname;
+  const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+  // In local dev we always redirect back to the current origin, even if a prod
+  // redirect URL is present in env, otherwise OAuth will bounce to production.
+  const redirectTo = isLocal ? window.location.origin : (envRedirect || window.location.origin);
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {

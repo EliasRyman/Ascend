@@ -19,6 +19,7 @@ interface ConsistencyCardProps {
     showLegend?: boolean;
     cellFill?: 'levels' | 'gradient';
     labelsLayout?: 'default' | 'dashboard';
+    lightModeContrast?: 'default' | 'soft';
 }
 
 const ConsistencyCard: React.FC<ConsistencyCardProps> = ({
@@ -30,7 +31,8 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({
     controlsLayout = 'default',
     showLegend = true,
     cellFill = 'levels',
-    labelsLayout = 'default'
+    labelsLayout = 'default',
+    lightModeContrast = 'default'
 }) => {
     const allowedRanges: ViewRange[] = useMemo(() => {
         if (allowedRangesProp && allowedRangesProp.length > 0) return allowedRangesProp;
@@ -328,19 +330,22 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({
 
     // Color functions
     const getCellColor = (level: number) => {
+        const isSoft = lightModeContrast === 'soft';
         if (cellFill === 'gradient') {
             return level === 0
-                ? 'bg-slate-100 dark:bg-slate-800'
-                : 'bg-gradient-to-br from-[#6F00FF] to-purple-600 shadow-sm shadow-purple-500/25';
+                ? (isSoft ? 'bg-slate-50 dark:bg-slate-800' : 'bg-slate-100 dark:bg-slate-800')
+                : (isSoft
+                    ? 'bg-gradient-to-br from-[#6F00FF]/85 to-purple-600/85 shadow-sm shadow-purple-500/10'
+                    : 'bg-gradient-to-br from-[#6F00FF] to-purple-600 shadow-sm shadow-purple-500/25');
         }
         // Purple theme
         switch (level) {
-            case 0: return 'bg-slate-100 dark:bg-slate-800'; // Empty
-            case 1: return 'bg-purple-200 dark:bg-purple-900/40';
-            case 2: return 'bg-purple-300 dark:bg-purple-700/60';
-            case 3: return 'bg-purple-400 dark:bg-purple-600';
-            case 4: return 'bg-[#6F00FF] dark:bg-[#6F00FF] shadow-sm shadow-purple-500/30';
-            default: return 'bg-slate-100 dark:bg-slate-800';
+            case 0: return isSoft ? 'bg-slate-50 dark:bg-slate-800' : 'bg-slate-100 dark:bg-slate-800'; // Empty
+            case 1: return isSoft ? 'bg-violet-200/45 dark:bg-purple-900/40' : 'bg-purple-200 dark:bg-purple-900/40';
+            case 2: return isSoft ? 'bg-violet-300/55 dark:bg-purple-700/60' : 'bg-purple-300 dark:bg-purple-700/60';
+            case 3: return isSoft ? 'bg-violet-400/65 dark:bg-purple-600' : 'bg-purple-400 dark:bg-purple-600';
+            case 4: return isSoft ? 'bg-[#6F00FF]/75 dark:bg-[#6F00FF] shadow-sm shadow-purple-500/15' : 'bg-[#6F00FF] dark:bg-[#6F00FF] shadow-sm shadow-purple-500/30';
+            default: return isSoft ? 'bg-slate-50 dark:bg-slate-800' : 'bg-slate-100 dark:bg-slate-800';
         }
     };
 
@@ -531,11 +536,11 @@ const ConsistencyCard: React.FC<ConsistencyCardProps> = ({
                         <div className="flex items-center justify-end mt-4 gap-2 text-xs text-slate-400 dark:text-slate-500">
                             <span>Less</span>
                             <div className="flex gap-1">
-                                <div className="w-3 h-3 rounded-sm bg-slate-100 dark:bg-slate-800"></div>
-                                <div className="w-3 h-3 rounded-sm bg-purple-200 dark:bg-purple-900/40"></div>
-                                <div className="w-3 h-3 rounded-sm bg-purple-300 dark:bg-purple-700/60"></div>
-                                <div className="w-3 h-3 rounded-sm bg-purple-400 dark:bg-purple-600"></div>
-                                <div className="w-3 h-3 rounded-sm bg-[#6F00FF] dark:bg-[#6F00FF]"></div>
+                                <div className={`w-3 h-3 rounded-sm ${getCellColor(0)}`}></div>
+                                <div className={`w-3 h-3 rounded-sm ${getCellColor(1)}`}></div>
+                                <div className={`w-3 h-3 rounded-sm ${getCellColor(2)}`}></div>
+                                <div className={`w-3 h-3 rounded-sm ${getCellColor(3)}`}></div>
+                                <div className={`w-3 h-3 rounded-sm ${getCellColor(4)}`}></div>
                             </div>
                             <span>More</span>
                         </div>
